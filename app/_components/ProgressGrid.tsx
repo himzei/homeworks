@@ -23,6 +23,7 @@ interface UserProgress {
   userId: string;
   assignmentId: string;
   status: ProgressStatus;
+  url?: string; // 제출 URL 정보 (제출한 경우에만 존재)
 }
 
 interface ProgressGridProps {
@@ -44,6 +45,14 @@ export default function ProgressGrid({
       (p) => p.userId === userId && p.assignmentId === assignmentId
     );
     return progress?.status || "not_completed";
+  };
+
+  // 특정 사용자의 특정 과제 제출 URL 가져오기
+  const getSubmissionUrl = (userId: string, assignmentId: string): string | undefined => {
+    const progress = progressData.find(
+      (p) => p.userId === userId && p.assignmentId === assignmentId
+    );
+    return progress?.url;
   };
 
   // 사용자를 섹션별로 분리
@@ -98,10 +107,9 @@ export default function ProgressGrid({
 
                 {/* YOUR PROGRESS 사용자 행 */}
                 {yourProgressUsers.map((user) => (
-                  <>
+                  <div key={`your-user-row-${user.id}`} style={{ display: 'contents' }}>
                     {/* 사용자 이름 셀 */}
                     <div
-                      key={`user-${user.id}`}
                       className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
                     >
                       <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
@@ -112,6 +120,7 @@ export default function ProgressGrid({
                     {/* 각 과제별 진행 상태 셀 */}
                     {assignments.map((assignment) => {
                       const status = getProgressStatus(user.id, assignment.id);
+                      const submissionUrl = getSubmissionUrl(user.id, assignment.id);
                       const isCurrentUser = user.id === currentUserId;
 
                       return (
@@ -120,10 +129,15 @@ export default function ProgressGrid({
                           className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[60px]"
                         >
                           {status === "completed" ? (
-                            isCurrentUser ? (
-                              <span className="text-sm text-black dark:text-zinc-50">
+                            isCurrentUser && submissionUrl ? (
+                              <a
+                                href={submissionUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                              >
                                 제출 완료
-                              </span>
+                              </a>
                             ) : (
                               <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                                 <Check className="w-4 h-4 text-white" />
@@ -137,7 +151,7 @@ export default function ProgressGrid({
                         </div>
                       );
                     })}
-                  </>
+                  </div>
                 ))}
               </>
             )}
@@ -157,10 +171,9 @@ export default function ProgressGrid({
 
                 {/* EVERYONE'S PROGRESS 사용자 행들 */}
                 {everyoneProgressUsers.map((user) => (
-                  <>
+                  <div key={`everyone-user-row-${user.id}`} style={{ display: 'contents' }}>
                     {/* 사용자 이름 셀 */}
                     <div
-                      key={`user-${user.id}`}
                       className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
                     >
                       <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
@@ -171,6 +184,7 @@ export default function ProgressGrid({
                     {/* 각 과제별 진행 상태 셀 */}
                     {assignments.map((assignment) => {
                       const status = getProgressStatus(user.id, assignment.id);
+                      const submissionUrl = getSubmissionUrl(user.id, assignment.id);
 
                       return (
                         <div
@@ -178,9 +192,23 @@ export default function ProgressGrid({
                           className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[60px]"
                         >
                           {status === "completed" ? (
-                            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-white" />
-                            </div>
+                            submissionUrl ? (
+                              <a
+                                href={submissionUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors"
+                                title={submissionUrl}
+                              >
+                                
+                                <Check className="w-4 h-4 text-white" />
+                              </a>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-white" />
+                                
+                              </div>
+                            )
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
                               <X className="w-4 h-4 text-white" />
@@ -189,7 +217,7 @@ export default function ProgressGrid({
                         </div>
                       );
                     })}
-                  </>
+                  </div>
                 ))}
               </>
             )}

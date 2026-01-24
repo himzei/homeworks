@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 interface AuthModalProps {
@@ -18,6 +19,7 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
   const [success, setSuccess] = useState<string | null>(null);
 
   const supabase = createClient();
+  const router = useRouter();
 
   // 폼 초기화
   const resetForm = () => {
@@ -98,12 +100,24 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
       if (error) throw error;
 
       if (data.user) {
+        // profiles 테이블에서 현재 로그인한 유저가 있는지 확인
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", data.user.id)
+          .single();
+
+        // 프로필이 있으면 메인페이지로, 없으면 프로필 페이지로 이동
+        // profile이 null이 아니면 프로필이 존재하는 것으로 판단
+        // PGRST116은 데이터가 없을 때 발생하는 정상적인 에러 코드이므로 무시
+        const hasProfile = profile !== null;
+        const redirectPath = hasProfile ? "/" : "/profile";
+
         setSuccess("로그인 성공!");
-        // 모달 닫기 후 프로필 페이지로 이동
+        // 모달 닫기 후 적절한 페이지로 이동
         setTimeout(() => {
           handleClose();
-          // 프로필 페이지로 리다이렉트
-          window.location.href = "/profile";
+          router.push(redirectPath);
         }, 1000);
       }
     } catch (err: any) {

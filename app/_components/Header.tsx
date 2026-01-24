@@ -4,6 +4,15 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AuthModal from "./AuthModal";
+import { Avatar, AvatarFallback } from "./ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 export default function Header() {
   const router = useRouter();
@@ -59,14 +68,13 @@ export default function Header() {
       <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black">
         <div className="container mx-auto flex items-center justify-between h-16">
           {/* 왼쪽 영역 (비어있음) */}
-          <div className="flex-1"></div>
-
-          {/* 중앙 영역 - 과제제출 */}
-          <div className="flex-1 flex justify-center">
-            <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
-              과제제출
+          <div className="flex-1">
+          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
+              K-Digital Training AI 빅데이터 전문가 양성과정
             </h1>
           </div>
+
+        
 
           {/* 오른쪽 영역 - 회원가입, 로그인 버튼 또는 사용자 정보 */}
           <div className="flex-1 flex justify-end items-center gap-3">
@@ -74,21 +82,50 @@ export default function Header() {
               // 로딩 중
               <div className="px-4 py-2 text-sm text-zinc-500">로딩 중...</div>
             ) : user ? (
-              // 로그인된 상태 - 이메일 정보 표시 및 프로필 페이지 이동
-              <>
-                <button
-                  onClick={() => router.push("/profile")}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  <span className="font-medium">{user.email}</span>
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 text-sm font-medium bg-zinc-200 dark:bg-zinc-800 text-black dark:text-white rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
-                >
-                  로그아웃
-                </button>
-              </>
+              // 로그인된 상태 - Avatar와 DropdownMenu 사용
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 dark:focus:ring-zinc-400 rounded-full">
+                    <Avatar>
+                      <AvatarFallback className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                        {user.email?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {/* 이메일 정보 표시 */}
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{user.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {/* 프로필 메뉴 */}
+                  <DropdownMenuItem
+                    onClick={() => router.push("/profile")}
+                    className="cursor-pointer"
+                  >
+                    프로필
+                  </DropdownMenuItem>
+                  {/* 과제 메뉴 */}
+                  <DropdownMenuItem
+                    onClick={() => router.push("/assignment/new")}
+                    className="cursor-pointer"
+                  >
+                    과제
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {/* 로그아웃 메뉴 */}
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    variant="destructive"
+                    className="cursor-pointer"
+                  >
+                    로그아웃
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               // 로그인되지 않은 상태 - 회원가입, 로그인 버튼
               <>

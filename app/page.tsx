@@ -1,99 +1,148 @@
 import Tabs from "@/app/_components/Tabs";
 import ProgressGrid from "@/app/_components/ProgressGrid";
-import HomeworkSubmission from "@/app/_components/HomeworkSubmission";
+import AssignmentList from "@/app/_components/AssignmentList";
+import TodayAssignments from "@/app/_components/TodayAssignments";
+import { Button } from "@/app/_components/ui/button";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 
-export default function Home() {
-  // 샘플 데이터 - 실제로는 API나 데이터베이스에서 가져올 수 있습니다
-  const currentUserId = "himzei"; // 현재 로그인한 사용자 ID
+export default async function Home() {
+  // Supabase 클라이언트 생성
+  const supabase = await createClient();
 
-  // 과제 목록 데이터
-  const assignments = [
-    { id: "assignment-1", name: "Assignment 1" },
-    { id: "assignment-2", name: "Assignment 2" },
-    { id: "assignment-3", name: "Assignment 3" },
-    { id: "assignment-4", name: "Assignment 4" },
-    { id: "assignment-5", name: "Assignment 5" },
-    { id: "assignment-6", name: "Assignment 6" },
-  ];
+  // assignments 테이블에서 숙제 리스트 가져오기
+  const { data: assignmentsData, error: assignmentsError } = await supabase
+    .from("assignments")
+    .select("*")
+    .order("created_at", { ascending: false }); // 최신순 정렬
 
-  // 사용자 목록 데이터
-  const users = [
-    { id: "himzei", name: "himzei", section: "your" as const },
-    { id: "eddiekim", name: "eddiekim", section: "everyone" as const },
-    { id: "hasong925", name: "hasong925", section: "everyone" as const },
-    { id: "ciel", name: "ciel", section: "everyone" as const },
-    { id: "cheese.woo", name: "cheese.woo", section: "everyone" as const },
-    { id: "pictur96", name: "pictur96", section: "everyone" as const },
-    { id: "yunsup.j", name: "yunsup.j", section: "everyone" as const },
-    { id: "enjoyg", name: "enjoyg", section: "everyone" as const },
-  ];
+  // 에러 처리
+  if (assignmentsError) {
+    console.error("숙제 리스트 조회 오류:", assignmentsError);
+  }
 
-  // 진행 상태 데이터 - 이미지에 맞춰 설정
-  const progressData = [
-    // YOUR PROGRESS (himzei)
-    { userId: "himzei", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "himzei", assignmentId: "assignment-2", status: "completed" as const },
-    { userId: "himzei", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "himzei", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "himzei", assignmentId: "assignment-5", status: "not_completed" as const },
-    { userId: "himzei", assignmentId: "assignment-6", status: "completed" as const },
+  // 현재 시간 가져오기
+  const now = new Date();
 
-    // EVERYONE'S PROGRESS - eddiekim
-    { userId: "eddiekim", assignmentId: "assignment-1", status: "not_completed" as const },
-    { userId: "eddiekim", assignmentId: "assignment-2", status: "completed" as const },
-    { userId: "eddiekim", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "eddiekim", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "eddiekim", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "eddiekim", assignmentId: "assignment-6", status: "completed" as const },
+  // 오늘의 숙제 필터링: 현재 시간이 start_date와 end_date 사이에 있는 숙제
+  const todayAssignmentsData = (assignmentsData || [])
+    .filter((assignment) => {
+      const startDate = new Date(assignment.start_date);
+      const endDate = new Date(assignment.end_date);
+      return now >= startDate && now <= endDate;
+    })
+    .map((assignment) => ({
+      id: assignment.id,
+      title: assignment.title,
+      content: assignment.content || "",
+      startDate: new Date(assignment.start_date),
+      endDate: new Date(assignment.end_date),
+    }));
 
-    // EVERYONE'S PROGRESS - hasong925
-    { userId: "hasong925", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "hasong925", assignmentId: "assignment-2", status: "not_completed" as const },
-    { userId: "hasong925", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "hasong925", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "hasong925", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "hasong925", assignmentId: "assignment-6", status: "completed" as const },
+  // 제출 학생 수를 계산하기 위해 각 assignment에 대한 제출 수를 가져옴
+  const assignmentListData = await Promise.all(
+    (assignmentsData || []).map(async (assignment) => {
+      // 각 assignment에 대한 제출 학생 수 계산
+      const { count, error } = await supabase
+        .from("homeworks")
+        .select("*", { count: "exact", head: true })
+        .eq("assignment_id", assignment.id);
 
-    // EVERYONE'S PROGRESS - ciel
-    { userId: "ciel", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "ciel", assignmentId: "assignment-2", status: "not_completed" as const },
-    { userId: "ciel", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "ciel", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "ciel", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "ciel", assignmentId: "assignment-6", status: "completed" as const },
+      if (error) {
+        console.error(`Assignment ${assignment.id} 제출 수 조회 오류:`, error);
+      }
 
-    // EVERYONE'S PROGRESS - cheese.woo
-    { userId: "cheese.woo", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "cheese.woo", assignmentId: "assignment-2", status: "not_completed" as const },
-    { userId: "cheese.woo", assignmentId: "assignment-3", status: "not_completed" as const },
-    { userId: "cheese.woo", assignmentId: "assignment-4", status: "not_completed" as const },
-    { userId: "cheese.woo", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "cheese.woo", assignmentId: "assignment-6", status: "completed" as const },
+      return {
+        id: assignment.id,
+        title: assignment.title,
+        content: assignment.content || "",
+        startDate: new Date(assignment.start_date),
+        endDate: new Date(assignment.end_date),
+        submissionCount: count || 0,
+      };
+    })
+  );
+  // 현재 로그인한 사용자 정보 가져오기
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+  const currentUserId = currentUser?.id || ""; // 현재 로그인한 사용자 ID
 
-    // EVERYONE'S PROGRESS - pictur96 (모두 완료)
-    { userId: "pictur96", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "pictur96", assignmentId: "assignment-2", status: "completed" as const },
-    { userId: "pictur96", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "pictur96", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "pictur96", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "pictur96", assignmentId: "assignment-6", status: "completed" as const },
+  // 현재 사용자의 프로필 정보 가져오기 (관리자 권한 확인용)
+  let isAdmin = false;
+  if (currentUserId) {
+    const { data: currentUserProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", currentUserId)
+      .single();
+    
+    // 관리자 역할 확인 (role이 'admin'인 경우)
+    isAdmin = currentUserProfile?.role === "admin";
+  }
 
-    // EVERYONE'S PROGRESS - yunsup.j (모두 완료)
-    { userId: "yunsup.j", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "yunsup.j", assignmentId: "assignment-2", status: "completed" as const },
-    { userId: "yunsup.j", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "yunsup.j", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "yunsup.j", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "yunsup.j", assignmentId: "assignment-6", status: "completed" as const },
+  // 데이터베이스에서 과제 목록 가져오기 (ProgressGrid용)
+  const assignments = (assignmentsData || []).map((assignment) => ({
+    id: assignment.id,
+    name: assignment.title, // title을 name으로 매핑
+  }));
 
-    // EVERYONE'S PROGRESS - enjoyg (모두 완료)
-    { userId: "enjoyg", assignmentId: "assignment-1", status: "completed" as const },
-    { userId: "enjoyg", assignmentId: "assignment-2", status: "completed" as const },
-    { userId: "enjoyg", assignmentId: "assignment-3", status: "completed" as const },
-    { userId: "enjoyg", assignmentId: "assignment-4", status: "completed" as const },
-    { userId: "enjoyg", assignmentId: "assignment-5", status: "completed" as const },
-    { userId: "enjoyg", assignmentId: "assignment-6", status: "completed" as const },
-  ];
+  // profiles 테이블에서 회원가입된 모든 사용자 정보 가져오기
+  const { data: profilesData, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, name")
+    .order("created_at", { ascending: true }); // 생성일 순으로 정렬
+
+  // 에러 처리
+  if (profilesError) {
+    console.error("사용자 프로필 조회 오류:", profilesError);
+  }
+
+  // 사용자 목록 데이터 생성: profiles 테이블에서 가져온 데이터를 ProgressGrid 형식으로 변환
+  const users = (profilesData || []).map((profile) => ({
+    id: profile.id,
+    name: profile.name || profile.id, // name이 없으면 id 사용
+    section: profile.id === currentUserId ? ("your" as const) : ("everyone" as const), // 현재 사용자는 "your", 나머지는 "everyone"
+  }));
+
+  // 데이터베이스에서 모든 제출 상태 가져오기 (URL 정보 포함)
+  // 주의: RLS 정책으로 인해 모든 사용자의 제출 상태를 조회하지 못할 수 있음
+  // 필요시 supabase-setup.sql에서 homeworks 테이블의 SELECT 정책을 수정해야 함
+  const { data: allHomeworks, error: homeworksError } = await supabase
+    .from("homeworks")
+    .select("user_id, assignment_id, url"); // URL 필드 추가
+
+  // 에러 처리
+  if (homeworksError) {
+    console.error("제출 상태 조회 오류:", homeworksError);
+  }
+
+  // 진행 상태 데이터 생성: 각 사용자-과제 조합에 대해 제출 여부 및 URL 확인
+  const progressData: Array<{
+    userId: string;
+    assignmentId: string;
+    status: "completed" | "not_completed";
+    url?: string; // 제출 URL 정보 (제출한 경우에만 존재)
+  }> = [];
+
+  // 모든 사용자와 모든 과제에 대해 진행 상태 생성
+  users.forEach((user) => {
+    assignments.forEach((assignment) => {
+      // 제출된 숙제 찾기
+      const submission = (allHomeworks || []).find(
+        (homework) =>
+          homework.user_id === user.id &&
+          homework.assignment_id === assignment.id
+      );
+
+      progressData.push({
+        userId: user.id,
+        assignmentId: assignment.id,
+        status: submission ? ("completed" as const) : ("not_completed" as const),
+        url: submission?.url, // 제출한 경우 URL 정보 포함
+      });
+    });
+  });
 
   // 탭 아이템 정의
   const tabItems = [
@@ -101,17 +150,20 @@ export default function Home() {
       id: "homework",
       label: "오늘의숙제",
       content: (
-        <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-black dark:text-zinc-50">
-            오늘의 숙제
-          </h2>
-          <p className="text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            오늘 해야 할 숙제 목록이 여기에 표시됩니다.
-          </p>
-          {/* 여기에 숙제 목록 컴포넌트를 추가할 수 있습니다 */}
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-2">
+              오늘의 숙제
+            </h2>
+            <p className="text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+              현재 진행 중인 숙제 목록입니다.
+            </p>
+          </div>
+
+          {/* 오늘의 숙제 목록 */}
+          <TodayAssignments assignments={todayAssignmentsData} />
           
-          {/* URL 제출 박스 */}
-          <HomeworkSubmission />
+         
         </div>
       ),
     },
@@ -129,11 +181,36 @@ export default function Home() {
         </div>
       ),
     },
+    // 관리자만 숙제 리스트 탭 표시
+    ...(isAdmin
+      ? [
+          {
+            id: "assignment-list",
+            label: "숙제리스트",
+            content: (
+              <div className="w-full space-y-4">
+                {/* 헤더 영역: 제목과 글쓰기 버튼 */}
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-semibold text-black dark:text-zinc-50">
+                    숙제 리스트
+                  </h2>
+                  <Link href="/assignment/new">
+                    <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+                      글쓰기
+                    </Button>
+                  </Link>
+                </div>
+                <AssignmentList assignments={assignmentListData} />
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-7xl flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black sm:items-start">
+      <main className="flex min-h-screen w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black sm:items-start">
         <Tabs items={tabItems} defaultTabId="homework" />
       </main>
     </div>
