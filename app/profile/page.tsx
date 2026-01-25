@@ -9,7 +9,7 @@ export default function ProfilePage() {
   const supabase = createClient();
 
   // 폼 상태 관리
-  const [groupName, setGroupName] = useState("test1");
+  const [groupName, setGroupName] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
@@ -362,6 +362,9 @@ export default function ProfilePage() {
                 onChange={(e) => setGroupName(e.target.value)}
                 className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
+                {/* 기본 선택 옵션 */}
+                <option value="">선택하세요</option>
+                {/* 과정 선택 옵션 */}
                 <option value="13기 교육생 - 빅데이터 전문가 양성과정">
                   13기 교육생 - 빅데이터 전문가 양성과정
                 </option>

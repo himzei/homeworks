@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -24,35 +24,91 @@ export default function Header() {
 
   // 인증 상태 관리
   const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null); // 프로필 정보 저장
   const [isLoading, setIsLoading] = useState(true);
 
   const supabase = createClient();
 
+  // 초기 로드 완료 여부를 추적하는 ref (클로저 문제 방지)
+  const isInitialLoadRef = useRef(true);
+
   // 인증 상태 확인
   useEffect(() => {
-    // 현재 사용자 정보 가져오기
+    // 현재 사용자 정보 및 프로필 정보 가져오기
     const getUser = async () => {
       try {
+        // 1. 인증된 사용자 정보 가져오기
         const {
           data: { user },
         } = await supabase.auth.getUser();
         setUser(user);
+
+        // 2. 사용자가 로그인되어 있으면 프로필 정보 가져오기
+        if (user) {
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+          // 프로필이 없어도 에러가 아니므로 (PGRST116은 데이터 없음 에러)
+          if (profileError && profileError.code !== "PGRST116") {
+            console.error("프로필 정보 가져오기 실패:", profileError);
+          }
+
+          // 프로필 데이터가 있으면 저장
+          if (profileData) {
+            setProfile(profileData);
+          } else {
+            setProfile(null);
+          }
+        } else {
+          setProfile(null);
+        }
       } catch (error) {
         console.error("사용자 정보 가져오기 실패:", error);
         setUser(null);
+        setProfile(null);
       } finally {
-        setIsLoading(false);
+        // 초기 로드가 완료되면 로딩 상태 해제
+        if (isInitialLoadRef.current) {
+          setIsLoading(false);
+          isInitialLoadRef.current = false; // 초기 로드 완료 표시
+        }
       }
     };
 
     getUser();
 
-    // 인증 상태 변경 감지
+    // 인증 상태 변경 감지 (초기 로드 이후의 변경사항만 처리)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // 초기 로드가 완료된 후에만 상태 업데이트
+      if (!isInitialLoadRef.current) {
+        setUser(session?.user ?? null);
+
+        // 인증 상태가 변경되면 프로필 정보도 다시 가져오기
+        if (session?.user) {
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .single();
+
+          if (profileError && profileError.code !== "PGRST116") {
+            console.error("프로필 정보 가져오기 실패:", profileError);
+          }
+
+          if (profileData) {
+            setProfile(profileData);
+          } else {
+            setProfile(null);
+          }
+        } else {
+          setProfile(null);
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -87,11 +143,28 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-500 dark:focus:ring-zinc-400 rounded-full">
-                    <Avatar>
-                      <AvatarFallback className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                        {user.email?.charAt(0).toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
+                    {/* 아바타 이미지 표시 */}
+                    <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center overflow-hidden border border-zinc-300 dark:border-zinc-600">
+                      {profile?.avatar_url ? (
+                        <img
+                          src={profile.avatar_url}
+                          alt={profile.name || user.email || "사용자"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                          {profile?.name
+                            ? profile.name.charAt(0).toUpperCase()
+                            : user.email
+                            ? user.email.charAt(0).toUpperCase()
+                            : "?"}
+                        </div>
+                      )}
+                    </div>
+                    {/* 사용자 이름 또는 이메일 표시 */}
+                    <span className="text-sm font-medium">
+                      {profile?.name || user.email || "사용자"}
+                    </span>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
