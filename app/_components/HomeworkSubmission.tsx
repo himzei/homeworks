@@ -20,8 +20,10 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
   const [isSaving, setIsSaving] = useState<boolean>(false);
   // 기존 제출 정보 로드 상태
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  // 과제 제목 저장
+  const [assignmentTitle, setAssignmentTitle] = useState<string>("");
 
-  // 기존 제출 정보 불러오기
+  // 기존 제출 정보 및 과제 정보 불러오기
   useEffect(() => {
     const loadExistingSubmission = async () => {
       try {
@@ -29,6 +31,17 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
         if (!user) {
           setIsLoading(false);
           return;
+        }
+
+        // 과제 정보 가져오기 (제목 조회)
+        const { data: assignmentData, error: assignmentError } = await supabase
+          .from("assignments")
+          .select("title")
+          .eq("id", assignmentId)
+          .single();
+
+        if (assignmentData && !assignmentError) {
+          setAssignmentTitle(assignmentData.title);
         }
 
         // 기존 제출 정보 확인
@@ -89,6 +102,8 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
         .eq("assignment_id", assignmentId)
         .single();
 
+      const isNewSubmission = !existing; // 새 제출인지 수정인지 확인
+
       if (existing) {
         // 기존 제출이 있으면 업데이트
         const { error } = await supabase
@@ -118,6 +133,36 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
           alert(`제출에 실패했습니다: ${error.message}`);
           setIsSaving(false);
           return;
+        }
+      }
+
+      // 과제 제출 완료 확인 이메일 전송 (새 제출인 경우에만)
+      if (isNewSubmission && user.email) {
+        try {
+          const emailResponse = await fetch("/api/send-submission-email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              assignmentId: assignmentId,
+              userEmail: user.email,
+              assignmentTitle: assignmentTitle,
+              submissionUrl: url.trim(),
+            }),
+          });
+
+          const emailResult = await emailResponse.json();
+          
+          if (!emailResponse.ok) {
+            console.error("이메일 전송 실패:", emailResult.error);
+            // 이메일 전송 실패해도 제출은 성공했으므로 계속 진행
+          } else {
+            console.log("이메일 전송 성공:", emailResult.message);
+          }
+        } catch (emailError) {
+          console.error("이메일 전송 중 오류 발생:", emailError);
+          // 이메일 전송 실패해도 제출은 성공했으므로 계속 진행
         }
       }
 

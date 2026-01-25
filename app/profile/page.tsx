@@ -175,7 +175,7 @@ export default function ProfilePage() {
                 htmlFor="name"
                 className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
               >
-                이름
+                닉네임
               </label>
               <input
                 id="name"

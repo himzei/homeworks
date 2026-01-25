@@ -70,7 +70,7 @@ export default function Header() {
           {/* 왼쪽 영역 (비어있음) */}
           <div className="flex-1">
             <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
-              K-Digital Training AI 빅데이터 전문가 양성과정
+              13기 기초교육과정 과제 관리
             </h1>
           </div>
 
