@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X } from "lucide-react";
+import Link from "next/link";
 
 // 과제 타입 정의
 interface Assignment {
@@ -41,48 +42,81 @@ export default function ProgressGrid({
   progressData,
 }: ProgressGridProps) {
   // 특정 사용자의 특정 과제 진행 상태 가져오기
-  const getProgressStatus = (userId: string, assignmentId: string): ProgressStatus => {
+  const getProgressStatus = (
+    userId: string,
+    assignmentId: string,
+  ): ProgressStatus => {
     const progress = progressData.find(
-      (p) => p.userId === userId && p.assignmentId === assignmentId
+      (p) => p.userId === userId && p.assignmentId === assignmentId,
     );
     return progress?.status || "not_completed";
   };
 
   // 특정 사용자의 특정 과제 제출 URL 가져오기
-  const getSubmissionUrl = (userId: string, assignmentId: string): string | undefined => {
+  const getSubmissionUrl = (
+    userId: string,
+    assignmentId: string,
+  ): string | undefined => {
     const progress = progressData.find(
-      (p) => p.userId === userId && p.assignmentId === assignmentId
+      (p) => p.userId === userId && p.assignmentId === assignmentId,
     );
     return progress?.url;
   };
 
   // 특정 사용자의 특정 과제 평가 상태 가져오기
-  const getEvaluationStatus = (userId: string, assignmentId: string): string | undefined => {
+  const getEvaluationStatus = (
+    userId: string,
+    assignmentId: string,
+  ): string | undefined => {
     const progress = progressData.find(
-      (p) => p.userId === userId && p.assignmentId === assignmentId
+      (p) => p.userId === userId && p.assignmentId === assignmentId,
     );
     return progress?.evaluationStatus;
   };
 
   // 평가 상태에 따른 배경색 및 텍스트 반환
-  const getStatusStyle = (evaluationStatus?: string): { bgColor: string; text: string; textColor: string } => {
+  const getStatusStyle = (
+    evaluationStatus?: string,
+  ): { bgColor: string; text: string; textColor: string } => {
     switch (evaluationStatus) {
       case "검토중":
-        return { bgColor: "bg-yellow-500", text: "검토중", textColor: "text-yellow-700 dark:text-yellow-300" };
+        return {
+          bgColor: "bg-yellow-300",
+          text: "검토중",
+          textColor: "text-yellow-700 dark:text-yellow-300",
+        };
       case "승인":
-        return { bgColor: "bg-green-500", text: "승인", textColor: "text-green-700 dark:text-green-300" };
+        return {
+          bgColor: "bg-green-300",
+          text: "승인",
+          textColor: "text-green-700 dark:text-green-300",
+        };
       case "수정필요":
-        return { bgColor: "bg-orange-500", text: "수정필요", textColor: "text-orange-700 dark:text-orange-300" };
+        return {
+          bgColor: "bg-orange-300",
+          text: "수정필요",
+          textColor: "text-orange-700 dark:text-orange-300",
+        };
       case "모범답안":
-        return { bgColor: "bg-blue-500", text: "모범답안", textColor: "text-blue-700 dark:text-blue-300" };
+        return {
+          bgColor: "bg-blue-300",
+          text: "모범답안",
+          textColor: "text-blue-700 dark:text-blue-300",
+        };
       default:
-        return { bgColor: "bg-gray-400", text: "제출완료", textColor: "text-gray-700 dark:text-gray-300" };
+        return {
+          bgColor: "bg-gray-400",
+          text: "제출완료",
+          textColor: "text-gray-700 dark:text-gray-300",
+        };
     }
   };
 
   // 사용자를 섹션별로 분리
   const yourProgressUsers = users.filter((user) => user.section === "your");
-  const everyoneProgressUsers = users.filter((user) => user.section === "everyone");
+  const everyoneProgressUsers = users.filter(
+    (user) => user.section === "everyone",
+  );
 
   // 그리드 열 템플릿 생성 (사용자 열 + 과제 열들)
   const gridCols = `200px repeat(${assignments.length}, 120px)`;
@@ -132,21 +166,31 @@ export default function ProgressGrid({
 
                 {/* YOUR PROGRESS 사용자 행 */}
                 {yourProgressUsers.map((user) => (
-                  <div key={`your-user-row-${user.id}`} style={{ display: 'contents' }}>
+                  <div
+                    key={`your-user-row-${user.id}`}
+                    style={{ display: "contents" }}
+                  >
                     {/* 사용자 이름 셀 */}
-                    <div
-                      className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
-                    >
-                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                      <Link
+                        href={`/user/${user.id}`}
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+                      >
                         {user.name}
-                      </span>
+                      </Link>
                     </div>
 
                     {/* 각 과제별 진행 상태 셀 */}
                     {assignments.map((assignment) => {
                       const status = getProgressStatus(user.id, assignment.id);
-                      const submissionUrl = getSubmissionUrl(user.id, assignment.id);
-                      const evaluationStatus = getEvaluationStatus(user.id, assignment.id);
+                      const submissionUrl = getSubmissionUrl(
+                        user.id,
+                        assignment.id,
+                      );
+                      const evaluationStatus = getEvaluationStatus(
+                        user.id,
+                        assignment.id,
+                      );
                       const isCurrentUser = user.id === currentUserId;
                       const statusStyle = getStatusStyle(evaluationStatus);
 
@@ -169,7 +213,9 @@ export default function ProgressGrid({
                               </a>
                             ) : (
                               // 다른 사용자이거나 URL이 없는 경우: 아이콘만 표시
-                              <div className={`w-6 h-6 rounded-full ${statusStyle.bgColor} flex items-center justify-center`}>
+                              <div
+                                className={`w-6 h-6 rounded-full ${statusStyle.bgColor} flex items-center justify-center`}
+                              >
                                 <Check className="w-4 h-4 text-white" />
                               </div>
                             )
@@ -202,20 +248,27 @@ export default function ProgressGrid({
 
                 {/* EVERYONE'S PROGRESS 사용자 행들 */}
                 {everyoneProgressUsers.map((user) => (
-                  <div key={`everyone-user-row-${user.id}`} style={{ display: 'contents' }}>
+                  <div
+                    key={`everyone-user-row-${user.id}`}
+                    style={{ display: "contents" }}
+                  >
                     {/* 사용자 이름 셀 */}
-                    <div
-                      className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
-                    >
-                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                      <Link
+                        href={`/user/${user.id}`}
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+                      >
                         {user.name}
-                      </span>
+                      </Link>
                     </div>
 
                     {/* 각 과제별 진행 상태 셀 */}
                     {assignments.map((assignment) => {
                       const status = getProgressStatus(user.id, assignment.id);
-                      const submissionUrl = getSubmissionUrl(user.id, assignment.id);
+                      const submissionUrl = getSubmissionUrl(
+                        user.id,
+                        assignment.id,
+                      );
 
                       return (
                         <div
@@ -231,13 +284,11 @@ export default function ProgressGrid({
                                 className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors"
                                 title={submissionUrl}
                               >
-                                
                                 <Check className="w-4 h-4 text-white" />
                               </a>
                             ) : (
                               <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                                 <Check className="w-4 h-4 text-white" />
-                                
                               </div>
                             )
                           ) : (

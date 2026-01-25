@@ -230,6 +230,60 @@ ALTER TABLE public.assignments
 ADD COLUMN IF NOT EXISTS previous_answer_url TEXT;
 
 -- ============================================
+-- profiles 테이블에 아바타 이미지 URL 컬럼 추가
+-- ============================================
+
+-- 아바타 이미지 URL 컬럼 추가
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+-- ============================================
+-- profiles 테이블에 GitHub URL 컬럼 추가
+-- ============================================
+
+-- GitHub URL 컬럼 추가
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS github_url TEXT;
+
+-- ============================================
+-- Supabase Storage 버킷 생성 (수동으로 Supabase 대시보드에서 생성 필요)
+-- ============================================
+-- 참고: Supabase 대시보드 > Storage > New bucket에서 "avatars" 버킷을 생성하세요.
+-- 버킷 설정:
+--   - Public bucket: true (공개 버킷으로 설정)
+--   - File size limit: 5MB
+--   - Allowed MIME types: image/*
+--
+-- 또는 SQL로 생성하려면 다음 명령을 실행하세요:
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true);
+--
+-- Storage 정책 생성 (사용자는 자신의 아바타만 업로드/삭제 가능):
+-- CREATE POLICY "Users can upload own avatar"
+--   ON storage.objects FOR INSERT
+--   WITH CHECK (
+--     bucket_id = 'avatars' AND
+--     auth.uid()::text = (storage.foldername(name))[1]
+--   );
+--
+-- CREATE POLICY "Users can update own avatar"
+--   ON storage.objects FOR UPDATE
+--   USING (
+--     bucket_id = 'avatars' AND
+--     auth.uid()::text = (storage.foldername(name))[1]
+--   );
+--
+-- CREATE POLICY "Users can delete own avatar"
+--   ON storage.objects FOR DELETE
+--   USING (
+--     bucket_id = 'avatars' AND
+--     auth.uid()::text = (storage.foldername(name))[1]
+--   );
+--
+-- CREATE POLICY "Anyone can view avatars"
+--   ON storage.objects FOR SELECT
+--   USING (bucket_id = 'avatars');
+
+-- ============================================
 -- homeworks 테이블에 status 컬럼 추가
 -- ============================================
 

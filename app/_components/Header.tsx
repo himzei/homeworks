@@ -70,7 +70,7 @@ export default function Header() {
         <div className="container mx-auto flex items-center justify-between h-16">
           {/* 왼쪽 영역 - 제목 (클릭 시 메인 페이지로 이동) */}
           <div className="flex-1">
-            <Link href="/home">
+            <Link href="/">
               <h1 className="text-xl font-semibold text-black dark:text-zinc-50 cursor-pointer hover:opacity-80 transition-opacity">
                 13기 기초교육과정 과제 관리
               </h1>
@@ -106,7 +106,12 @@ export default function Header() {
                   <DropdownMenuSeparator />
                   {/* 프로필 메뉴 */}
                   <DropdownMenuItem
-                    onClick={() => router.push("/profile")}
+                    onClick={() => {
+                      // 현재 사용자의 ID로 유저 정보 페이지로 이동
+                      if (user?.id) {
+                        router.push(`/user/${user.id}`);
+                      }
+                    }}
                     className="cursor-pointer"
                   >
                     프로필
