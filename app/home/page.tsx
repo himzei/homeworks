@@ -90,10 +90,11 @@ export default async function Home() {
     name: assignment.title, // title을 name으로 매핑
   }));
 
-  // profiles 테이블에서 회원가입된 모든 사용자 정보 가져오기
+  // profiles 테이블에서 회원가입된 모든 사용자 정보 가져오기 (관리자 제외)
   const { data: profilesData, error: profilesError } = await supabase
     .from("profiles")
-    .select("id, name")
+    .select("id, name, role")
+    .neq("role", "admin") // 관리자 제외
     .order("created_at", { ascending: true }); // 생성일 순으로 정렬
 
   // 에러 처리
@@ -102,6 +103,7 @@ export default async function Home() {
   }
 
   // 사용자 목록 데이터 생성: profiles 테이블에서 가져온 데이터를 ProgressGrid 형식으로 변환
+  // 관리자는 이미 쿼리에서 제외되었으므로 추가 필터링 불필요
   const users = (profilesData || []).map((profile) => ({
     id: profile.id,
     name: profile.name || profile.id, // name이 없으면 id 사용

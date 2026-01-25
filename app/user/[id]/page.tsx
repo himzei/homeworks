@@ -85,14 +85,20 @@ export default async function UserProfilePage({
     }
   };
 
-  // 날짜 포맷팅 함수
+  // 날짜 및 시간 포맷팅 함수
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString("ko-KR", {
+    const dateStr = date.toLocaleDateString("ko-KR", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
+    const timeStr = date.toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false, // 24시간 형식 사용
+    });
+    return `${dateStr} ${timeStr}`;
   };
 
   return (
