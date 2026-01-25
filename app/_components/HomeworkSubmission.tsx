@@ -8,10 +8,12 @@ interface HomeworkSubmissionProps {
   assignmentId: string; // 어떤 숙제에 대한 제출인지 식별
 }
 
-export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionProps) {
+export default function HomeworkSubmission({
+  assignmentId,
+}: HomeworkSubmissionProps) {
   const supabase = createClient();
   const router = useRouter();
-  
+
   // URL 입력 상태 관리
   const [url, setUrl] = useState<string>("");
   // 저장 성공/실패 상태 관리
@@ -27,7 +29,9 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
   useEffect(() => {
     const loadExistingSubmission = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) {
           setIsLoading(false);
           return;
@@ -85,7 +89,10 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
     }
 
     // 로그인 확인
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     if (userError || !user) {
       alert("로그인이 필요합니다.");
       return;
@@ -119,14 +126,12 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
         }
       } else {
         // 새로 제출
-        const { error } = await supabase
-          .from("homeworks")
-          .insert({
-            user_id: user.id,
-            assignment_id: assignmentId,
-            url: url.trim(),
-            homework_number: 0, // 기존 컬럼 호환성을 위해 (나중에 제거 가능)
-          });
+        const { error } = await supabase.from("homeworks").insert({
+          user_id: user.id,
+          assignment_id: assignmentId,
+          url: url.trim(),
+          homework_number: 0, // 기존 컬럼 호환성을 위해 (나중에 제거 가능)
+        });
 
         if (error) {
           console.error("저장 오류:", error);
@@ -153,7 +158,7 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
           });
 
           const emailResult = await emailResponse.json();
-          
+
           if (!emailResponse.ok) {
             console.error("이메일 전송 실패:", emailResult.error);
             // 이메일 전송 실패해도 제출은 성공했으므로 계속 진행
@@ -181,7 +186,9 @@ export default function HomeworkSubmission({ assignmentId }: HomeworkSubmissionP
   if (isLoading) {
     return (
       <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-6 mt-8">
-        <p className="text-center text-zinc-500 dark:text-zinc-400">로딩 중...</p>
+        <p className="text-center text-zinc-500 dark:text-zinc-400">
+          로딩 중...
+        </p>
       </div>
     );
   }

@@ -24,6 +24,7 @@ interface UserProgress {
   assignmentId: string;
   status: ProgressStatus;
   url?: string; // 제출 URL 정보 (제출한 경우에만 존재)
+  evaluationStatus?: string; // 평가 상태 (검토중, 승인, 수정필요, 모범답안)
 }
 
 interface ProgressGridProps {
@@ -53,6 +54,30 @@ export default function ProgressGrid({
       (p) => p.userId === userId && p.assignmentId === assignmentId
     );
     return progress?.url;
+  };
+
+  // 특정 사용자의 특정 과제 평가 상태 가져오기
+  const getEvaluationStatus = (userId: string, assignmentId: string): string | undefined => {
+    const progress = progressData.find(
+      (p) => p.userId === userId && p.assignmentId === assignmentId
+    );
+    return progress?.evaluationStatus;
+  };
+
+  // 평가 상태에 따른 배경색 및 텍스트 반환
+  const getStatusStyle = (evaluationStatus?: string): { bgColor: string; text: string; textColor: string } => {
+    switch (evaluationStatus) {
+      case "검토중":
+        return { bgColor: "bg-yellow-500", text: "검토중", textColor: "text-yellow-700 dark:text-yellow-300" };
+      case "승인":
+        return { bgColor: "bg-green-500", text: "승인", textColor: "text-green-700 dark:text-green-300" };
+      case "수정필요":
+        return { bgColor: "bg-orange-500", text: "수정필요", textColor: "text-orange-700 dark:text-orange-300" };
+      case "모범답안":
+        return { bgColor: "bg-blue-500", text: "모범답안", textColor: "text-blue-700 dark:text-blue-300" };
+      default:
+        return { bgColor: "bg-gray-400", text: "제출완료", textColor: "text-gray-700 dark:text-gray-300" };
+    }
   };
 
   // 사용자를 섹션별로 분리
@@ -121,7 +146,9 @@ export default function ProgressGrid({
                     {assignments.map((assignment) => {
                       const status = getProgressStatus(user.id, assignment.id);
                       const submissionUrl = getSubmissionUrl(user.id, assignment.id);
+                      const evaluationStatus = getEvaluationStatus(user.id, assignment.id);
                       const isCurrentUser = user.id === currentUserId;
+                      const statusStyle = getStatusStyle(evaluationStatus);
 
                       return (
                         <div
@@ -130,20 +157,24 @@ export default function ProgressGrid({
                         >
                           {status === "completed" ? (
                             isCurrentUser && submissionUrl ? (
+                              // 현재 사용자이고 제출한 경우: 클릭 가능한 상태 표시
                               <a
                                 href={submissionUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                className={`px-3 py-1 rounded-md ${statusStyle.bgColor} ${statusStyle.textColor} font-medium text-xs hover:opacity-80 transition-opacity cursor-pointer`}
+                                title={`${statusStyle.text} - 클릭하여 제출물 보기`}
                               >
-                                제출 완료
+                                {statusStyle.text}
                               </a>
                             ) : (
-                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                              // 다른 사용자이거나 URL이 없는 경우: 아이콘만 표시
+                              <div className={`w-6 h-6 rounded-full ${statusStyle.bgColor} flex items-center justify-center`}>
                                 <Check className="w-4 h-4 text-white" />
                               </div>
                             )
                           ) : (
+                            // 미제출 상태
                             <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
                               <X className="w-4 h-4 text-white" />
                             </div>

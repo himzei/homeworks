@@ -2,6 +2,7 @@ import Tabs from "@/app/_components/Tabs";
 import ProgressGrid from "@/app/_components/ProgressGrid";
 import AssignmentList from "@/app/_components/AssignmentList";
 import TodayAssignments from "@/app/_components/TodayAssignments";
+import EvaluationTab from "@/app/_components/EvaluationTab";
 import { Button } from "@/app/_components/ui/button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -62,7 +63,7 @@ export default async function Home() {
         endDate: new Date(assignment.end_date),
         submissionCount: count || 0,
       };
-    })
+    }),
   );
   // 현재 로그인한 사용자 정보 가져오기
   const {
@@ -78,7 +79,7 @@ export default async function Home() {
       .select("role")
       .eq("id", currentUserId)
       .single();
-    
+
     // 관리자 역할 확인 (role이 'admin'인 경우)
     isAdmin = currentUserProfile?.role === "admin";
   }
@@ -104,27 +105,29 @@ export default async function Home() {
   const users = (profilesData || []).map((profile) => ({
     id: profile.id,
     name: profile.name || profile.id, // name이 없으면 id 사용
-    section: profile.id === currentUserId ? ("your" as const) : ("everyone" as const), // 현재 사용자는 "your", 나머지는 "everyone"
+    section:
+      profile.id === currentUserId ? ("your" as const) : ("everyone" as const), // 현재 사용자는 "your", 나머지는 "everyone"
   }));
 
-  // 데이터베이스에서 모든 제출 상태 가져오기 (URL 정보 포함)
+  // 데이터베이스에서 모든 제출 상태 가져오기 (URL 및 status 정보 포함)
   // 주의: RLS 정책으로 인해 모든 사용자의 제출 상태를 조회하지 못할 수 있음
   // 필요시 supabase-setup.sql에서 homeworks 테이블의 SELECT 정책을 수정해야 함
   const { data: allHomeworks, error: homeworksError } = await supabase
     .from("homeworks")
-    .select("user_id, assignment_id, url"); // URL 필드 추가
+    .select("user_id, assignment_id, url, status"); // URL 및 status 필드 추가
 
   // 에러 처리
   if (homeworksError) {
     console.error("제출 상태 조회 오류:", homeworksError);
   }
 
-  // 진행 상태 데이터 생성: 각 사용자-과제 조합에 대해 제출 여부 및 URL 확인
+  // 진행 상태 데이터 생성: 각 사용자-과제 조합에 대해 제출 여부, URL, status 확인
   const progressData: Array<{
     userId: string;
     assignmentId: string;
     status: "completed" | "not_completed";
     url?: string; // 제출 URL 정보 (제출한 경우에만 존재)
+    evaluationStatus?: string; // 평가 상태 (검토중, 승인, 수정필요, 모범답안)
   }> = [];
 
   // 모든 사용자와 모든 과제에 대해 진행 상태 생성
@@ -134,14 +137,17 @@ export default async function Home() {
       const submission = (allHomeworks || []).find(
         (homework) =>
           homework.user_id === user.id &&
-          homework.assignment_id === assignment.id
+          homework.assignment_id === assignment.id,
       );
 
       progressData.push({
         userId: user.id,
         assignmentId: assignment.id,
-        status: submission ? ("completed" as const) : ("not_completed" as const),
+        status: submission
+          ? ("completed" as const)
+          : ("not_completed" as const),
         url: submission?.url, // 제출한 경우 URL 정보 포함
+        evaluationStatus: submission?.status || undefined, // 평가 상태 정보 포함
       });
     });
   });
@@ -155,17 +161,15 @@ export default async function Home() {
         <div className="space-y-6">
           <div>
             <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-2">
-              오늘의 숙제
+              오늘의 과제
             </h2>
             <p className="text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-              현재 진행 중인 숙제 목록입니다.
+              현재 진행 중인 과제입니다.
             </p>
           </div>
 
           {/* 오늘의 숙제 목록 */}
           <TodayAssignments assignments={todayAssignmentsData} />
-          
-         
         </div>
       ),
     },
@@ -183,7 +187,7 @@ export default async function Home() {
         </div>
       ),
     },
-    // 관리자만 숙제 리스트 탭 표시
+    // 관리자만 숙제 리스트 및 평가 탭 표시
     ...(isAdmin
       ? [
           {
@@ -204,6 +208,21 @@ export default async function Home() {
                 </div>
                 <AssignmentList assignments={assignmentListData} />
               </div>
+            ),
+          },
+          {
+            id: "evaluation",
+            label: "평가",
+            content: (
+              <EvaluationTab
+                assignments={assignmentListData.map((assignment) => ({
+                  id: assignment.id,
+                  title: assignment.title,
+                  content: assignment.content,
+                  startDate: assignment.startDate,
+                  endDate: assignment.endDate,
+                }))}
+              />
             ),
           },
         ]

@@ -228,3 +228,38 @@ ADD COLUMN IF NOT EXISTS lecture_material_url TEXT;
 -- 지난과제 모범답안 URL 컬럼 추가
 ALTER TABLE public.assignments 
 ADD COLUMN IF NOT EXISTS previous_answer_url TEXT;
+
+-- ============================================
+-- homeworks 테이블에 status 컬럼 추가
+-- ============================================
+
+-- status 컬럼 추가 (기본값: '검토중')
+ALTER TABLE public.homeworks 
+ADD COLUMN IF NOT EXISTS status TEXT DEFAULT '검토중';
+
+-- status 컬럼에 CHECK 제약 조건 추가 (유효한 값만 허용)
+ALTER TABLE public.homeworks
+DROP CONSTRAINT IF EXISTS check_status_valid;
+
+ALTER TABLE public.homeworks
+ADD CONSTRAINT check_status_valid 
+CHECK (status IN ('검토중', '승인', '수정필요', '모범답안'));
+
+-- 관리자가 다른 사용자의 제출물 상태를 수정할 수 있도록 RLS 정책 추가
+CREATE POLICY "Admins can update all homework statuses"
+  ON public.homeworks
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE profiles.id = auth.uid()
+      AND profiles.role = 'admin'
+    )
+  );
