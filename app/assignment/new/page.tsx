@@ -17,6 +17,8 @@ export default function NewAssignmentPage() {
     startTime: "", // 게시 시작 시간
     endDate: "", // 게시 종료일
     endTime: "", // 게시 종료 시간
+    lectureMaterialUrl: "", // 오늘의 강의자료 URL
+    previousAnswerUrl: "", // 지난과제 모범답안 URL
   });
 
   // 저장 중 상태 관리
@@ -76,6 +78,27 @@ export default function NewAssignmentPage() {
         return;
       }
 
+      // URL 유효성 검사 (입력된 경우에만)
+      if (formData.lectureMaterialUrl.trim()) {
+        try {
+          new URL(formData.lectureMaterialUrl.trim());
+        } catch {
+          alert("오늘의 강의자료 URL 형식이 올바르지 않습니다.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      if (formData.previousAnswerUrl.trim()) {
+        try {
+          new URL(formData.previousAnswerUrl.trim());
+        } catch {
+          alert("지난과제 모범답안 URL 형식이 올바르지 않습니다.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // 데이터베이스에 저장
       const { data, error } = await supabase
         .from("assignments")
@@ -85,6 +108,8 @@ export default function NewAssignmentPage() {
           start_date: startDateTime.toISOString(),
           end_date: endDateTime.toISOString(),
           created_by: user.id,
+          lecture_material_url: formData.lectureMaterialUrl.trim() || null, // 오늘의 강의자료 URL
+          previous_answer_url: formData.previousAnswerUrl.trim() || null, // 지난과제 모범답안 URL
         })
         .select()
         .single();
@@ -241,6 +266,50 @@ export default function NewAssignmentPage() {
                 required
               />
             </div>
+          </div>
+
+          {/* 오늘의 강의자료 URL */}
+          <div className="space-y-2">
+            <label
+              htmlFor="lectureMaterialUrl"
+              className="text-sm font-semibold text-black dark:text-zinc-50"
+            >
+              오늘의 강의자료 URL
+            </label>
+            <input
+              type="url"
+              id="lectureMaterialUrl"
+              name="lectureMaterialUrl"
+              value={formData.lectureMaterialUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/lecture-material"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            />
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              강의자료가 있는 URL을 입력하세요 (선택사항)
+            </p>
+          </div>
+
+          {/* 지난과제 모범답안 URL */}
+          <div className="space-y-2">
+            <label
+              htmlFor="previousAnswerUrl"
+              className="text-sm font-semibold text-black dark:text-zinc-50"
+            >
+              지난과제 모범답안 URL
+            </label>
+            <input
+              type="url"
+              id="previousAnswerUrl"
+              name="previousAnswerUrl"
+              value={formData.previousAnswerUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/previous-answer"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            />
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              지난과제 모범답안이 있는 URL을 입력하세요 (선택사항)
+            </p>
           </div>
 
           {/* 버튼 영역 */}

@@ -37,6 +37,8 @@ export default async function Home() {
       content: assignment.content || "",
       startDate: new Date(assignment.start_date),
       endDate: new Date(assignment.end_date),
+      lectureMaterialUrl: assignment.lecture_material_url || null, // 오늘의 강의자료 URL
+      previousAnswerUrl: assignment.previous_answer_url || null, // 지난과제 모범답안 URL
     }));
 
   // 제출 학생 수를 계산하기 위해 각 assignment에 대한 제출 수를 가져옴

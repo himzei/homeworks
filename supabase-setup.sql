@@ -216,3 +216,15 @@ ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
 
 -- role 컬럼에 대한 인덱스 추가 (관리자 조회 성능 향상)
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
+
+-- ============================================
+-- assignments 테이블에 강의자료 및 모범답안 URL 컬럼 추가
+-- ============================================
+
+-- 오늘의 강의자료 URL 컬럼 추가
+ALTER TABLE public.assignments 
+ADD COLUMN IF NOT EXISTS lecture_material_url TEXT;
+
+-- 지난과제 모범답안 URL 컬럼 추가
+ALTER TABLE public.assignments 
+ADD COLUMN IF NOT EXISTS previous_answer_url TEXT;
