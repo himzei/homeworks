@@ -16,11 +16,11 @@ import {
 
 export default function Header() {
   const router = useRouter();
-  
+
   // 모달 상태 관리
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  
+
   // 인증 상태 관리
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,12 +69,10 @@ export default function Header() {
         <div className="container mx-auto flex items-center justify-between h-16">
           {/* 왼쪽 영역 (비어있음) */}
           <div className="flex-1">
-          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
+            <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
               K-Digital Training AI 빅데이터 전문가 양성과정
             </h1>
           </div>
-
-        
 
           {/* 오른쪽 영역 - 회원가입, 로그인 버튼 또는 사용자 정보 */}
           <div className="flex-1 flex justify-end items-center gap-3">
@@ -97,7 +95,9 @@ export default function Header() {
                   {/* 이메일 정보 표시 */}
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.email}</p>
+                      <p className="text-sm font-medium leading-none">
+                        {user.email}
+                      </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
@@ -110,7 +110,7 @@ export default function Header() {
                   </DropdownMenuItem>
                   {/* 과제 메뉴 */}
                   <DropdownMenuItem
-                    onClick={() => router.push("/assignment/new")}
+                    onClick={() => router.push("/home")}
                     className="cursor-pointer"
                   >
                     과제

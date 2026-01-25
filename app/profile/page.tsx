@@ -7,13 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 export default function ProfilePage() {
   const router = useRouter();
   const supabase = createClient();
-  
+
   // 폼 상태 관리
   const [groupName, setGroupName] = useState("test1");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
-  
+
   // UI 상태 관리
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -84,21 +84,19 @@ export default function ProfilePage() {
 
     try {
       // 프로필 정보 저장 또는 업데이트
-      const { error: upsertError } = await supabase
-        .from("profiles")
-        .upsert({
-          id: user.id,
-          group_name: groupName,
-          name: name,
-          phone: phone,
-          bio: bio,
-          updated_at: new Date().toISOString(),
-        });
+      const { error: upsertError } = await supabase.from("profiles").upsert({
+        id: user.id,
+        group_name: groupName,
+        name: name,
+        phone: phone,
+        bio: bio,
+        updated_at: new Date().toISOString(),
+      });
 
       if (upsertError) throw upsertError;
 
       setSuccess("프로필이 성공적으로 저장되었습니다!");
-      
+
       // 2초 후 성공 메시지 숨기기
       setTimeout(() => {
         setSuccess(null);
@@ -164,7 +162,9 @@ export default function ProfilePage() {
                 onChange={(e) => setGroupName(e.target.value)}
                 className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="test1">test1</option>
+                <option value="13기 교육생 - 빅데이터 전문가 양성과정">
+                  13기 교육생 - 빅데이터 전문가 양성과정
+                </option>
                 {/* 필요시 여기에 추가 옵션을 넣을 수 있습니다 */}
               </select>
             </div>
@@ -187,8 +187,6 @@ export default function ProfilePage() {
                 placeholder="이름을 입력하세요"
               />
             </div>
-
-          
 
             {/* 자기소개 */}
             <div>
