@@ -90,7 +90,7 @@ export default function EvaluationTab({
     checkAdmin();
   }, [supabase]);
 
-  // 사용자 목록 가져오기
+  // 사용자 목록 가져오기 (관리자 제외)
   useEffect(() => {
     const fetchUsers = async () => {
       if (!isAdmin || isCheckingAdmin) return;
@@ -98,7 +98,7 @@ export default function EvaluationTab({
       try {
         const { data: profilesData, error } = await supabase
           .from("profiles")
-          .select("id, name")
+          .select("id, name, role")
           .order("created_at", { ascending: true });
 
         if (error) {
@@ -106,11 +106,14 @@ export default function EvaluationTab({
           return;
         }
 
+        // 관리자가 아닌 사용자만 필터링
         const usersList: User[] =
-          profilesData?.map((profile) => ({
-            id: profile.id,
-            name: profile.name || "이름 없음",
-          })) || [];
+          profilesData
+            ?.filter((profile) => profile.role !== "admin")
+            .map((profile) => ({
+              id: profile.id,
+              name: profile.name || "이름 없음",
+            })) || [];
 
         setUsers(usersList);
       } catch (error) {

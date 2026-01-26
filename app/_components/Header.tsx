@@ -126,7 +126,7 @@ export default function Header() {
         <div className="container mx-auto flex items-center justify-between h-16">
           {/* 왼쪽 영역 - 제목 (클릭 시 메인 페이지로 이동) */}
           <div className="flex-1">
-            <Link href="/">
+            <Link href="/home">
               <h1 className="text-xl font-semibold text-black dark:text-zinc-50 cursor-pointer hover:opacity-80 transition-opacity">
                 13기 기초교육과정 과제 관리
               </h1>
@@ -156,8 +156,8 @@ export default function Header() {
                           {profile?.name
                             ? profile.name.charAt(0).toUpperCase()
                             : user.email
-                            ? user.email.charAt(0).toUpperCase()
-                            : "?"}
+                              ? user.email.charAt(0).toUpperCase()
+                              : "?"}
                         </div>
                       )}
                     </div>
