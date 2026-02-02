@@ -40,7 +40,31 @@ export default function Header() {
         // 1. 인증된 사용자 정보 가져오기
         const {
           data: { user },
+          error: userError,
         } = await supabase.auth.getUser();
+
+        // refresh token 에러 체크
+        if (userError) {
+          // refresh token 관련 에러인 경우 세션 정리
+          if (
+            userError.message?.includes("Refresh Token") ||
+            userError.message?.includes("refresh_token") ||
+            userError.status === 401
+          ) {
+            console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
+            // 세션 정리
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            return;
+          }
+          // 다른 에러인 경우
+          console.error("사용자 정보 가져오기 실패:", userError);
+          setUser(null);
+          setProfile(null);
+          return;
+        }
+
         setUser(user);
 
         // 2. 사용자가 로그인되어 있으면 프로필 정보 가져오기
@@ -65,8 +89,18 @@ export default function Header() {
         } else {
           setProfile(null);
         }
-      } catch (error) {
-        console.error("사용자 정보 가져오기 실패:", error);
+      } catch (error: any) {
+        // refresh token 에러 체크
+        if (
+          error?.message?.includes("Refresh Token") ||
+          error?.message?.includes("refresh_token") ||
+          error?.status === 401
+        ) {
+          console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
+          await supabase.auth.signOut();
+        } else {
+          console.error("사용자 정보 가져오기 실패:", error);
+        }
         setUser(null);
         setProfile(null);
       } finally {

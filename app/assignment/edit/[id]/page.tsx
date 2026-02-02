@@ -19,6 +19,8 @@ export default function EditAssignmentPage() {
     startTime: "", // 게시 시작 시간
     endDate: "", // 게시 종료일
     endTime: "", // 게시 종료 시간
+    lectureMaterialUrl: "", // 오늘의 강의자료 URL
+    previousAnswerUrl: "", // 지난과제 모범답안 URL
   });
 
   // 로딩 및 저장 상태 관리
@@ -67,6 +69,8 @@ export default function EditAssignmentPage() {
           startTime: startDate.toTimeString().slice(0, 5), // HH:MM 형식
           endDate: endDate.toISOString().split("T")[0],
           endTime: endDate.toTimeString().slice(0, 5), // HH:MM 형식
+          lectureMaterialUrl: data.lecture_material_url || "",
+          previousAnswerUrl: data.previous_answer_url || "",
         });
       } catch (error) {
         console.error("예상치 못한 오류:", error);
@@ -136,33 +140,107 @@ export default function EditAssignmentPage() {
         return;
       }
 
+      // URL 유효성 검사 (입력된 경우에만)
+      if (formData.lectureMaterialUrl.trim()) {
+        try {
+          new URL(formData.lectureMaterialUrl.trim());
+        } catch {
+          alert("오늘의 강의자료 URL 형식이 올바르지 않습니다.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      if (formData.previousAnswerUrl.trim()) {
+        try {
+          new URL(formData.previousAnswerUrl.trim());
+        } catch {
+          alert("지난과제 모범답안 URL 형식이 올바르지 않습니다.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // 업데이트할 데이터 준비
+      const updateData: any = {
+        title: formData.title.trim(),
+        content: formData.content.trim() || null,
+        start_date: startDateTime.toISOString(),
+        end_date: endDateTime.toISOString(),
+      };
+
+      // URL 필드 처리 (빈 문자열이면 null로 저장)
+      updateData.lecture_material_url = formData.lectureMaterialUrl.trim() || null;
+      updateData.previous_answer_url = formData.previousAnswerUrl.trim() || null;
+
+      console.log("업데이트할 데이터:", updateData);
+      console.log("URL 필드 값:", {
+        lecture_material_url: updateData.lecture_material_url,
+        previous_answer_url: updateData.previous_answer_url,
+      });
+
       // 데이터베이스 업데이트
       const { data, error } = await supabase
         .from("assignments")
-        .update({
-          title: formData.title.trim(),
-          content: formData.content.trim() || null,
-          start_date: startDateTime.toISOString(),
-          end_date: endDateTime.toISOString(),
-        })
+        .update(updateData)
         .eq("id", assignmentId)
         .eq("created_by", user.id) // 작성자만 수정 가능하도록
         .select()
         .single();
 
+      console.log("업데이트 결과:", { data, error });
+
       if (error) {
         console.error("수정 오류:", error);
+        console.error("에러 상세:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
         alert(`숙제 수정에 실패했습니다: ${error.message}`);
         setIsSubmitting(false);
         return;
       }
 
-      // 성공 메시지 표시 후 리스트 페이지로 이동
+      if (!data) {
+        console.error("업데이트된 데이터가 없습니다.");
+        alert("숙제 수정에 실패했습니다. 업데이트된 데이터를 확인할 수 없습니다.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log("업데이트 성공! 업데이트된 데이터:", data);
+
+      // 성공 메시지 표시
       alert("숙제가 수정되었습니다!");
+      
+      // 로딩 상태 해제
+      setIsSubmitting(false);
+      
+      // 리스트 페이지로 이동
       router.push("/");
-    } catch (error) {
+    } catch (error: any) {
       console.error("예상치 못한 오류:", error);
-      alert("예상치 못한 오류가 발생했습니다.");
+      console.error("에러 상세:", {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      });
+      
+      // refresh token 에러 체크
+      if (
+        error?.message?.includes("Refresh Token") ||
+        error?.message?.includes("refresh_token") ||
+        error?.status === 401
+      ) {
+        alert("세션이 만료되었습니다. 다시 로그인해주세요.");
+        await supabase.auth.signOut();
+        router.push("/");
+      } else {
+        alert(`예상치 못한 오류가 발생했습니다: ${error?.message || "알 수 없는 오류"}`);
+      }
+      
       setIsSubmitting(false);
     }
   };
@@ -315,6 +393,50 @@ export default function EditAssignmentPage() {
                 required
               />
             </div>
+          </div>
+
+          {/* 오늘의 강의자료 URL */}
+          <div className="space-y-2">
+            <label
+              htmlFor="lectureMaterialUrl"
+              className="text-sm font-semibold text-black dark:text-zinc-50"
+            >
+              오늘의 강의자료 URL
+            </label>
+            <input
+              type="url"
+              id="lectureMaterialUrl"
+              name="lectureMaterialUrl"
+              value={formData.lectureMaterialUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/lecture-material"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            />
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              강의자료가 있는 URL을 입력하세요 (선택사항)
+            </p>
+          </div>
+
+          {/* 지난과제 모범답안 URL */}
+          <div className="space-y-2">
+            <label
+              htmlFor="previousAnswerUrl"
+              className="text-sm font-semibold text-black dark:text-zinc-50"
+            >
+              지난과제 모범답안 URL
+            </label>
+            <input
+              type="url"
+              id="previousAnswerUrl"
+              name="previousAnswerUrl"
+              value={formData.previousAnswerUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/previous-answer"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            />
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              지난과제 모범답안이 있는 URL을 입력하세요 (선택사항)
+            </p>
           </div>
 
           {/* 버튼 영역 */}

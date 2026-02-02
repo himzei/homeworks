@@ -35,7 +35,25 @@ export default function ProfilePage() {
           error: userError,
         } = await supabase.auth.getUser();
 
-        if (userError || !currentUser) {
+        // refresh token 에러 체크
+        if (userError) {
+          // refresh token 관련 에러인 경우 세션 정리 후 홈으로 리다이렉트
+          if (
+            userError.message?.includes("Refresh Token") ||
+            userError.message?.includes("refresh_token") ||
+            userError.status === 401
+          ) {
+            console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
+            await supabase.auth.signOut();
+            router.push("/");
+            return;
+          }
+          // 다른 에러인 경우도 홈으로 리다이렉트
+          router.push("/");
+          return;
+        }
+
+        if (!currentUser) {
           // 로그인하지 않은 경우 홈으로 리다이렉트
           router.push("/");
           return;
@@ -66,6 +84,17 @@ export default function ProfilePage() {
           setAvatarPreview(profile.avatar_url || null);
         }
       } catch (err: any) {
+        // refresh token 에러 체크
+        if (
+          err?.message?.includes("Refresh Token") ||
+          err?.message?.includes("refresh_token") ||
+          err?.status === 401
+        ) {
+          console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
+          await supabase.auth.signOut();
+          router.push("/");
+          return;
+        }
         console.error("프로필 로드 중 오류:", err);
         setError("프로필 정보를 불러오는 중 오류가 발생했습니다.");
       } finally {
