@@ -159,12 +159,25 @@ export default function Header() {
       <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black">
         <div className="container mx-auto flex items-center justify-between h-16">
           {/* 왼쪽 영역 - 제목 (클릭 시 메인 페이지로 이동) */}
-          <div className="flex-1">
+          <div className="flex-1 flex items-center gap-4">
             <Link href="/home">
               <h1 className="text-xl font-semibold text-black dark:text-zinc-50 cursor-pointer hover:opacity-80 transition-opacity">
                 13기 기초교육과정 과제 관리
               </h1>
             </Link>
+            {/* 과제제출방법 버튼 */}
+            <button
+              onClick={() => {
+                window.open(
+                  "https://himzei.notion.site/13-2fcd0a6ad3d780468f31c3eff7e9a23b?source=copy_link",
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+              }}
+              className="px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-black dark:hover:text-white border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              과제제출방법
+            </button>
           </div>
 
           {/* 오른쪽 영역 - 회원가입, 로그인 버튼 또는 사용자 정보 */}
