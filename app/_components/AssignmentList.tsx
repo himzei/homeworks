@@ -13,6 +13,7 @@ import {
   PaginationPrevious,
 } from "@/app/_components/ui/pagination";
 import { createClient } from "@/lib/supabase/client";
+import { useAdmin } from "@/lib/auth/SessionProvider";
 import CheckedList from "./CheckedList";
 
 // 숙제 데이터 타입 정의
@@ -43,6 +44,10 @@ interface AssignmentListProps {
 export default function AssignmentList({ assignments }: AssignmentListProps) {
   const router = useRouter();
   const supabase = createClient();
+  
+  // 전역 세션에서 관리자 권한 가져오기
+  const { isAdmin, isCheckingAdmin } = useAdmin();
+  
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
   // 페이지네이션 상태 (1페이지당 1개 항목)
@@ -61,10 +66,6 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
   const [submissionStatuses, setSubmissionStatuses] = useState<
     Record<string, SubmissionStatus>
   >({});
-
-  // 관리자 권한 확인 상태
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState<boolean>(true);
 
   // assignments의 ID 배열을 메모이제이션 (의존성 배열 안정화를 위해)
   const assignmentIds = useMemo(
@@ -178,47 +179,20 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
     }
   }, [assignmentIds, supabase, isAdmin, isCheckingAdmin]);
 
-  // 관리자 권한 확인 함수
-  useEffect(() => {
-    const checkAdminRole = async () => {
-      try {
-        // 현재 로그인한 사용자 정보 가져오기
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          setIsAdmin(false);
-          setIsCheckingAdmin(false);
-          return;
-        }
-
-        // 프로필에서 역할 확인
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        // 관리자 역할 확인 (role이 'admin'인 경우)
-        setIsAdmin(profile?.role === "admin");
-      } catch (error) {
-        console.error("관리자 권한 확인 실패:", error);
-        setIsAdmin(false);
-      } finally {
-        setIsCheckingAdmin(false);
-      }
-    };
-
-    checkAdminRole();
-  }, [supabase]);
+  // 관리자 권한은 전역 세션에서 관리하므로 별도 확인 불필요
 
   // 컴포넌트 마운트 시 및 assignments 변경 시 제출 정보 가져오기 (관리자일 때만)
   useEffect(() => {
-    if (assignments.length > 0 && isAdmin && !isCheckingAdmin) {
+    // 관리자가 아니거나 권한 확인 중이면 실행하지 않음
+    if (!isAdmin || isCheckingAdmin) {
+      return;
+    }
+    
+    // assignments가 있고 관리자 권한이 확인된 경우에만 실행
+    if (assignments.length > 0) {
       fetchSubmissions();
     }
-  }, [assignmentIds, fetchSubmissions, isAdmin, isCheckingAdmin]);
+  }, [assignmentIds, fetchSubmissions, isAdmin, isCheckingAdmin, assignments.length]);
 
   // 특정 과제의 제출 정보만 다시 불러오는 함수
   const refreshAssignmentSubmissions = useCallback(

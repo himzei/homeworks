@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useSession } from "@/lib/auth/SessionProvider";
 import AuthModal from "./AuthModal";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import {
@@ -17,136 +18,14 @@ import {
 
 export default function Header() {
   const router = useRouter();
+  
+  // 전역 세션에서 사용자 정보 가져오기
+  const { user, profile, isLoading } = useSession();
+  const supabase = createClient();
 
   // 모달 상태 관리
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-
-  // 인증 상태 관리
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null); // 프로필 정보 저장
-  const [isLoading, setIsLoading] = useState(true);
-
-  const supabase = createClient();
-
-  // 초기 로드 완료 여부를 추적하는 ref (클로저 문제 방지)
-  const isInitialLoadRef = useRef(true);
-
-  // 인증 상태 확인
-  useEffect(() => {
-    // 현재 사용자 정보 및 프로필 정보 가져오기
-    const getUser = async () => {
-      try {
-        // 1. 인증된 사용자 정보 가져오기
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        // refresh token 에러 체크
-        if (userError) {
-          // refresh token 관련 에러인 경우 세션 정리
-          if (
-            userError.message?.includes("Refresh Token") ||
-            userError.message?.includes("refresh_token") ||
-            userError.status === 401
-          ) {
-            console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
-            // 세션 정리
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            return;
-          }
-          // 다른 에러인 경우
-          console.error("사용자 정보 가져오기 실패:", userError);
-          setUser(null);
-          setProfile(null);
-          return;
-        }
-
-        setUser(user);
-
-        // 2. 사용자가 로그인되어 있으면 프로필 정보 가져오기
-        if (user) {
-          const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-
-          // 프로필이 없어도 에러가 아니므로 (PGRST116은 데이터 없음 에러)
-          if (profileError && profileError.code !== "PGRST116") {
-            console.error("프로필 정보 가져오기 실패:", profileError);
-          }
-
-          // 프로필 데이터가 있으면 저장
-          if (profileData) {
-            setProfile(profileData);
-          } else {
-            setProfile(null);
-          }
-        } else {
-          setProfile(null);
-        }
-      } catch (error: any) {
-        // refresh token 에러 체크
-        if (
-          error?.message?.includes("Refresh Token") ||
-          error?.message?.includes("refresh_token") ||
-          error?.status === 401
-        ) {
-          console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
-          await supabase.auth.signOut();
-        } else {
-          console.error("사용자 정보 가져오기 실패:", error);
-        }
-        setUser(null);
-        setProfile(null);
-      } finally {
-        // 초기 로드가 완료되면 로딩 상태 해제
-        if (isInitialLoadRef.current) {
-          setIsLoading(false);
-          isInitialLoadRef.current = false; // 초기 로드 완료 표시
-        }
-      }
-    };
-
-    getUser();
-
-    // 인증 상태 변경 감지 (초기 로드 이후의 변경사항만 처리)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      // 초기 로드가 완료된 후에만 상태 업데이트
-      if (!isInitialLoadRef.current) {
-        setUser(session?.user ?? null);
-
-        // 인증 상태가 변경되면 프로필 정보도 다시 가져오기
-        if (session?.user) {
-          const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-
-          if (profileError && profileError.code !== "PGRST116") {
-            console.error("프로필 정보 가져오기 실패:", profileError);
-          }
-
-          if (profileData) {
-            setProfile(profileData);
-          } else {
-            setProfile(null);
-          }
-        } else {
-          setProfile(null);
-        }
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   // 로그아웃 처리
   const handleLogout = async () => {

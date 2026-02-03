@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAdmin } from "@/lib/auth/SessionProvider";
 
 // 과제 데이터 타입 정의
 interface Assignment {
@@ -37,15 +38,17 @@ interface EvaluationTabProps {
 export default function EvaluationTab({
   assignments,
 }: EvaluationTabProps) {
-  const supabase = createClient();
-
-  // 관리자 권한 확인 상태
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState<boolean>(true);
+  // Supabase 클라이언트를 메모이제이션하여 무한 루프 방지
+  const supabase = useMemo(() => createClient(), []);
+  
+  // 전역 세션에서 관리자 권한 가져오기
+  const { isAdmin, isCheckingAdmin } = useAdmin();
 
   // 사용자 목록 상태
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(true);
+  // 타임아웃 방지를 위한 ref
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 평가 상태 저장: { "userId-assignmentId": "미제출" | "수정필요" | "승인" | "모범답안" }
   const [evaluationStatuses, setEvaluationStatuses] = useState<
@@ -57,45 +60,35 @@ export default function EvaluationTab({
     Record<string, { url: string; submittedAt: string }>
   >({});
 
-  // 관리자 권한 확인
-  useEffect(() => {
-    const checkAdmin = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          setIsAdmin(false);
-          setIsCheckingAdmin(false);
-          return;
-        }
-
-        // 프로필에서 역할 확인
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-        setIsAdmin(profile?.role === "admin");
-      } catch (error) {
-        console.error("관리자 권한 확인 실패:", error);
-        setIsAdmin(false);
-      } finally {
-        setIsCheckingAdmin(false);
-      }
-    };
-
-    checkAdmin();
-  }, [supabase]);
+  // 관리자 권한은 전역 세션에서 관리하므로 별도 확인 불필요
 
   // 사용자 목록 가져오기 (관리자 제외)
   useEffect(() => {
+    // 기존 타임아웃 클리어
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+
     const fetchUsers = async () => {
-      if (!isAdmin || isCheckingAdmin) return;
+      // 관리자가 아니거나 권한 확인 중이면 실행하지 않음
+      if (!isAdmin || isCheckingAdmin) {
+        // 관리자가 아닌 경우 로딩 상태 해제
+        if (!isCheckingAdmin && !isAdmin) {
+          setIsLoadingUsers(false);
+        }
+        // 권한 확인 중인 경우 타임아웃 설정 (5초 후 강제로 로딩 해제)
+        if (isCheckingAdmin) {
+          loadingTimeoutRef.current = setTimeout(() => {
+            console.warn("관리자 권한 확인 타임아웃 - 로딩 상태 해제");
+            setIsLoadingUsers(false);
+          }, 5000);
+        }
+        return;
+      }
 
       try {
+        setIsLoadingUsers(true);
         const { data: profilesData, error } = await supabase
           .from("profiles")
           .select("id, name, role")
@@ -103,6 +96,7 @@ export default function EvaluationTab({
 
         if (error) {
           console.error("사용자 목록 조회 실패:", error);
+          setIsLoadingUsers(false);
           return;
         }
 
@@ -120,11 +114,25 @@ export default function EvaluationTab({
         console.error("사용자 목록 가져오기 중 오류:", error);
       } finally {
         setIsLoadingUsers(false);
+        // 타임아웃 클리어
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
       }
     };
 
     fetchUsers();
-  }, [isAdmin, isCheckingAdmin, supabase]);
+
+    // 클린업 함수: 컴포넌트 언마운트 시 타임아웃 클리어
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isCheckingAdmin]); // supabase는 메모이제이션되어 있으므로 의존성에서 제외
 
   // 제출 정보 가져오기
   useEffect(() => {
@@ -177,7 +185,8 @@ export default function EvaluationTab({
     };
 
     fetchSubmissions();
-  }, [isAdmin, isCheckingAdmin, assignments, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isCheckingAdmin, assignments]); // supabase는 메모이제이션되어 있으므로 의존성에서 제외
 
   // 평가 상태 키 생성 함수
   const getEvaluationKey = (
@@ -314,7 +323,9 @@ export default function EvaluationTab({
   const gridCols = `200px 100px repeat(${assignments.length}, 120px)`;
   const totalCols = assignments.length + 2; // 사용자 열 + 부분합 열 + 과제 열들
 
-  // 관리자가 아닌 경우 접근 제한
+  // 관리자 권한 확인 중이거나 사용자 목록 로딩 중일 때 로딩 표시
+  // isCheckingAdmin이 false로 바뀌지 않으면 무한 로딩이 될 수 있으므로,
+  // 타임아웃 처리는 useEffect에서 처리됨
   if (isCheckingAdmin || isLoadingUsers) {
     return (
       <div className="w-full space-y-4">

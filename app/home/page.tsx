@@ -7,6 +7,10 @@ import { Button } from "@/app/_components/ui/button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
+// 동적 렌더링 강제 설정 (세션별로 다른 데이터를 보여주므로 캐싱 방지)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function Home() {
   // Supabase 클라이언트 생성
   const supabase = await createClient();
