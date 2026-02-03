@@ -19,9 +19,6 @@ export default function Tabs({ items, defaultTabId }: TabsProps) {
     defaultTabId || items[0]?.id || ""
   );
 
-  // 현재 활성화된 탭의 콘텐츠 찾기
-  const activeTab = items.find((tab) => tab.id === activeTabId);
-
   return (
     <div className="w-full">
       {/* 탭 헤더 */}
@@ -44,8 +41,17 @@ export default function Tabs({ items, defaultTabId }: TabsProps) {
         ))}
       </div>
 
-      {/* 탭 콘텐츠 */}
-      <div className="mt-6">{activeTab?.content}</div>
+      {/* 탭 콘텐츠 - 모든 탭을 렌더링하되 비활성 탭은 숨김 */}
+      <div className="mt-6">
+        {items.map((tab) => (
+          <div
+            key={tab.id}
+            className={activeTabId === tab.id ? "block" : "hidden"}
+          >
+            {tab.content}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

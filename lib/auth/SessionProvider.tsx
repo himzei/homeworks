@@ -28,6 +28,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
   const isInitialLoadRef = useRef(true);
   const isMountedRef = useRef(true);
+  // 가시성 변경 핸들러의 중복 실행 방지를 위한 ref
+  const isCheckingVisibilityRef = useRef(false);
+  // user와 profile의 최신 값을 참조하기 위한 ref
+  const userRef = useRef<User | null>(null);
+  const profileRef = useRef<{ role?: string; [key: string]: any } | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -83,7 +88,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           
           if (isMountedRef.current) {
             setUser(null);
+            userRef.current = null;
             setProfile(null);
+            profileRef.current = null;
             setIsAdmin(false);
             setIsCheckingAdmin(false);
             setIsLoading(false);
@@ -98,6 +105,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         }
 
         setUser(currentUser);
+        userRef.current = currentUser;
 
         // 프로필 정보 가져오기
         if (currentUser) {
@@ -113,7 +121,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (isMountedRef.current) {
-              setProfile(profileData || null);
+              const profileValue = profileData || null;
+              setProfile(profileValue);
+              profileRef.current = profileValue;
               setIsAdmin(profileData?.role === "admin" || false);
               setIsCheckingAdmin(false);
             } else {
@@ -124,6 +134,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             console.error("프로필 조회 중 오류:", profileErr);
             if (isMountedRef.current) {
               setProfile(null);
+              profileRef.current = null;
               setIsAdmin(false);
               setIsCheckingAdmin(false);
             } else {
@@ -133,6 +144,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         } else {
           if (isMountedRef.current) {
             setProfile(null);
+            profileRef.current = null;
             setIsAdmin(false);
             setIsCheckingAdmin(false);
           } else {
@@ -143,7 +155,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         console.error("세션 로드 실패:", error);
         if (isMountedRef.current) {
           setUser(null);
+          userRef.current = null;
           setProfile(null);
+          profileRef.current = null;
           setIsAdmin(false);
           setIsCheckingAdmin(false);
         } else {
@@ -174,6 +188,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         
         const currentUser = session?.user ?? null;
         setUser(currentUser);
+        userRef.current = currentUser;
 
         if (currentUser) {
           try {
@@ -189,7 +204,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (isMountedRef.current) {
-              setProfile(profileData || null);
+              const profileValue = profileData || null;
+              setProfile(profileValue);
+              profileRef.current = profileValue;
               setIsAdmin(profileData?.role === "admin" || false);
               setIsCheckingAdmin(false);
             } else {
@@ -199,6 +216,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             console.error("프로필 조회 중 오류:", profileErr);
             if (isMountedRef.current) {
               setProfile(null);
+              profileRef.current = null;
               setIsAdmin(false);
               setIsCheckingAdmin(false);
             } else {
@@ -208,6 +226,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         } else {
           if (isMountedRef.current) {
             setProfile(null);
+            profileRef.current = null;
             setIsAdmin(false);
             setIsCheckingAdmin(false);
           } else {
@@ -219,28 +238,53 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     // 페이지 가시성 변경 감지 (다른 탭에서 돌아올 때 세션 확인)
     const handleVisibilityChange = async () => {
+      // 이미 확인 중이면 중복 실행 방지
+      if (isCheckingVisibilityRef.current) {
+        return;
+      }
+
       if (
         typeof window !== "undefined" &&
         document.visibilityState === "visible" &&
         isMountedRef.current
       ) {
-        // 페이지가 다시 보일 때 세션 확인
+        // 중복 실행 방지 플래그 설정
+        isCheckingVisibilityRef.current = true;
+
         try {
+          // 현재 사용자 정보 가져오기
           const { data: { user: currentUser }, error } = await supabase.auth.getUser();
           
           if (error) {
             console.error("세션 확인 실패:", error);
             if (isMountedRef.current) {
               setUser(null);
+              userRef.current = null;
               setProfile(null);
+              profileRef.current = null;
               setIsAdmin(false);
               setIsCheckingAdmin(false);
             }
+            isCheckingVisibilityRef.current = false;
+            return;
+          }
+
+          // 사용자가 변경되지 않았고 프로필도 이미 로드되어 있다면 다시 조회하지 않음
+          // ref를 사용하여 최신 값 참조
+          if (
+            isMountedRef.current &&
+            currentUser?.id === userRef.current?.id &&
+            profileRef.current
+          ) {
+            // 사용자와 프로필이 변경되지 않았으므로 확인 완료
+            setIsCheckingAdmin(false);
+            isCheckingVisibilityRef.current = false;
             return;
           }
 
           if (isMountedRef.current) {
             setUser(currentUser);
+            userRef.current = currentUser;
             
             if (currentUser) {
               setIsCheckingAdmin(true);
@@ -253,17 +297,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
                 if (profileError && profileError.code !== "PGRST116") {
                   console.error("프로필 정보 가져오기 실패:", profileError);
+                  // 프로필 조회 실패 시에도 isCheckingAdmin을 false로 설정
+                  if (isMountedRef.current) {
+                    setProfile(null);
+                    profileRef.current = null;
+                    setIsAdmin(false);
+                    setIsCheckingAdmin(false);
+                  }
+                  return;
                 }
 
                 if (isMountedRef.current) {
-                  setProfile(profileData || null);
+                  const profileValue = profileData || null;
+                  setProfile(profileValue);
+                  profileRef.current = profileValue;
                   setIsAdmin(profileData?.role === "admin" || false);
+                  setIsCheckingAdmin(false);
+                } else {
+                  // 마운트 해제된 경우에도 isCheckingAdmin을 false로 설정
                   setIsCheckingAdmin(false);
                 }
               } catch (profileErr) {
                 console.error("프로필 조회 중 오류:", profileErr);
                 if (isMountedRef.current) {
                   setProfile(null);
+                  profileRef.current = null;
                   setIsAdmin(false);
                   setIsCheckingAdmin(false);
                 }
@@ -271,6 +329,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             } else {
               if (isMountedRef.current) {
                 setProfile(null);
+                profileRef.current = null;
                 setIsAdmin(false);
                 setIsCheckingAdmin(false);
               }
@@ -281,6 +340,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           if (isMountedRef.current) {
             setIsCheckingAdmin(false);
           }
+        } finally {
+          // 항상 플래그 해제 (에러 발생 시에도)
+          isCheckingVisibilityRef.current = false;
         }
       }
     };

@@ -16,6 +16,16 @@ export default async function UserProfilePage({
   const { id } = await params;
   const supabase = await createClient();
 
+  // 현재 로그인한 사용자 확인
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+
+  // 현재 로그인한 사용자의 ID와 URL의 id가 같으면 프로필 수정 페이지로 리다이렉트
+  if (currentUser && currentUser.id === id) {
+    redirect("/profile");
+  }
+
   // 사용자 프로필 정보 가져오기
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -23,7 +33,13 @@ export default async function UserProfilePage({
     .eq("id", id)
     .single();
 
+  // 프로필을 찾을 수 없을 때
   if (profileError || !profile) {
+    // 현재 로그인한 사용자 본인이라면 프로필 수정 페이지로 리다이렉트
+    if (currentUser && currentUser.id === id) {
+      redirect("/profile");
+    }
+    // 다른 사용자의 프로필을 찾을 수 없으면 not-found 페이지 표시
     notFound();
   }
 

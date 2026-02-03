@@ -47,15 +47,6 @@ export default function CheckedList({
   updateSubmissionStatus,
 }: CheckedListProps) {
   // 권한 확인 중일 때
-  if (isCheckingAdmin) {
-    return (
-      <div className="mb-4 mt-8">
-        <div className="text-sm text-zinc-500 dark:text-zinc-400">
-          권한 확인 중...
-        </div>
-      </div>
-    );
-  }
 
   // 관리자가 아닐 때는 아무것도 렌더링하지 않음
   if (!isAdmin) {
@@ -73,7 +64,7 @@ export default function CheckedList({
           제출 정보를 불러오는 중...
         </div>
       ) : submissions && submissions.length > 0 ? (
-        <div className="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-4 space-y-2 max-h-60 overflow-y-auto">
+        <div className="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-4 space-y-2">
           {submissions.map((submission, index) => (
             <div
               key={submission.userId}

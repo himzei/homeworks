@@ -35,12 +35,10 @@ interface EvaluationTabProps {
   assignments: Assignment[];
 }
 
-export default function EvaluationTab({
-  assignments,
-}: EvaluationTabProps) {
+export default function EvaluationTab({ assignments }: EvaluationTabProps) {
   // Supabase 클라이언트를 메모이제이션하여 무한 루프 방지
   const supabase = useMemo(() => createClient(), []);
-  
+
   // 전역 세션에서 관리자 권한 가져오기
   const { isAdmin, isCheckingAdmin } = useAdmin();
 
@@ -49,6 +47,8 @@ export default function EvaluationTab({
   const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(true);
   // 타임아웃 방지를 위한 ref
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // isCheckingAdmin이 너무 오래 true인 경우를 감지하기 위한 ref
+  const checkingAdminTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 평가 상태 저장: { "userId-assignmentId": "미제출" | "수정필요" | "승인" | "모범답안" }
   const [evaluationStatuses, setEvaluationStatuses] = useState<
@@ -69,6 +69,10 @@ export default function EvaluationTab({
       clearTimeout(loadingTimeoutRef.current);
       loadingTimeoutRef.current = null;
     }
+    if (checkingAdminTimeoutRef.current) {
+      clearTimeout(checkingAdminTimeoutRef.current);
+      checkingAdminTimeoutRef.current = null;
+    }
 
     const fetchUsers = async () => {
       // 관리자가 아니거나 권한 확인 중이면 실행하지 않음
@@ -83,6 +87,13 @@ export default function EvaluationTab({
             console.warn("관리자 권한 확인 타임아웃 - 로딩 상태 해제");
             setIsLoadingUsers(false);
           }, 5000);
+
+          // isCheckingAdmin이 너무 오래 true인 경우를 감지 (10초 후 경고)
+          checkingAdminTimeoutRef.current = setTimeout(() => {
+            console.warn(
+              "isCheckingAdmin이 10초 이상 true 상태입니다. 세션 확인에 문제가 있을 수 있습니다.",
+            );
+          }, 10000);
         }
         return;
       }
@@ -129,6 +140,10 @@ export default function EvaluationTab({
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
         loadingTimeoutRef.current = null;
+      }
+      if (checkingAdminTimeoutRef.current) {
+        clearTimeout(checkingAdminTimeoutRef.current);
+        checkingAdminTimeoutRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,13 +204,9 @@ export default function EvaluationTab({
   }, [isAdmin, isCheckingAdmin, assignments]); // supabase는 메모이제이션되어 있으므로 의존성에서 제외
 
   // 평가 상태 키 생성 함수
-  const getEvaluationKey = (
-    userId: string,
-    assignmentId: string,
-  ): string => {
+  const getEvaluationKey = (userId: string, assignmentId: string): string => {
     return `${userId}-${assignmentId}`;
   };
-
 
   // 특정 사용자의 특정 과제 평가 상태 가져오기
   const getEvaluationStatus = (
@@ -250,7 +261,8 @@ export default function EvaluationTab({
         console.error("상태 업데이트 실패:", updateError);
         // 에러 발생 시 이전 상태로 되돌리기
         const previousStatus =
-          evaluationStatuses[getEvaluationKey(userId, assignmentId)] || "미제출";
+          evaluationStatuses[getEvaluationKey(userId, assignmentId)] ||
+          "미제출";
         setEvaluationStatuses((prev) => ({
           ...prev,
           [getEvaluationKey(userId, assignmentId)]: previousStatus,
@@ -326,15 +338,6 @@ export default function EvaluationTab({
   // 관리자 권한 확인 중이거나 사용자 목록 로딩 중일 때 로딩 표시
   // isCheckingAdmin이 false로 바뀌지 않으면 무한 로딩이 될 수 있으므로,
   // 타임아웃 처리는 useEffect에서 처리됨
-  if (isCheckingAdmin || isLoadingUsers) {
-    return (
-      <div className="w-full space-y-4">
-        <div className="text-center py-12">
-          <p className="text-zinc-500 dark:text-zinc-400">로딩 중...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (!isAdmin) {
     return (
@@ -369,22 +372,34 @@ export default function EvaluationTab({
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                검토중: <span className="font-semibold text-zinc-800 dark:text-zinc-200">0점</span>
+                검토중:{" "}
+                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                  0점
+                </span>
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                수정필요: <span className="font-semibold text-zinc-800 dark:text-zinc-200">1점</span>
+                수정필요:{" "}
+                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                  1점
+                </span>
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                승인: <span className="font-semibold text-zinc-800 dark:text-zinc-200">2점</span>
+                승인:{" "}
+                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                  2점
+                </span>
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                모범답안: <span className="font-semibold text-zinc-800 dark:text-zinc-200">3점</span>
+                모범답안:{" "}
+                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                  3점
+                </span>
               </span>
             </div>
           </div>
@@ -466,7 +481,8 @@ export default function EvaluationTab({
                           <select
                             value={currentStatus}
                             onChange={async (e) => {
-                              const newStatus = e.target.value as EvaluationStatus;
+                              const newStatus = e.target
+                                .value as EvaluationStatus;
                               // 낙관적 업데이트: 먼저 UI 업데이트
                               setEvaluationStatuses((prev) => ({
                                 ...prev,
