@@ -46,7 +46,19 @@ export default function CheckedList({
   setSubmissionStatuses,
   updateSubmissionStatus,
 }: CheckedListProps) {
-  // 권한 확인 중일 때
+  // 제출 상태 키 생성 함수 (EvaluationTab과 동일한 패턴)
+  const getSubmissionKey = (userId: string, assignmentId: string): string => {
+    return `${userId}-${assignmentId}`;
+  };
+
+  // 특정 사용자의 특정 과제 제출 상태 가져오기 (EvaluationTab과 동일한 패턴)
+  const getSubmissionStatus = (
+    userId: string,
+    assignmentId: string,
+  ): SubmissionStatus => {
+    const key = getSubmissionKey(userId, assignmentId);
+    return submissionStatuses[key] || "검토중";
+  };
 
   // 관리자가 아닐 때는 아무것도 렌더링하지 않음
   if (!isAdmin) {
@@ -93,13 +105,18 @@ export default function CheckedList({
                 </a>
                 {/* 검토 상태 선택 콤보박스 */}
                 <select
-                  value={submissionStatuses[submission.userId] || "검토중"}
+                  value={getSubmissionStatus(submission.userId, assignmentId)}
                   onChange={async (e) => {
                     const newStatus = e.target.value as SubmissionStatus;
+                    // 각 과제별로 고유한 상태를 저장하기 위해 userId-assignmentId 복합 키 사용
+                    const statusKey = getSubmissionKey(
+                      submission.userId,
+                      assignmentId,
+                    );
                     // 낙관적 업데이트: 먼저 UI 업데이트
                     setSubmissionStatuses((prev) => ({
                       ...prev,
-                      [submission.userId]: newStatus,
+                      [statusKey]: newStatus,
                     }));
                     // 데이터베이스에 저장하고 테이블 업데이트
                     await updateSubmissionStatus(

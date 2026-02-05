@@ -44,12 +44,12 @@ interface AssignmentListProps {
 export default function AssignmentList({ assignments }: AssignmentListProps) {
   const router = useRouter();
   const supabase = createClient();
-  
+
   // 전역 세션에서 관리자 권한 가져오기
   const { isAdmin, isCheckingAdmin } = useAdmin();
-  
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  
+
   // 페이지네이션 상태 (1페이지당 1개 항목)
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 1; // 페이지당 항목 수
@@ -187,12 +187,18 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
     if (!isAdmin || isCheckingAdmin) {
       return;
     }
-    
+
     // assignments가 있고 관리자 권한이 확인된 경우에만 실행
     if (assignments.length > 0) {
       fetchSubmissions();
     }
-  }, [assignmentIds, fetchSubmissions, isAdmin, isCheckingAdmin, assignments.length]);
+  }, [
+    assignmentIds,
+    fetchSubmissions,
+    isAdmin,
+    isCheckingAdmin,
+    assignments.length,
+  ]);
 
   // 특정 과제의 제출 정보만 다시 불러오는 함수
   const refreshAssignmentSubmissions = useCallback(
@@ -284,11 +290,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
 
   // 제출 상태를 데이터베이스에 저장하는 함수
   const updateSubmissionStatus = useCallback(
-    async (
-      userId: string,
-      assignmentId: string,
-      status: SubmissionStatus,
-    ) => {
+    async (userId: string, assignmentId: string, status: SubmissionStatus) => {
       try {
         // 먼저 해당 사용자의 해당 과제 제출물 찾기
         const { data: homework, error: findError } = await supabase
@@ -312,8 +314,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
         if (updateError) {
           console.error("상태 업데이트 실패:", updateError);
           // 에러 발생 시 이전 상태로 되돌리기
-          const previousStatus =
-            submissionStatuses[userId] || "검토중";
+          const previousStatus = submissionStatuses[userId] || "검토중";
           setSubmissionStatuses((prev) => ({
             ...prev,
             [userId]: previousStatus,
@@ -349,7 +350,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
     const day = String(date.getDate()).padStart(2, "0");
     const hours = String(date.getHours()).padStart(2, "0");
     const minutes = String(date.getMinutes()).padStart(2, "0");
-    
+
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   };
 
@@ -470,7 +471,10 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
         ) : (
           // 숙제 목록 렌더링 (현재 페이지의 항목만)
           currentAssignments.map((assignment, index) => (
-            <div key={assignment.id} className="divide-y divide-zinc-200 dark:divide-zinc-700">
+            <div
+              key={assignment.id}
+              className="divide-y divide-zinc-200 dark:divide-zinc-700"
+            >
               {/* 숙제 항목 행 */}
               <div className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 {/* 번호 */}
@@ -579,7 +583,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
               {/* 페이지 번호 버튼들 */}
               {(() => {
                 const pages: (number | "ellipsis")[] = [];
-                
+
                 if (totalPages <= 7) {
                   // 페이지가 7개 이하일 경우 모두 표시
                   for (let i = 1; i <= totalPages; i++) {
@@ -588,7 +592,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
                 } else {
                   // 페이지가 많을 경우 생략 표시
                   pages.push(1); // 첫 페이지
-                  
+
                   if (currentPage <= 4) {
                     // 현재 페이지가 앞쪽에 있을 때
                     for (let i = 2; i <= 5; i++) {
@@ -612,7 +616,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
                     pages.push(totalPages);
                   }
                 }
-                
+
                 return pages.map((page, index) => {
                   if (page === "ellipsis") {
                     return (
@@ -621,7 +625,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
                       </PaginationItem>
                     );
                   }
-                  
+
                   return (
                     <PaginationItem key={page}>
                       <PaginationLink

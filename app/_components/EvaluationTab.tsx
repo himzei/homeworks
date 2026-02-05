@@ -437,7 +437,7 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
                   className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
                 >
                   <span className="text-sm font-medium text-black dark:text-zinc-50 text-center">
-                    {index + 1}일차과제
+                    {assignment.title}
                   </span>
                 </div>
               ))}
