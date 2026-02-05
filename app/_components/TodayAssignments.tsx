@@ -54,7 +54,7 @@ export default function TodayAssignments({
       {assignments.map((assignment) => (
         <div
           key={assignment.id}
-          className="w-full bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-6"
+          className="w-full bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6"
         >
           {/* 강의자료 및 모범답안 버튼 (제목 위) */}
           {(assignment.lectureMaterialUrl || assignment.previousAnswerUrl) && (
@@ -63,7 +63,7 @@ export default function TodayAssignments({
               {assignment.lectureMaterialUrl && (
                 <button
                   onClick={() => handleOpenUrl(assignment.lectureMaterialUrl!)}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-2"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -87,7 +87,7 @@ export default function TodayAssignments({
               {assignment.previousAnswerUrl && (
                 <button
                   onClick={() => handleOpenUrl(assignment.previousAnswerUrl!)}
-                  className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-green-700 hover:bg-green-600 text-white text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-2"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -110,19 +110,19 @@ export default function TodayAssignments({
           )}
 
           {/* 숙제 제목 */}
-          <h3 className="text-xl font-semibold text-black dark:text-zinc-50 mb-3">
+          <h3 className="text-lg sm:text-xl font-semibold text-black dark:text-zinc-50 mb-3">
             {assignment.title}
           </h3>
 
           {/* 숙제 내용 */}
           {assignment.content && (
-            <p className="text-zinc-600 dark:text-zinc-400 mb-4 whitespace-pre-wrap">
+            <p className="text-sm sm:text-base text-zinc-600 dark:text-zinc-400 mb-4 whitespace-pre-wrap">
               {assignment.content}
             </p>
           )}
 
           {/* 기간 정보 */}
-          <div className="flex flex-wrap gap-4 text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-4">
             <div>
               <span className="font-medium">게시 시작:</span>{" "}
               {formatDateTime(assignment.startDate)}

@@ -418,8 +418,8 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
 
   return (
     <div className="w-full bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-      {/* 테이블 헤더 */}
-      <div className="bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+      {/* 데스크톱 테이블 헤더 - 모바일에서 숨김 */}
+      <div className="hidden md:block bg-zinc-100 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
         <div className="grid grid-cols-12 gap-4 px-6 py-4">
           <div className="col-span-1">
             <span className="text-sm font-semibold text-black dark:text-zinc-50">
@@ -463,7 +463,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
       <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
         {assignments.length === 0 ? (
           // 숙제가 없을 때
-          <div className="px-6 py-12 text-center">
+          <div className="px-4 sm:px-6 py-12 text-center">
             <p className="text-zinc-500 dark:text-zinc-400">
               등록된 숙제가 없습니다.
             </p>
@@ -475,8 +475,68 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
               key={assignment.id}
               className="divide-y divide-zinc-200 dark:divide-zinc-700"
             >
-              {/* 숙제 항목 행 */}
-              <div className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              {/* 모바일 카드 형태 - 데스크톱에서 숨김 */}
+              <div className="md:hidden p-4 space-y-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        #{startIndex + index + 1}
+                      </span>
+                      <span className="text-sm font-semibold text-black dark:text-zinc-50">
+                        {assignment.title}
+                      </span>
+                    </div>
+                    {assignment.content && (
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 mb-2">
+                        {assignment.content}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">시작:</span>
+                    <span className="text-zinc-700 dark:text-zinc-300">
+                      {formatDateTime(assignment.startDate)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">종료:</span>
+                    <span className="text-zinc-700 dark:text-zinc-300">
+                      {formatDateTime(assignment.endDate)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500 dark:text-zinc-400">제출:</span>
+                    <span className="text-zinc-700 dark:text-zinc-300">
+                      {assignment.submissionCount}명
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => handleEdit(assignment.id)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs px-3 py-1 flex-1"
+                  >
+                    수정
+                  </Button>
+                  <Button
+                    onClick={() => handleDelete(assignment.id)}
+                    variant="destructive"
+                    size="sm"
+                    disabled={deletingId === assignment.id}
+                    className="text-xs px-3 py-1 flex-1"
+                  >
+                    {deletingId === assignment.id ? "삭제 중..." : "삭제"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* 데스크톱 테이블 행 - 모바일에서 숨김 */}
+              <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 {/* 번호 */}
                 <div className="col-span-1 flex items-center">
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">
@@ -542,7 +602,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
               </div>
 
               {/* 제출 회원 리스트 - 관리자만 볼 수 있음 */}
-              <div className="px-6 py-4">
+              <div className="px-4 sm:px-6 py-4">
                 <CheckedList
                   isCheckingAdmin={isCheckingAdmin}
                   isAdmin={isAdmin}
@@ -561,7 +621,7 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
 
       {/* 페이지네이션 */}
       {assignments.length > 0 && totalPages > 1 && (
-        <div className="border-t border-zinc-200 dark:border-zinc-700 px-6 py-4">
+        <div className="border-t border-zinc-200 dark:border-zinc-700 px-4 sm:px-6 py-4">
           <Pagination>
             <PaginationContent>
               {/* 이전 페이지 버튼 */}

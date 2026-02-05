@@ -68,37 +68,41 @@ export default function CheckedList({
   // 관리자일 때 제출 회원 리스트 표시
   return (
     <div className="my-4">
-      <h4 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
+      <h4 className="text-xs sm:text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
         제출한 회원 ({submissions?.length || 0}명)
       </h4>
       {isLoadingSubmissions ? (
-        <div className="text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
           제출 정보를 불러오는 중...
         </div>
       ) : submissions && submissions.length > 0 ? (
-        <div className="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-4 space-y-2">
+        <div className="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-3 sm:p-4 space-y-2">
           {submissions.map((submission, index) => (
             <div
               key={submission.userId}
-              className="flex items-center justify-between text-sm border-b border-zinc-200 dark:border-zinc-700 pb-2 last:border-b-0 last:pb-0"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 text-xs sm:text-sm border-b border-zinc-200 dark:border-zinc-700 pb-2 last:border-b-0 last:pb-0"
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-zinc-500 dark:text-zinc-400 font-medium w-6 flex-shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                <span className="text-zinc-500 dark:text-zinc-400 font-medium w-5 sm:w-6 flex-shrink-0">
                   {index + 1}
                 </span>
                 <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate">
                   {submission.userName}
                 </span>
-                <span className="text-zinc-500 dark:text-zinc-400 text-xs flex-shrink-0">
+                <span className="hidden sm:inline text-zinc-500 dark:text-zinc-400 text-xs flex-shrink-0">
                   {submission.submittedAt}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              {/* 모바일에서 날짜 표시 */}
+              <span className="sm:hidden text-zinc-500 dark:text-zinc-400 text-xs pl-7">
+                {submission.submittedAt}
+              </span>
+              <div className="flex items-center gap-2 pl-7 sm:pl-0">
                 <a
                   href={submission.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 text-xs ml-2 flex-shrink-0"
+                  className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 text-xs flex-shrink-0"
                   onClick={(e) => e.stopPropagation()}
                 >
                   제출물 보기 →
@@ -138,7 +142,7 @@ export default function CheckedList({
           ))}
         </div>
       ) : (
-        <div className="text-sm text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 rounded-lg p-4">
+        <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 rounded-lg p-3 sm:p-4">
           아직 제출한 회원이 없습니다.
         </div>
       )}

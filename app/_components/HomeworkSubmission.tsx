@@ -185,8 +185,8 @@ export default function HomeworkSubmission({
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-6 mt-8">
-        <p className="text-center text-zinc-500 dark:text-zinc-400">
+      <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 mt-6 sm:mt-8">
+        <p className="text-center text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
           로딩 중...
         </p>
       </div>
@@ -194,30 +194,30 @@ export default function HomeworkSubmission({
   }
 
   return (
-    <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-6 mt-8">
+    <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 mt-6 sm:mt-8">
       {/* 제목 */}
-      <h3 className="text-xl font-semibold text-black dark:text-zinc-50 text-center mb-4">
+      <h3 className="text-lg sm:text-xl font-semibold text-black dark:text-zinc-50 text-center mb-3 sm:mb-4">
         과제 제출하기
       </h3>
 
       {/* 안내 텍스트 */}
-      <div className="space-y-2 mb-6 text-center">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+      <div className="space-y-2 mb-4 sm:mb-6 text-center">
+        <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
           제출 방법에 맞는 URL을 여기에 붙여 넣으세요.
         </p>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
           제출 기한 내에 언제든 해당 URL을 수정할 수 있습니다.
         </p>
       </div>
 
       {/* URL 입력 필드와 저장 버튼 */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Paste your awesome URL here!"
-          className="flex-1 px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+          className="flex-1 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
           onKeyDown={(e) => {
             // Enter 키로 저장 가능
             if (e.key === "Enter") {
@@ -228,7 +228,7 @@ export default function HomeworkSubmission({
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors whitespace-nowrap"
+          className="px-4 sm:px-6 py-2 sm:py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm sm:text-base font-medium rounded-lg transition-colors whitespace-nowrap"
         >
           {isSaving ? "저장 중..." : url ? "수정" : "제출"}
         </button>

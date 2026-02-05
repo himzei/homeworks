@@ -164,12 +164,12 @@ export default async function Home() {
       id: "homework",
       label: "오늘의숙제",
       content: (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <div>
-            <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-2">
+            <h2 className="text-xl sm:text-2xl font-semibold text-black dark:text-zinc-50 mb-2">
               오늘의 과제
             </h2>
-            <p className="text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+            <p className="text-base sm:text-lg leading-7 sm:leading-8 text-zinc-600 dark:text-zinc-400">
               현재 진행 중인 과제입니다.
             </p>
           </div>
@@ -202,12 +202,12 @@ export default async function Home() {
             content: (
               <div className="w-full space-y-4">
                 {/* 헤더 영역: 제목과 글쓰기 버튼 */}
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-semibold text-black dark:text-zinc-50">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                  <h2 className="text-xl sm:text-2xl font-semibold text-black dark:text-zinc-50">
                     숙제 리스트
                   </h2>
                   <Link href="/assignment/new">
-                    <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+                    <Button className="bg-blue-500 hover:bg-blue-600 text-white text-sm sm:text-base px-4 py-2 w-full sm:w-auto">
                       글쓰기
                     </Button>
                   </Link>
@@ -237,7 +237,7 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black sm:items-start">
+      <main className="flex min-h-screen w-full container flex-col py-4 sm:py-8 px-4 sm:px-8 bg-white dark:bg-black sm:items-start">
         <Tabs items={tabItems} defaultTabId="homework" />
       </main>
     </div>

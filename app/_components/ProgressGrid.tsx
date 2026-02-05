@@ -118,23 +118,23 @@ export default function ProgressGrid({
     (user) => user.section === "everyone",
   );
 
-  // 그리드 열 템플릿 생성 (사용자 열 + 과제 열들)
-  const gridCols = `200px repeat(${assignments.length}, 120px)`;
+  // 그리드 열 템플릿 생성 (사용자 열 + 과제 열들) - 모바일에서는 더 작은 크기
+  const gridCols = `minmax(120px, 200px) repeat(${assignments.length}, minmax(100px, 120px))`;
   const totalCols = assignments.length + 1; // 사용자 열 + 과제 열들
 
   return (
-    <div className="w-full bg-zinc-50 dark:bg-black rounded-lg p-6">
+    <div className="w-full bg-zinc-50 dark:bg-black rounded-lg p-3 sm:p-6">
       {/* 가로 스크롤 가능한 컨테이너 */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scrollbar-hide">
         <div className="inline-block min-w-full">
           {/* 그리드 컨테이너 */}
           <div
-            className="inline-grid gap-3"
+            className="inline-grid gap-2 sm:gap-3"
             style={{ gridTemplateColumns: gridCols }}
           >
             {/* 헤더 셀 (왼쪽 상단) */}
-            <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-              <span className="text-sm font-medium text-black dark:text-zinc-50">
+            <div className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+              <span className="text-xs sm:text-sm font-medium text-black dark:text-zinc-50">
                 User / Assignment
               </span>
             </div>
@@ -143,9 +143,9 @@ export default function ProgressGrid({
             {assignments.map((assignment) => (
               <div
                 key={assignment.id}
-                className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
+                className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center"
               >
-                <span className="text-sm font-medium text-black dark:text-zinc-50 text-center">
+                <span className="text-xs sm:text-sm font-medium text-black dark:text-zinc-50 text-center break-words">
                   {assignment.name}
                 </span>
               </div>
@@ -197,7 +197,7 @@ export default function ProgressGrid({
                       return (
                         <div
                           key={`${user.id}-${assignment.id}`}
-                          className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[60px]"
+                          className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[50px] sm:min-h-[60px]"
                         >
                           {status === "completed" ? (
                             isCurrentUser && submissionUrl ? (
@@ -253,10 +253,10 @@ export default function ProgressGrid({
                     style={{ display: "contents" }}
                   >
                     {/* 사용자 이름 셀 */}
-                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
                       <Link
                         href={`/user/${user.id}`}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+                        className="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors break-words text-center"
                       >
                         {user.name}
                       </Link>
@@ -273,7 +273,7 @@ export default function ProgressGrid({
                       return (
                         <div
                           key={`${user.id}-${assignment.id}`}
-                          className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[60px]"
+                          className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[50px] sm:min-h-[60px]"
                         >
                           {status === "completed" ? (
                             submissionUrl ? (

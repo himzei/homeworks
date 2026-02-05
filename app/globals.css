@@ -128,6 +128,16 @@
   @apply max-w-5xl mx-auto px-4 sm:px-6 lg:px-8;
 }
 
+/* 모바일 스크롤바 숨김 (가로 스크롤용) */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
 /* 그리드 패턴 배경 */
 .bg-grid-pattern {
   background-image: 

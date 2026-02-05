@@ -21,14 +21,14 @@ export default function Tabs({ items, defaultTabId }: TabsProps) {
 
   return (
     <div className="w-full">
-      {/* 탭 헤더 */}
-      <div className="flex border-b border-zinc-200 dark:border-zinc-800">
+      {/* 탭 헤더 - 모바일에서 가로 스크롤 가능 */}
+      <div className="flex border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto scrollbar-hide">
         {items.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTabId(tab.id)}
             className={`
-              px-6 py-3 text-sm font-medium transition-colors
+              px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0
               ${
                 activeTabId === tab.id
                   ? "border-b-2 border-black dark:border-white text-black dark:text-white"
@@ -42,7 +42,7 @@ export default function Tabs({ items, defaultTabId }: TabsProps) {
       </div>
 
       {/* 탭 콘텐츠 - 모든 탭을 렌더링하되 비활성 탭은 숨김 */}
-      <div className="mt-6">
+      <div className="mt-4 sm:mt-6">
         {items.map((tab) => (
           <div
             key={tab.id}
