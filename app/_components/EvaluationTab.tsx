@@ -292,8 +292,8 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
     // CSV 헤더 생성 (부분합을 이름 뒤로 이동)
     const headers = [
       "User / Assignment",
-      "부분합",
-      ...assignments.map((_, index) => `${index + 1}일차과제`),
+      "총합",
+      ...assignments.map((assignment) => assignment.title),
     ];
 
     // CSV 데이터 행 생성 (부분합을 이름 뒤로 이동)
@@ -424,9 +424,9 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
               </div>
 
               {/* 부분합 헤더 */}
-              <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-                <span className="text-sm font-medium text-black dark:text-zinc-50">
-                  부분합
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-4 py-3 shadow-md border-2 border-blue-200 dark:border-blue-700 flex items-center justify-center">
+                <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                  총합
                 </span>
               </div>
 
@@ -456,8 +456,8 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
                   </div>
 
                   {/* 부분합 셀 */}
-                  <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
-                    <span className="text-sm font-semibold text-black dark:text-zinc-50">
+                  <div className="bg-blue-50/80 dark:bg-blue-900/15 rounded-lg px-4 py-3 shadow-md border-2 border-blue-200 dark:border-blue-800 flex items-center justify-center">
+                    <span className="text-base font-bold text-blue-700 dark:text-blue-300">
                       {getTotalScore(user.id)}점
                     </span>
                   </div>
