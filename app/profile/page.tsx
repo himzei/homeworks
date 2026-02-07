@@ -15,6 +15,9 @@ export default function ProfilePage() {
   const [bio, setBio] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [university, setUniversity] = useState("");
+  const [major, setMajor] = useState("");
+  const [isGraduated, setIsGraduated] = useState<boolean>(false);
 
   // UI 상태 관리
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +85,9 @@ export default function ProfilePage() {
           setGithubUrl(profile.github_url || "");
           setAvatarUrl(profile.avatar_url || null);
           setAvatarPreview(profile.avatar_url || null);
+          setUniversity(profile.university || "");
+          setMajor(profile.major || "");
+          setIsGraduated(profile.is_graduated || false);
         }
       } catch (err: any) {
         // refresh token 에러 체크
@@ -254,6 +260,9 @@ export default function ProfilePage() {
         bio: bio,
         github_url: validatedGithubUrl || null,
         avatar_url: avatarUrl,
+        university: university.trim() || null,
+        major: major.trim() || null,
+        is_graduated: isGraduated,
         updated_at: new Date().toISOString(),
       });
 
@@ -407,7 +416,7 @@ export default function ProfilePage() {
                 htmlFor="name"
                 className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
               >
-                닉네임
+                이름
               </label>
               <input
                 id="name"
@@ -418,6 +427,75 @@ export default function ProfilePage() {
                 className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="이름을 입력하세요"
               />
+            </div>
+
+            {/* 대학교 */}
+            <div>
+              <label
+                htmlFor="university"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
+              >
+                대학교
+              </label>
+              <input
+                id="university"
+                type="text"
+                value={university}
+                onChange={(e) => setUniversity(e.target.value)}
+                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="대학교를 입력하세요"
+              />
+            </div>
+
+            {/* 전공 */}
+            <div>
+              <label
+                htmlFor="major"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
+              >
+                전공
+              </label>
+              <input
+                id="major"
+                type="text"
+                value={major}
+                onChange={(e) => setMajor(e.target.value)}
+                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="전공을 입력하세요"
+              />
+            </div>
+
+            {/* 졸업여부 */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                졸업여부
+              </label>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="graduationStatus"
+                    checked={!isGraduated}
+                    onChange={() => setIsGraduated(false)}
+                    className="w-4 h-4 text-blue-500 border-zinc-300 dark:border-zinc-600 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                    재학 중
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="graduationStatus"
+                    checked={isGraduated}
+                    onChange={() => setIsGraduated(true)}
+                    className="w-4 h-4 text-blue-500 border-zinc-300 dark:border-zinc-600 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                    졸업
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* GitHub 주소 */}

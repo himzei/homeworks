@@ -111,14 +111,18 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
           return;
         }
 
-        // 관리자가 아닌 사용자만 필터링
+        // 관리자가 아닌 사용자만 필터링하고 이름 오름차순 정렬
         const usersList: User[] =
           profilesData
             ?.filter((profile) => profile.role !== "admin")
             .map((profile) => ({
               id: profile.id,
               name: profile.name || "이름 없음",
-            })) || [];
+            }))
+            .sort((a, b) => {
+              // 이름을 오름차순으로 정렬 (한글 정렬 지원)
+              return a.name.localeCompare(b.name, "ko-KR");
+            }) || [];
 
         setUsers(usersList);
       } catch (error) {

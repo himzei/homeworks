@@ -3,9 +3,12 @@ import ProgressGrid from "@/app/_components/ProgressGrid";
 import AssignmentList from "@/app/_components/AssignmentList";
 import TodayAssignments from "@/app/_components/TodayAssignments";
 import EvaluationTab from "@/app/_components/EvaluationTab";
+import ConsultationTab from "@/app/_components/ConsultationTab";
+import SurveyTab from "@/app/_components/SurveyTab";
 import { Button } from "@/app/_components/ui/button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { Suspense } from "react";
 
 // 동적 렌더링 강제 설정 (세션별로 다른 데이터를 보여주므로 캐싱 방지)
 export const dynamic = "force-dynamic";
@@ -193,9 +196,19 @@ export default async function Home() {
         </div>
       ),
     },
-    // 관리자만 숙제 리스트 및 평가 탭 표시
+    {
+      id: "survey",
+      label: "설문조사",
+      content: <SurveyTab />,
+    },
+    // 관리자만 학생상담, 숙제 리스트 및 평가 탭 표시
     ...(isAdmin
       ? [
+          {
+            id: "consultation",
+            label: "학생상담",
+            content: <ConsultationTab />,
+          },
           {
             id: "assignment-list",
             label: "숙제리스트",
@@ -238,7 +251,11 @@ export default async function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full container flex-col py-4 sm:py-8 px-4 sm:px-8 bg-white dark:bg-black sm:items-start">
-        <Tabs items={tabItems} defaultTabId="homework" />
+        <Suspense
+          fallback={<div className="text-center py-12">로딩 중...</div>}
+        >
+          <Tabs items={tabItems} defaultTabId="homework" />
+        </Suspense>
       </main>
     </div>
   );
