@@ -18,7 +18,7 @@ import {
 
 export default function Header() {
   const router = useRouter();
-  
+
   // 전역 세션에서 사용자 정보 가져오기
   const { user, profile, isLoading } = useSession();
   const supabase = createClient();
@@ -50,20 +50,28 @@ export default function Header() {
                 window.open(
                   "https://himzei.notion.site/13-2fcd0a6ad3d780468f31c3eff7e9a23b?source=copy_link",
                   "_blank",
-                  "noopener,noreferrer"
+                  "noopener,noreferrer",
                 );
               }}
               className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-black dark:hover:text-white border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap"
             >
               과제제출방법
             </button>
+            <Link
+              href="/git-how"
+              className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:text-black dark:hover:text-white border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap"
+            >
+              깃이란?
+            </Link>
           </div>
 
           {/* 오른쪽 영역 - 회원가입, 로그인 버튼 또는 사용자 정보 */}
           <div className="flex-1 sm:flex-none flex justify-start sm:justify-end items-center gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0">
             {isLoading ? (
               // 로딩 중
-              <div className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-zinc-500">로딩 중...</div>
+              <div className="px-2 sm:px-4 py-2 text-xs sm:text-sm text-zinc-500">
+                로딩 중...
+              </div>
             ) : user ? (
               // 로그인된 상태 - Avatar와 DropdownMenu 사용
               <DropdownMenu>
