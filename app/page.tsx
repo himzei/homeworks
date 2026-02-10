@@ -20,24 +20,25 @@ import {
 export default function Home() {
   const router = useRouter();
 
-  // 주요 특징 데이터
+  // 주요 특징 데이터 (SEO: 빅데이터 전문가 양성과정 관련 키워드 포함)
   const features = [
     {
       icon: <Code className="w-8 h-8" />,
-      title: "AI 기술 전문 교육",
-      description: "최신 AI 기술과 빅데이터 분석 방법을 체계적으로 학습합니다.",
+      title: "빅데이터·AI 기술 전문 교육",
+      description:
+        "빅데이터 전문가 양성과정에서 최신 AI 기술과 데이터 분석 방법을 체계적으로 학습합니다.",
     },
     {
       icon: <Database className="w-8 h-8" />,
       title: "실무 중심 커리큘럼",
       description:
-        "이론과 실습을 결합한 실무 중심의 교육 프로그램을 제공합니다.",
+        "이론과 실습을 결합한 실무 중심의 빅데이터 전문가 양성 교육 프로그램을 제공합니다.",
     },
     {
       icon: <Brain className="w-8 h-8" />,
       title: "전문가 양성",
       description:
-        "AI 빅데이터 분야의 전문가로 성장할 수 있는 기회를 제공합니다.",
+        "빅데이터 전문가 양성과정을 통해 AI·데이터 분야 전문가로 성장할 수 있는 기회를 제공합니다.",
     },
   ];
 
@@ -51,8 +52,25 @@ export default function Home() {
     "평생 학습 지원",
   ];
 
+  // SEO: 구조화 데이터 (JSON-LD) - 검색엔진이 교육 과정 정보를 이해하도록 지원
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Course",
+    name: "빅데이터 전문가 양성과정",
+    description:
+      "빅데이터 전문가 양성과정으로 AI·데이터 분석부터 실무 프로젝트까지 체계적으로 배웁니다. K-Digital Training 기반 전문가 교육.",
+    provider: {
+      "@type": "Organization",
+      name: "빅데이터 전문가 양성과정",
+    },
+  };
+
   return (
     <div className="min-h-screen bg-white dark:bg-black">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* 히어로 섹션 */}
       <section className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-900 dark:via-black dark:to-zinc-900">
         <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
@@ -64,16 +82,19 @@ export default function Home() {
               <span>K-Digital Training</span>
             </div>
 
+            {/* SEO: 메인 키워드 '빅데이터 전문가 양성과정'을 h1에 포함 */}
             <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-black dark:text-white mb-4 sm:mb-6 leading-tight">
-              AI 빅데이터 전문가
+              빅데이터 전문가 양성과정
               <br />
-              <span className="text-blue-600 dark:text-blue-400">양성과정</span>
+              <span className="text-blue-600 dark:text-blue-400">
+                AI·데이터 분석 실무 교육
+              </span>
             </h1>
 
             <p className="text-base sm:text-xl lg:text-2xl text-zinc-600 dark:text-zinc-400 mb-8 sm:mb-10 max-w-2xl mx-auto leading-relaxed">
-              미래를 이끌어갈 AI 빅데이터 전문가가 되세요.
+              빅데이터 전문가 양성과정으로 미래를 이끌어갈 데이터 전문가가 되세요.
               <br />
-              체계적인 교육과 실무 경험을 통해 전문성을 키워보세요.
+              체계적인 커리큘럼과 실무 프로젝트로 전문성을 키워보세요.
             </p>
           </div>
         </div>
@@ -87,7 +108,7 @@ export default function Home() {
             <div className="relative w-full h-auto rounded-lg overflow-hidden shadow-lg">
               <Image
                 src="https://datainstitute.knu.ac.kr/uploads/ckeditor/24641083351656572.jpg"
-                alt="AI 빅데이터 전문가 양성과정"
+                alt="빅데이터 전문가 양성과정 - AI·데이터 분석 실무 교육"
                 width={1200}
                 height={600}
                 className="w-full h-auto object-cover"
