@@ -1,17 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { GROUP_OPTIONS } from "@/lib/constants";
+import {
+  getCachedAssignment,
+  setCachedAssignment,
+  invalidateAssignmentCache,
+} from "@/lib/cache/assignment-cache";
+
+/** useParams가 클라이언트 네비게이션 직후 undefined를 반환할 수 있어, URL에서 id를 보조로 추출 */
+function useAssignmentId(): string | null {
+  const params = useParams();
+  return useMemo(() => {
+    const fromParams = params?.id;
+    if (typeof fromParams === "string" && fromParams) return fromParams;
+    if (typeof window !== "undefined") {
+      const match = window.location.pathname.match(/\/assignment\/edit\/([^/]+)/);
+      return match?.[1] ?? null;
+    }
+    return null;
+  }, [params?.id]);
+}
 
 export default function EditAssignmentPage() {
   const router = useRouter();
-  const params = useParams();
-  const assignmentId = params.id as string;
-  const supabase = createClient();
-  
+  const assignmentId = useAssignmentId();
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
+
   // 폼 상태 관리
   const [formData, setFormData] = useState({
     title: "", // 숙제 제목
@@ -29,9 +48,39 @@ export default function EditAssignmentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 기존 데이터 불러오기
+  // 기존 데이터 불러오기 (캐시 우선 → 없으면 Supabase 조회)
   useEffect(() => {
-    const loadAssignment = async () => {
+    if (!assignmentId) {
+      setIsLoading(false);
+      router.replace("/home");
+      return;
+    }
+
+    // 1) 캐시 확인 — 있으면 즉시 표시 (탭 전환 후 재진입 시 로딩 회피)
+    const cached = getCachedAssignment(assignmentId);
+    if (cached) {
+      const startDate = new Date(cached.start_date);
+      const endDate = new Date(cached.end_date);
+      setFormData({
+        title: cached.title || "",
+        content: cached.content || "",
+        groupName: cached.group_name || "",
+        startDate: startDate.toISOString().split("T")[0],
+        startTime: startDate.toTimeString().slice(0, 5),
+        endDate: endDate.toISOString().split("T")[0],
+        endTime: endDate.toTimeString().slice(0, 5),
+        lectureMaterialUrl: cached.lecture_material_url || "",
+        previousAnswerUrl: cached.previous_answer_url || "",
+      });
+      setIsLoading(false);
+      // 캐시가 있어도 백그라운드에서 최신 데이터로 갱신
+      loadAssignmentInBackground();
+      return;
+    }
+
+    loadAssignment();
+
+    async function loadAssignment() {
       try {
         const { data, error } = await supabase
           .from("assignments")
@@ -51,7 +100,6 @@ export default function EditAssignmentPage() {
           return;
         }
 
-        // 현재 로그인한 사용자가 작성자인지 확인
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.id !== data.created_by) {
           alert("수정 권한이 없습니다.");
@@ -59,33 +107,56 @@ export default function EditAssignmentPage() {
           return;
         }
 
-        // 날짜와 시간을 분리하여 폼에 설정
-        const startDate = new Date(data.start_date);
-        const endDate = new Date(data.end_date);
-
-        setFormData({
-          title: data.title || "",
-          content: data.content || "",
-          groupName: data.group_name || "",
-          startDate: startDate.toISOString().split("T")[0],
-          startTime: startDate.toTimeString().slice(0, 5), // HH:MM 형식
-          endDate: endDate.toISOString().split("T")[0],
-          endTime: endDate.toTimeString().slice(0, 5), // HH:MM 형식
-          lectureMaterialUrl: data.lecture_material_url || "",
-          previousAnswerUrl: data.previous_answer_url || "",
-        });
+        setCachedAssignment(data);
+        applyDataToForm(data);
       } catch {
         alert("예상치 못한 오류가 발생했습니다.");
         router.push("/");
       } finally {
         setIsLoading(false);
       }
-    };
-
-    if (assignmentId) {
-      loadAssignment();
     }
-  }, [assignmentId, router, supabase]);
+
+    async function loadAssignmentInBackground() {
+      try {
+        const { data } = await supabase
+          .from("assignments")
+          .select("*")
+          .eq("id", assignmentId)
+          .single();
+        if (data) {
+          setCachedAssignment(data);
+          applyDataToForm(data);
+        }
+      } catch {
+        // 백그라운드 갱신 실패는 무시
+      }
+    }
+
+    function applyDataToForm(data: {
+      title?: string | null;
+      content?: string | null;
+      group_name?: string | null;
+      start_date: string;
+      end_date: string;
+      lecture_material_url?: string | null;
+      previous_answer_url?: string | null;
+    }) {
+      const startDate = new Date(data.start_date);
+      const endDate = new Date(data.end_date);
+      setFormData({
+        title: data.title || "",
+        content: data.content || "",
+        groupName: data.group_name || "",
+        startDate: startDate.toISOString().split("T")[0],
+        startTime: startDate.toTimeString().slice(0, 5),
+        endDate: endDate.toISOString().split("T")[0],
+        endTime: endDate.toTimeString().slice(0, 5),
+        lectureMaterialUrl: data.lecture_material_url || "",
+        previousAnswerUrl: data.previous_answer_url || "",
+      });
+    }
+  }, [assignmentId, router]);
 
   // 폼 필드 변경 핸들러
   const handleChange = (
@@ -196,13 +267,11 @@ export default function EditAssignmentPage() {
         return;
       }
 
-      // 성공 메시지 표시
+      // 저장 성공 시 캐시 무효화 (다음 진입 시 최신 데이터 로드)
+      if (assignmentId) invalidateAssignmentCache(assignmentId);
+
       alert("숙제가 수정되었습니다!");
-      
-      // 로딩 상태 해제
       setIsSubmitting(false);
-      
-      // 리스트 페이지로 이동
       router.push("/home");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "알 수 없는 오류";

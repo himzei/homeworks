@@ -380,11 +380,6 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
     setCurrentPage(1);
   }, [assignments.length]);
 
-  // 수정 버튼 클릭 핸들러
-  const handleEdit = (assignmentId: string) => {
-    router.push(`/assignment/edit/${assignmentId}`);
-  };
-
   // 삭제 버튼 클릭 핸들러
   const handleDelete = async (assignmentId: string) => {
     if (!confirm("정말 이 숙제를 삭제하시겠습니까?")) {
@@ -521,14 +516,18 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
                   </div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => handleEdit(assignment.id)}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1 flex-1"
+                  <a
+                    href={`/assignment/edit/${assignment.id}`}
+                    className="flex-1"
                   >
-                    수정
-                  </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs px-3 py-1 w-full"
+                    >
+                      수정
+                    </Button>
+                  </a>
                   <Button
                     onClick={() => handleDelete(assignment.id)}
                     variant="destructive"
@@ -585,16 +584,17 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
                   </span>
                 </div>
 
-                {/* 수정/삭제 버튼 */}
+                {/* 수정/삭제 버튼 — a 태그로 전체 페이지 로드 (클라이언트 네비게이션 시 Supabase 요청 멈춤 회피) */}
                 <div className="col-span-2 flex items-center gap-2">
-                  <Button
-                    onClick={() => handleEdit(assignment.id)}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-3 py-1"
-                  >
-                    수정
-                  </Button>
+                  <a href={`/assignment/edit/${assignment.id}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs px-3 py-1"
+                    >
+                      수정
+                    </Button>
+                  </a>
                   <Button
                     onClick={() => handleDelete(assignment.id)}
                     variant="destructive"
