@@ -128,7 +128,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               .single();
 
             if (profileError && profileError.code !== "PGRST116") {
-              console.error("프로필 정보 가져오기 실패:", profileError);
+              console.error("프로필 정보 가져오기 실패:", profileError?.message ?? profileError?.code ?? profileError);
             }
 
             if (isMountedRef.current) {
@@ -142,7 +142,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               setIsCheckingAdmin(false);
             }
           } catch (profileErr) {
-            console.error("프로필 조회 중 오류:", profileErr);
+            console.error("프로필 조회 중 오류:", profileErr instanceof Error ? profileErr.message : profileErr);
             if (isMountedRef.current) {
               setProfile(null);
               profileRef.current = null;
@@ -216,7 +216,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               .single();
 
             if (profileError && profileError.code !== "PGRST116") {
-              console.error("프로필 정보 가져오기 실패:", profileError);
+              console.error("프로필 정보 가져오기 실패:", profileError?.message ?? profileError?.code ?? profileError);
             }
 
             if (isMountedRef.current) {
@@ -229,7 +229,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               setIsCheckingAdmin(false);
             }
           } catch (profileErr) {
-            console.error("프로필 조회 중 오류:", profileErr);
+            console.error("프로필 조회 중 오류:", profileErr instanceof Error ? profileErr.message : profileErr);
             if (isMountedRef.current) {
               setProfile(null);
               profileRef.current = null;
@@ -312,7 +312,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                   .single();
 
                 if (profileError && profileError.code !== "PGRST116") {
-                  console.error("프로필 정보 가져오기 실패:", profileError);
+                  console.error("프로필 정보 가져오기 실패:", profileError?.message ?? profileError?.code ?? profileError);
                   // 프로필 조회 실패 시에도 isCheckingAdmin을 false로 설정
                   if (isMountedRef.current) {
                     setProfile(null);
@@ -334,7 +334,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                   setIsCheckingAdmin(false);
                 }
               } catch (profileErr) {
-                console.error("프로필 조회 중 오류:", profileErr);
+                console.error("프로필 조회 중 오류:", profileErr instanceof Error ? profileErr.message : profileErr);
                 if (isMountedRef.current) {
                   setProfile(null);
                   profileRef.current = null;

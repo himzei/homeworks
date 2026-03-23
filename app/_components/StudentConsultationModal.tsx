@@ -382,8 +382,9 @@ export default function StudentConsultationModal({
       <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-          <div className="flex items-center gap-4">
-            <Avatar size="lg" className="shrink-0">
+          <div className="flex items-center gap-5">
+            {/* 학생 상세 모달용: 아바타 크게 표시 (24rem = 96px) */}
+            <Avatar size="lg" className="shrink-0 size-24! md:size-28!">
               {student.avatar_url ? (
                 <AvatarImage
                   src={student.avatar_url}
@@ -391,7 +392,7 @@ export default function StudentConsultationModal({
                   className="object-cover"
                 />
               ) : null}
-              <AvatarFallback className="bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 text-lg font-medium">
+              <AvatarFallback className="bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 text-2xl md:text-3xl font-medium">
                 {student.name ? student.name.charAt(0).toUpperCase() : "?"}
               </AvatarFallback>
             </Avatar>

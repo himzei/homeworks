@@ -77,7 +77,7 @@ export default function ConsultationTab({
         const { data, error: fetchError } = await profilesQuery;
 
         if (fetchError) {
-          console.error("학생 목록 조회 실패:", fetchError);
+          console.error("학생 목록 조회 실패:", fetchError?.message ?? fetchError?.code ?? fetchError);
           setError("학생 목록을 불러오는 중 오류가 발생했습니다.");
           setIsLoading(false);
           return;
@@ -123,7 +123,7 @@ export default function ConsultationTab({
               if (consultationError) {
                 console.error(
                   `학생 ${student.id}의 상담일지 조회 실패:`,
-                  consultationError,
+                  consultationError?.message ?? consultationError?.code ?? consultationError,
                 );
                 return {
                   ...student,
@@ -149,7 +149,7 @@ export default function ConsultationTab({
             } catch (error) {
               console.error(
                 `학생 ${student.id}의 상담일지 정보 가져오기 중 오류:`,
-                error,
+                error instanceof Error ? error.message : error,
               );
               return {
                 ...student,
@@ -162,7 +162,7 @@ export default function ConsultationTab({
 
         setStudents(studentsWithConsultationInfo);
       } catch (error) {
-        console.error("학생 목록 가져오기 중 오류:", error);
+        console.error("학생 목록 가져오기 중 오류:", error instanceof Error ? error.message : error);
         setError("학생 목록을 불러오는 중 예기치 않은 오류가 발생했습니다.");
       } finally {
         setIsLoading(false);
