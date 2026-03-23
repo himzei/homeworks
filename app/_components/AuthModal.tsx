@@ -42,13 +42,24 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
     setError(null);
     setSuccess(null);
 
-    // 비밀번호 확인 검증
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setError("이메일을 입력해주세요.");
+      return;
+    }
+
+    // 기본 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError("올바른 이메일 형식이 아닙니다.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("비밀번호가 일치하지 않습니다.");
       return;
     }
 
-    // 비밀번호 길이 검증
     if (password.length < 6) {
       setError("비밀번호는 최소 6자 이상이어야 합니다.");
       return;
@@ -57,27 +68,47 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: trimmedEmail,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (error) throw error;
+      if (signUpError) {
+        // 자주 발생하는 에러 메시지 한글화
+        const message = signUpError.message;
+        if (message.includes("already registered") || message.includes("already in use")) {
+          setError("이미 가입된 이메일입니다. 로그인을 시도해주세요.");
+        } else if (message.includes("Invalid email") || message.includes("invalid")) {
+          setError("유효하지 않은 이메일 형식입니다.");
+        } else if (message.includes("Password")) {
+          setError(message);
+        } else {
+          setError(message || "회원가입 중 오류가 발생했습니다.");
+        }
+        return;
+      }
 
       if (data.user) {
-        setSuccess(
-          "회원가입이 완료되었습니다! 이메일을 확인하여 인증을 완료해주세요."
-        );
-        // 3초 후 모달 닫기
-        setTimeout(() => {
-          handleClose();
-        }, 3000);
+        // 세션이 있으면 즉시 로그인됨 (이메일 확인 불필요 설정) → 프로필로 이동
+        if (data.session) {
+          setSuccess("회원가입이 완료되었습니다! 프로필 페이지로 이동합니다.");
+          setTimeout(() => {
+            handleClose();
+            router.push("/profile");
+          }, 1500);
+        } else {
+          // 이메일 확인 필요 (Supabase에서 Confirm email 사용 시)
+          setSuccess("이메일 확인 링크를 발송했습니다. 이메일을 확인해주세요.");
+          setTimeout(() => handleClose(), 3000);
+        }
       }
-    } catch (err: any) {
-      setError(err.message || "회원가입 중 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : typeof err === "string" ? err : "회원가입 중 오류가 발생했습니다.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -233,8 +264,8 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
             {isLoading
               ? "처리 중..."
               : mode === "signup"
-              ? "회원가입"
-              : "로그인"}
+                ? "회원가입"
+                : "로그인"}
           </button>
         </form>
       </div>

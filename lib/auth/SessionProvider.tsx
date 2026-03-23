@@ -35,10 +35,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<User | null>(null);
   const profileRef = useRef<{ role?: string; [key: string]: any } | null>(null);
 
+  // isCheckingAdmin이 5초 이상 stuck 시 강제 해제 (클라이언트 네비게이션/탭 전환 이슈 회피)
+  const adminCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     isMountedRef.current = true;
-    // isCheckingAdmin을 초기화하여 무한 로딩 방지
     setIsCheckingAdmin(true);
+
+    // 5초 후 강제 해제 (Supabase 요청 멈춤 시 fallback)
+    adminCheckTimeoutRef.current = setTimeout(() => {
+      if (isMountedRef.current) {
+        setIsCheckingAdmin(false);
+      }
+      adminCheckTimeoutRef.current = null;
+    }, 5000);
 
     // 초기 세션 및 프로필 로드
     const loadSession = async () => {
@@ -176,7 +186,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    loadSession();
+    loadSession().finally(() => {
+      if (adminCheckTimeoutRef.current) {
+        clearTimeout(adminCheckTimeoutRef.current);
+        adminCheckTimeoutRef.current = null;
+      }
+    });
 
     // 인증 상태 변경 리스너
     const {
@@ -355,6 +370,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMountedRef.current = false;
+      if (adminCheckTimeoutRef.current) {
+        clearTimeout(adminCheckTimeoutRef.current);
+        adminCheckTimeoutRef.current = null;
+      }
       subscription.unsubscribe();
       if (typeof window !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange);

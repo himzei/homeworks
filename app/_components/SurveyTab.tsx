@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin } from "@/lib/auth/SessionProvider";
 import { Button } from "@/app/_components/ui/button";
@@ -36,11 +36,28 @@ interface SurveyTabProps {
   selectedGroup?: string | null;
 }
 
+const ADMIN_CHECK_TIMEOUT_MS = 2500;
+
 export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
 
   // 관리자 권한 확인
   const { isAdmin, isCheckingAdmin } = useAdmin();
+
+  // 탭 전환 후 isCheckingAdmin이 멈출 경우를 위한 타임아웃 (클라이언트 네비게이션 이슈 회피)
+  const [adminCheckTimedOut, setAdminCheckTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!isCheckingAdmin) {
+      setAdminCheckTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setAdminCheckTimedOut(true), ADMIN_CHECK_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isCheckingAdmin]);
+
+  const showAdminCheck = isCheckingAdmin && !adminCheckTimedOut;
 
   // 설문조사 목록 상태
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -78,12 +95,12 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
     getCurrentUser();
   }, [supabase]);
 
-  // 설문조사 목록 가져오기
+  // 설문조사 목록 가져오기 (권한 확인 중이거나 타임아웃 후면 실행)
   useEffect(() => {
-    if (isCheckingAdmin) return;
+    if (showAdminCheck) return;
 
     fetchSurveys();
-  }, [isCheckingAdmin, currentUserId, selectedGroup]);
+  }, [showAdminCheck, currentUserId, selectedGroup]);
 
   const fetchSurveys = async () => {
     try {
@@ -495,15 +512,15 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
         </p>
       </div>
 
-      {/* 관리자 권한 확인 중 */}
-      {isCheckingAdmin && (
+      {/* 관리자 권한 확인 중 (타임아웃 시 숨김) */}
+      {showAdminCheck && (
         <div className="text-center py-8 text-zinc-500 dark:text-zinc-400">
           권한 확인 중...
         </div>
       )}
 
       {/* 설문조사 작성 폼 (관리자만) */}
-      {!isCheckingAdmin && isAdmin && !isWriting && (
+      {!showAdminCheck && isAdmin && !isWriting && (
         <div className="mb-6">
           <Button
             onClick={() => setIsWriting(true)}
@@ -516,7 +533,7 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
       )}
 
       {/* 설문조사 작성 폼 */}
-      {!isCheckingAdmin && isAdmin && isWriting && (
+      {!showAdminCheck && isAdmin && isWriting && (
         <div className="mb-6 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
           <h3 className="text-lg font-semibold text-black dark:text-zinc-50 mb-4">
             새 설문조사 작성
