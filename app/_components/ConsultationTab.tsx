@@ -28,7 +28,14 @@ interface StudentProfile {
   consultation_count: number; // 상담 횟수
 }
 
-export default function ConsultationTab() {
+interface ConsultationTabProps {
+  /** 과정 필터 (관리자 선택 시) - 지정 시 해당 과정 학생만 표시 */
+  selectedGroup?: string | null;
+}
+
+export default function ConsultationTab({
+  selectedGroup = null,
+}: ConsultationTabProps) {
   // 전역 세션에서 관리자 권한 가져오기
   const { isAdmin, isCheckingAdmin } = useAdmin();
 
@@ -55,13 +62,19 @@ export default function ConsultationTab() {
         const client = createClient();
 
         // 관리자가 아닌 학생들만 조회
-        const { data, error: fetchError } = await client
+        let profilesQuery = client
           .from("profiles")
           .select(
             "id, name, group_name, phone, bio, avatar_url, github_url, university, major, created_at",
           )
           .neq("role", "admin") // 관리자 제외
-          .order("name", { ascending: true }); // 이름 오름차순으로 정렬
+          .order("name", { ascending: true });
+
+        if (selectedGroup) {
+          profilesQuery = profilesQuery.eq("group_name", selectedGroup);
+        }
+
+        const { data, error: fetchError } = await profilesQuery;
 
         if (fetchError) {
           console.error("학생 목록 조회 실패:", fetchError);
@@ -157,8 +170,7 @@ export default function ConsultationTab() {
     };
 
     fetchStudents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCheckingAdmin]);
+  }, [isCheckingAdmin, selectedGroup]);
 
   // 에러가 발생한 경우 에러 메시지 표시
   if (error) {

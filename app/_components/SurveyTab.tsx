@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin } from "@/lib/auth/SessionProvider";
 import { Button } from "@/app/_components/ui/button";
+import { GROUP_OPTIONS } from "@/lib/constants";
 
 // 설문조사 타입 정의
 interface Survey {
@@ -30,7 +31,12 @@ interface Question {
   orderIndex: number;
 }
 
-export default function SurveyTab() {
+interface SurveyTabProps {
+  /** 과정 필터 - 지정 시 해당 과정 설문만 표시 (공통 설문 포함) */
+  selectedGroup?: string | null;
+}
+
+export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
   const supabase = createClient();
 
   // 관리자 권한 확인
@@ -45,6 +51,7 @@ export default function SurveyTab() {
   const [isWriting, setIsWriting] = useState<boolean>(false);
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
+  const [groupName, setGroupName] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(
     new Date().toISOString().slice(0, 16),
   );
@@ -76,19 +83,27 @@ export default function SurveyTab() {
     if (isCheckingAdmin) return;
 
     fetchSurveys();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCheckingAdmin, currentUserId]);
+  }, [isCheckingAdmin, currentUserId, selectedGroup]);
 
   const fetchSurveys = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // 설문조사 목록 가져오기
-      const { data: surveysData, error: surveysError } = await supabase
+      // 설문조사 목록 가져오기 (과정 필터 적용)
+      let surveysQuery = supabase
         .from("surveys")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (selectedGroup) {
+        const escaped = selectedGroup.replace(/"/g, '""');
+        surveysQuery = surveysQuery.or(
+          `group_name.is.null,group_name.eq."${escaped}"`,
+        );
+      }
+
+      const { data: surveysData, error: surveysError } = await surveysQuery;
 
       if (surveysError) {
         console.error("설문조사 목록 조회 실패:", surveysError);
@@ -190,6 +205,7 @@ export default function SurveyTab() {
   // 설문조사 작성 폼 초기화
   const resetForm = () => {
     setTitle("");
+    setGroupName("");
     setDescription("");
     setStartDate(new Date().toISOString().slice(0, 16));
     setEndDate("");
@@ -338,6 +354,7 @@ export default function SurveyTab() {
         .insert({
           title: title.trim(),
           description: description.trim() || null,
+          group_name: groupName.trim() || null, // null: 전체 공통
           start_date: startDate,
           end_date: endDate,
         })
@@ -529,6 +546,31 @@ export default function SurveyTab() {
                 placeholder="설문조사 제목을 입력하세요"
                 className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+
+            {/* 대상 과정 */}
+            <div>
+              <label
+                htmlFor="surveyGroupName"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
+              >
+                대상 과정
+              </label>
+              <select
+                id="surveyGroupName"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {GROUP_OPTIONS.map((opt) => (
+                  <option key={opt.value || "empty"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                빈 값 선택 시 전체 과정 공통 설문으로 등록됩니다.
+              </p>
             </div>
 
             {/* 설명 */}

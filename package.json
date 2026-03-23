@@ -9,7 +9,11 @@
     "lint": "eslint",
     "supabase:link": "supabase link",
     "supabase:push": "supabase db push",
-    "supabase:status": "supabase migration list"
+    "supabase:status": "supabase migration list",
+    "skills": "npx skills list",
+    "skills:add": "npx skills add",
+    "skills:find": "npx skills find",
+    "skills:update": "npx skills update"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

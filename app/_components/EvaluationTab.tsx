@@ -33,9 +33,14 @@ const EVALUATION_SCORES: Record<EvaluationStatus, number> = {
 
 interface EvaluationTabProps {
   assignments: Assignment[];
+  /** 과정 필터 - 지정 시 해당 과정 학생만 표시 */
+  selectedGroup?: string | null;
 }
 
-export default function EvaluationTab({ assignments }: EvaluationTabProps) {
+export default function EvaluationTab({
+  assignments,
+  selectedGroup = null,
+}: EvaluationTabProps) {
   // Supabase 클라이언트를 메모이제이션하여 무한 루프 방지
   const supabase = useMemo(() => createClient(), []);
 
@@ -100,10 +105,16 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
 
       try {
         setIsLoadingUsers(true);
-        const { data: profilesData, error } = await supabase
+        let profilesQuery = supabase
           .from("profiles")
           .select("id, name, role")
           .order("created_at", { ascending: true });
+
+        if (selectedGroup) {
+          profilesQuery = profilesQuery.eq("group_name", selectedGroup);
+        }
+
+        const { data: profilesData, error } = await profilesQuery;
 
         if (error) {
           console.error("사용자 목록 조회 실패:", error);
@@ -151,7 +162,7 @@ export default function EvaluationTab({ assignments }: EvaluationTabProps) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, isCheckingAdmin]); // supabase는 메모이제이션되어 있으므로 의존성에서 제외
+  }, [isAdmin, isCheckingAdmin, selectedGroup]); // supabase는 메모이제이션되어 있으므로 의존성에서 제외
 
   // 제출 정보 가져오기
   useEffect(() => {

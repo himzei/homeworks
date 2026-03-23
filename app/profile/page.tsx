@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { GROUP_OPTIONS } from "@/lib/constants";
 
-export default function ProfilePage() {
+/** useSearchParams를 사용하는 내부 컴포넌트 (Suspense boundary 필요) */
+function ProfilePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+  const isGroupRequired = searchParams.get("group_required") === "1";
 
   // 폼 상태 관리
   const [groupName, setGroupName] = useState("");
@@ -268,12 +272,9 @@ export default function ProfilePage() {
 
       if (upsertError) throw upsertError;
 
-      setSuccess("프로필이 성공적으로 저장되었습니다!");
-
-      // 2초 후 성공 메시지 숨기기
-      setTimeout(() => {
-        setSuccess(null);
-      }, 2000);
+      // 저장 완료 인포팁 표시 후 홈(과제 대시보드)으로 이동
+      setSuccess("저장이 완료되었습니다.");
+      setTimeout(() => router.push("/home"), 1500);
     } catch (err: any) {
       console.error("프로필 저장 실패:", err);
       setError(err.message || "프로필 저장 중 오류가 발생했습니다.");
@@ -305,6 +306,14 @@ export default function ProfilePage() {
             </p>
           </div>
 
+          {/* 과정 미설정 안내 (group_required로 리다이렉트된 경우) */}
+          {isGroupRequired && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200">
+              홈 화면을 이용하려면 아래에서 <strong>과정명</strong>을 선택해
+              저장해주세요.
+            </div>
+          )}
+
           {/* 에러 메시지 */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
@@ -312,12 +321,7 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* 성공 메시지 */}
-          {success && (
-            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-600 dark:text-green-400">
-              {success}
-            </div>
-          )}
+          {/* 저장 완료 인포팁은 fixed 토스트로 표시 (아래 영역) */}
 
           {/* 프로필 수정 폼 */}
           <form onSubmit={handleSave} className="space-y-6">
@@ -400,13 +404,11 @@ export default function ProfilePage() {
                 onChange={(e) => setGroupName(e.target.value)}
                 className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {/* 기본 선택 옵션 */}
-                <option value="">선택하세요</option>
-                {/* 과정 선택 옵션 */}
-                <option value="13기 교육생 - 빅데이터 전문가 양성과정">
-                  13기 교육생 - 빅데이터 전문가 양성과정
-                </option>
-                {/* 필요시 여기에 추가 옵션을 넣을 수 있습니다 */}
+                {GROUP_OPTIONS.map((opt) => (
+                  <option key={opt.value || "empty"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -556,7 +558,33 @@ export default function ProfilePage() {
             </div>
           </form>
         </div>
+
+        {/* 저장 완료 인포팁 (화면 하단 중앙 토스트) */}
+        {success && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300"
+          >
+            {success}
+          </div>
+        )}
       </main>
     </div>
+  );
+}
+
+/** useSearchParams를 Suspense로 감싸 빌드 시 prerender 오류 방지 */
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-zinc-500">로딩 중...</div>
+        </div>
+      }
+    >
+      <ProfilePageContent />
+    </Suspense>
   );
 }

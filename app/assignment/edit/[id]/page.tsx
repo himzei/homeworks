@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { GROUP_OPTIONS } from "@/lib/constants";
 
 export default function EditAssignmentPage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function EditAssignmentPage() {
   const [formData, setFormData] = useState({
     title: "", // 숙제 제목
     content: "", // 숙제 내용
+    groupName: "", // 대상 과정 (빈 값: 전체 공통)
     startDate: "", // 게시 시작일
     startTime: "", // 게시 시작 시간
     endDate: "", // 게시 종료일
@@ -38,7 +40,6 @@ export default function EditAssignmentPage() {
           .single();
 
         if (error) {
-          console.error("숙제 로드 오류:", error);
           alert("숙제 정보를 불러오는데 실패했습니다.");
           router.push("/");
           return;
@@ -65,6 +66,7 @@ export default function EditAssignmentPage() {
         setFormData({
           title: data.title || "",
           content: data.content || "",
+          groupName: data.group_name || "",
           startDate: startDate.toISOString().split("T")[0],
           startTime: startDate.toTimeString().slice(0, 5), // HH:MM 형식
           endDate: endDate.toISOString().split("T")[0],
@@ -72,8 +74,7 @@ export default function EditAssignmentPage() {
           lectureMaterialUrl: data.lecture_material_url || "",
           previousAnswerUrl: data.previous_answer_url || "",
         });
-      } catch (error) {
-        console.error("예상치 못한 오류:", error);
+      } catch {
         alert("예상치 못한 오류가 발생했습니다.");
         router.push("/");
       } finally {
@@ -88,7 +89,9 @@ export default function EditAssignmentPage() {
 
   // 폼 필드 변경 핸들러
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -162,22 +165,15 @@ export default function EditAssignmentPage() {
       }
 
       // 업데이트할 데이터 준비
-      const updateData: any = {
+      const updateData = {
         title: formData.title.trim(),
         content: formData.content.trim() || null,
+        group_name: formData.groupName.trim() || null,
         start_date: startDateTime.toISOString(),
         end_date: endDateTime.toISOString(),
+        lecture_material_url: formData.lectureMaterialUrl.trim() || null,
+        previous_answer_url: formData.previousAnswerUrl.trim() || null,
       };
-
-      // URL 필드 처리 (빈 문자열이면 null로 저장)
-      updateData.lecture_material_url = formData.lectureMaterialUrl.trim() || null;
-      updateData.previous_answer_url = formData.previousAnswerUrl.trim() || null;
-
-      console.log("업데이트할 데이터:", updateData);
-      console.log("URL 필드 값:", {
-        lecture_material_url: updateData.lecture_material_url,
-        previous_answer_url: updateData.previous_answer_url,
-      });
 
       // 데이터베이스 업데이트
       const { data, error } = await supabase
@@ -188,29 +184,17 @@ export default function EditAssignmentPage() {
         .select()
         .single();
 
-      console.log("업데이트 결과:", { data, error });
-
       if (error) {
-        console.error("수정 오류:", error);
-        console.error("에러 상세:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
         alert(`숙제 수정에 실패했습니다: ${error.message}`);
         setIsSubmitting(false);
         return;
       }
 
       if (!data) {
-        console.error("업데이트된 데이터가 없습니다.");
         alert("숙제 수정에 실패했습니다. 업데이트된 데이터를 확인할 수 없습니다.");
         setIsSubmitting(false);
         return;
       }
-
-      console.log("업데이트 성공! 업데이트된 데이터:", data);
 
       // 성공 메시지 표시
       alert("숙제가 수정되었습니다!");
@@ -219,28 +203,21 @@ export default function EditAssignmentPage() {
       setIsSubmitting(false);
       
       // 리스트 페이지로 이동
-      router.push("/");
-    } catch (error: any) {
-      console.error("예상치 못한 오류:", error);
-      console.error("에러 상세:", {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-      });
-      
-      // refresh token 에러 체크
+      router.push("/home");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "알 수 없는 오류";
+      const status = err && typeof err === "object" && "status" in err ? (err as { status?: number }).status : undefined;
       if (
-        error?.message?.includes("Refresh Token") ||
-        error?.message?.includes("refresh_token") ||
-        error?.status === 401
+        message.includes("Refresh Token") ||
+        message.includes("refresh_token") ||
+        status === 401
       ) {
         alert("세션이 만료되었습니다. 다시 로그인해주세요.");
         await supabase.auth.signOut();
         router.push("/");
       } else {
-        alert(`예상치 못한 오류가 발생했습니다: ${error?.message || "알 수 없는 오류"}`);
+        alert(`예상치 못한 오류가 발생했습니다: ${message}`);
       }
-      
       setIsSubmitting(false);
     }
   };
@@ -248,7 +225,7 @@ export default function EditAssignmentPage() {
   // 취소 버튼 핸들러
   const handleCancel = () => {
     if (confirm("작성 중인 내용이 사라집니다. 정말 취소하시겠습니까?")) {
-      router.push("/");
+      router.push("/home");
     }
   };
 
@@ -298,6 +275,32 @@ export default function EditAssignmentPage() {
               className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               required
             />
+          </div>
+
+          {/* 대상 과정 */}
+          <div className="space-y-2">
+            <label
+              htmlFor="groupName"
+              className="text-sm font-semibold text-black dark:text-zinc-50"
+            >
+              대상 과정
+            </label>
+            <select
+              id="groupName"
+              name="groupName"
+              value={formData.groupName}
+              onChange={handleChange}
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            >
+              {GROUP_OPTIONS.map((opt) => (
+                <option key={opt.value || "empty"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              빈 값 선택 시 전체 과정 공통 숙제로 등록됩니다.
+            </p>
           </div>
 
           {/* 숙제 내용 */}

@@ -4,15 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { GROUP_OPTIONS } from "@/lib/constants";
 
 export default function NewAssignmentPage() {
   const router = useRouter();
   const supabase = createClient();
-  
+
   // 폼 상태 관리
   const [formData, setFormData] = useState({
     title: "", // 숙제 제목
     content: "", // 숙제 내용
+    groupName: "", // 대상 과정 (빈 값: 전체 공통)
     startDate: "", // 게시 시작일
     startTime: "", // 게시 시작 시간
     endDate: "", // 게시 종료일
@@ -26,7 +28,9 @@ export default function NewAssignmentPage() {
 
   // 폼 필드 변경 핸들러
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -82,16 +86,12 @@ export default function NewAssignmentPage() {
     }
 
     setIsSubmitting(true);
-    console.log("폼 제출 시작, isSubmitting:", true);
 
     try {
-      console.log("사용자 정보 가져오기 시작...");
       // 현재 로그인한 사용자 정보 가져오기
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      console.log("사용자 정보:", { user: user?.id, error: userError });
-      
+
       if (userError) {
-        console.error("사용자 정보 가져오기 오류:", userError);
         // refresh token 에러 체크
         if (
           userError.message?.includes("Refresh Token") ||
@@ -116,31 +116,24 @@ export default function NewAssignmentPage() {
       }
 
       // 관리자 권한 확인
-      console.log("관리자 권한 확인 시작...");
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", user.id)
         .single();
 
-      console.log("프로필 조회 결과:", { profile, error: profileError });
-
       if (profileError) {
-        console.error("프로필 조회 오류:", profileError);
         alert("권한 확인 중 오류가 발생했습니다. 관리자만 숙제를 등록할 수 있습니다.");
         setIsSubmitting(false);
         return;
       }
 
       if (profile?.role !== "admin") {
-        console.warn("관리자 권한이 없습니다. role:", profile?.role);
         alert("관리자만 숙제를 등록할 수 있습니다.");
         setIsSubmitting(false);
         router.push("/");
         return;
       }
-
-      console.log("관리자 권한 확인 완료");
 
       // URL 유효성 검사 (입력된 경우에만)
       if (formData.lectureMaterialUrl.trim()) {
@@ -164,18 +157,12 @@ export default function NewAssignmentPage() {
       }
 
       // 데이터베이스에 저장
-      console.log("데이터베이스 저장 시작...", {
-        title: formData.title.trim(),
-        start_date: startDateTime.toISOString(),
-        end_date: endDateTime.toISOString(),
-        created_by: user.id,
-      });
-
       const { data, error } = await supabase
         .from("assignments")
         .insert({
           title: formData.title.trim(),
           content: formData.content.trim() || null, // 빈 문자열이면 null로 저장
+          group_name: formData.groupName.trim() || null, // null: 전체 공통, 값: 해당 과정 전용
           start_date: startDateTime.toISOString(),
           end_date: endDateTime.toISOString(),
           created_by: user.id,
@@ -185,17 +172,7 @@ export default function NewAssignmentPage() {
         .select()
         .single();
 
-      console.log("데이터베이스 저장 결과:", { data, error });
-
       if (error) {
-        console.error("저장 오류:", error);
-        console.error("에러 상세:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        
         // 더 구체적인 에러 메시지 제공
         let errorMessage = "숙제 등록에 실패했습니다.";
         if (error.code === "42501") {
@@ -212,51 +189,30 @@ export default function NewAssignmentPage() {
       }
 
       if (!data) {
-        console.error("저장된 데이터가 없습니다.");
         alert("숙제 등록에 실패했습니다. 저장된 데이터를 확인할 수 없습니다.");
         setIsSubmitting(false);
         return;
       }
 
-      console.log("저장 성공! 데이터:", data);
-
-      // 성공 메시지 표시
+      // 성공 메시지 표시 후 리스트 페이지로 이동
       alert("숙제가 등록되었습니다!");
-      
-      // 로딩 상태 해제 (중요: router.push 전에 호출)
       setIsSubmitting(false);
-      
-      console.log("페이지 이동 시작...");
-      
-      // 리스트 페이지로 이동
-      try {
-        router.push("/");
-        console.log("페이지 이동 완료");
-      } catch (routerError) {
-        console.error("페이지 이동 오류:", routerError);
-        // router.push 실패 시에도 로딩 상태는 이미 해제됨
-      }
-    } catch (error: any) {
-      console.error("예상치 못한 오류:", error);
-      console.error("에러 상세:", {
-        message: error?.message,
-        stack: error?.stack,
-        name: error?.name,
-      });
-      
+      router.push("/home");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "알 수 없는 오류";
+      const status = err && typeof err === "object" && "status" in err ? (err as { status?: number }).status : undefined;
       // refresh token 에러 체크
       if (
-        error?.message?.includes("Refresh Token") ||
-        error?.message?.includes("refresh_token") ||
-        error?.status === 401
+        message.includes("Refresh Token") ||
+        message.includes("refresh_token") ||
+        status === 401
       ) {
         alert("세션이 만료되었습니다. 다시 로그인해주세요.");
         await supabase.auth.signOut();
         router.push("/");
       } else {
-        alert(`예상치 못한 오류가 발생했습니다: ${error?.message || "알 수 없는 오류"}`);
+        alert(`예상치 못한 오류가 발생했습니다: ${message}`);
       }
-      
       setIsSubmitting(false);
     }
   };
@@ -264,7 +220,7 @@ export default function NewAssignmentPage() {
   // 취소 버튼 핸들러
   const handleCancel = () => {
     if (confirm("작성 중인 내용이 사라집니다. 정말 취소하시겠습니까?")) {
-      router.push("/");
+      router.push("/home");
     }
   };
 
@@ -301,6 +257,32 @@ export default function NewAssignmentPage() {
               className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               required
             />
+          </div>
+
+          {/* 대상 과정 */}
+          <div className="space-y-2">
+            <label
+              htmlFor="groupName"
+              className="text-sm font-semibold text-black dark:text-zinc-50"
+            >
+              대상 과정
+            </label>
+            <select
+              id="groupName"
+              name="groupName"
+              value={formData.groupName}
+              onChange={handleChange}
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            >
+              {GROUP_OPTIONS.map((opt) => (
+                <option key={opt.value || "empty"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              빈 값 선택 시 전체 과정 공통 숙제로 등록됩니다.
+            </p>
           </div>
 
           {/* 숙제 내용 */}

@@ -6,7 +6,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth/SessionProvider";
 import AuthModal from "./AuthModal";
-import { Avatar, AvatarFallback } from "./ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,7 +40,7 @@ export default function Header() {
           <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
             <Link href="/home" className="w-full sm:w-auto">
               <h1 className="text-base sm:text-xl font-semibold text-black dark:text-zinc-50 cursor-pointer hover:opacity-80 transition-opacity">
-                13기 기초교육과정 과제 관리
+                기초교육과정 과제 관리
               </h1>
             </Link>
             {/* 과제제출방법 버튼 */}

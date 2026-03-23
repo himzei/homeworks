@@ -118,6 +118,22 @@ export default function ProgressGrid({
     (user) => user.section === "everyone",
   );
 
+  // 과제가 없을 때 빈 상태 표시 (과정 필터 시 과제 없음 등)
+  if (assignments.length === 0) {
+    return (
+      <div className="w-full bg-zinc-50 dark:bg-black rounded-lg p-6 sm:p-8">
+        <div className="text-center py-12">
+          <p className="text-zinc-600 dark:text-zinc-400">
+            해당 과정에 등록된 과제가 없습니다.
+          </p>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
+            관리자가 과제를 등록하면 여기에 표시됩니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // 그리드 열 템플릿 생성 (사용자 열 + 과제 열들) - 모바일에서는 더 작은 크기
   const gridCols = `minmax(120px, 200px) repeat(${assignments.length}, minmax(100px, 120px))`;
   const totalCols = assignments.length + 1; // 사용자 열 + 과제 열들

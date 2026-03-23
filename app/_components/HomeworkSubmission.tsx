@@ -61,7 +61,6 @@ export default function HomeworkSubmission({
         }
       } catch (error) {
         // 데이터가 없을 때는 에러가 발생할 수 있음 (정상)
-        console.log("기존 제출 정보 없음");
       } finally {
         setIsLoading(false);
       }

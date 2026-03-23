@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable no-console -- 인증 디버깅용 에러 로깅 필요 */
 import { createContext, useContext, useEffect, useState, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";

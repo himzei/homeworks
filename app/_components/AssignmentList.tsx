@@ -181,6 +181,12 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
 
   // 관리자 권한은 전역 세션에서 관리하므로 별도 확인 불필요
 
+  // assignments 변경 시 이전 제출 데이터 초기화 (과정 필터 변경 시)
+  useEffect(() => {
+    setSubmissionsByAssignment({});
+    setSubmissionStatuses({});
+  }, [assignmentIds]);
+
   // 컴포넌트 마운트 시 및 assignments 변경 시 제출 정보 가져오기 (관리자일 때만)
   useEffect(() => {
     // 관리자가 아니거나 권한 확인 중이면 실행하지 않음

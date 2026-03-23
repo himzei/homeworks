@@ -5,24 +5,103 @@ import TodayAssignments from "@/app/_components/TodayAssignments";
 import EvaluationTab from "@/app/_components/EvaluationTab";
 import ConsultationTab from "@/app/_components/ConsultationTab";
 import SurveyTab from "@/app/_components/SurveyTab";
+import GroupSelector from "@/app/_components/GroupSelector";
 import { Button } from "@/app/_components/ui/button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
+import { LEGACY_GROUPS } from "@/lib/constants";
 
 // 동적 렌더링 강제 설정 (세션별로 다른 데이터를 보여주므로 캐싱 방지)
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function Home() {
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const adminSelectedGroup = (params?.group as string) || null;
   // Supabase 클라이언트 생성
   const supabase = await createClient();
 
-  // assignments 테이블에서 숙제 리스트 가져오기
-  const { data: assignmentsData, error: assignmentsError } = await supabase
+  // 현재 로그인한 사용자 정보 먼저 가져오기 (group_name 필터링에 필요)
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+  const currentUserId = currentUser?.id || "";
+
+  // 현재 사용자의 프로필 정보 (role, group_name)
+  let isAdmin = false;
+  let userGroupName: string | null = null;
+  if (currentUserId) {
+    const { data: currentUserProfile } = await supabase
+      .from("profiles")
+      .select("role, group_name")
+      .eq("id", currentUserId)
+      .single();
+    isAdmin = currentUserProfile?.role === "admin";
+    userGroupName = currentUserProfile?.group_name?.trim() || null;
+  }
+
+  // group_name이 없고 관리자가 아닌 일반 사용자 → 프로필 설정 유도
+  if (!isAdmin && currentUserId && !userGroupName) {
+    const { redirect } = await import("next/navigation");
+    redirect("/profile?group_required=1");
+  }
+
+  // 필터에 사용할 그룹: 관리자는 URL 파라미터, 일반 사용자는 프로필
+  const filterGroup =
+    isAdmin && adminSelectedGroup && adminSelectedGroup !== "all"
+      ? adminSelectedGroup
+      : !isAdmin
+        ? userGroupName
+        : null;
+
+  // 관리자가 특정 과정을 선택했는지 여부 (해당 과정만 조회, null 미포함)
+  const isAdminExplicitGroup =
+    isAdmin && adminSelectedGroup && adminSelectedGroup !== "all";
+
+  // assignments 조회: filterGroup에 따라 필터
+  // - filterGroup 없음: 전체 (관리자 "전체" 선택 시)
+  // - 관리자 + 특정 과정: 해당 과정 과제만 (null 공통 제외)
+  // - 일반 사용자 + 본인 과정: 공통(null) + 해당 그룹 과제
+  let assignmentsQuery = supabase
     .from("assignments")
     .select("*")
-    .order("created_at", { ascending: false }); // 최신순 정렬
+    .order("created_at", { ascending: false });
+
+  if (filterGroup) {
+    if (isAdminExplicitGroup) {
+      // 관리자 과정 필터
+      // - LEGACY_GROUPS(13기 등): null + 해당 그룹 (group_name 도입 전 과제 포함)
+      // - 신규 과정(14기 등): 해당 그룹만
+      if (LEGACY_GROUPS.includes(filterGroup as (typeof LEGACY_GROUPS)[number])) {
+        const escaped = filterGroup.replace(/"/g, '""');
+        assignmentsQuery = assignmentsQuery.or(
+          `group_name.is.null,group_name.eq."${escaped}"`,
+        );
+      } else {
+        assignmentsQuery = assignmentsQuery.eq("group_name", filterGroup);
+      }
+    } else {
+      // 일반 사용자: LEGACY_GROUPS(13기)만 null 포함, 신규 과정(14기)은 해당 그룹 과제만
+      if (LEGACY_GROUPS.includes(filterGroup as (typeof LEGACY_GROUPS)[number])) {
+        const escaped = filterGroup.replace(/"/g, '""');
+        assignmentsQuery = assignmentsQuery.or(
+          `group_name.is.null,group_name.eq."${escaped}"`,
+        );
+      } else {
+        assignmentsQuery = assignmentsQuery.eq("group_name", filterGroup);
+      }
+    }
+  }
+
+  const { data: assignmentsData, error: assignmentsError } =
+    await assignmentsQuery;
 
   // 에러 처리
   if (assignmentsError) {
@@ -72,24 +151,6 @@ export default async function Home() {
       };
     }),
   );
-  // 현재 로그인한 사용자 정보 가져오기
-  const {
-    data: { user: currentUser },
-  } = await supabase.auth.getUser();
-  const currentUserId = currentUser?.id || ""; // 현재 로그인한 사용자 ID
-
-  // 현재 사용자의 프로필 정보 가져오기 (관리자 권한 확인용)
-  let isAdmin = false;
-  if (currentUserId) {
-    const { data: currentUserProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", currentUserId)
-      .single();
-
-    // 관리자 역할 확인 (role이 'admin'인 경우)
-    isAdmin = currentUserProfile?.role === "admin";
-  }
 
   // 데이터베이스에서 과제 목록 가져오기 (ProgressGrid용)
   const assignments = (assignmentsData || []).map((assignment) => ({
@@ -97,12 +158,18 @@ export default async function Home() {
     name: assignment.title, // title을 name으로 매핑
   }));
 
-  // profiles 테이블에서 회원가입된 모든 사용자 정보 가져오기 (관리자 제외)
-  const { data: profilesData, error: profilesError } = await supabase
+  // profiles: filterGroup에 따라 필터
+  let profilesQuery = supabase
     .from("profiles")
     .select("id, name, role")
-    .neq("role", "admin") // 관리자 제외
-    .order("created_at", { ascending: true }); // 생성일 순으로 정렬
+    .neq("role", "admin")
+    .order("created_at", { ascending: true });
+
+  if (filterGroup) {
+    profilesQuery = profilesQuery.eq("group_name", filterGroup);
+  }
+
+  const { data: profilesData, error: profilesError } = await profilesQuery;
 
   // 에러 처리
   if (profilesError) {
@@ -199,7 +266,7 @@ export default async function Home() {
     {
       id: "survey",
       label: "설문조사",
-      content: <SurveyTab />,
+      content: <SurveyTab selectedGroup={filterGroup} />,
     },
     // 관리자만 학생상담, 숙제 리스트 및 평가 탭 표시
     ...(isAdmin
@@ -207,7 +274,7 @@ export default async function Home() {
           {
             id: "consultation",
             label: "학생상담",
-            content: <ConsultationTab />,
+            content: <ConsultationTab selectedGroup={filterGroup} />,
           },
           {
             id: "assignment-list",
@@ -241,6 +308,7 @@ export default async function Home() {
                   startDate: assignment.startDate,
                   endDate: assignment.endDate,
                 }))}
+                selectedGroup={filterGroup}
               />
             ),
           },
@@ -251,6 +319,12 @@ export default async function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full container flex-col py-4 sm:py-8 px-4 sm:px-8 bg-white dark:bg-black sm:items-start">
+        {/* 관리자용 과정 필터 */}
+        {isAdmin && (
+          <Suspense fallback={null}>
+            <GroupSelector selectedGroup={adminSelectedGroup} />
+          </Suspense>
+        )}
         <Suspense
           fallback={<div className="text-center py-12">로딩 중...</div>}
         >
