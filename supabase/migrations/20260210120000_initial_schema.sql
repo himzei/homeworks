@@ -1,7 +1,7 @@
--- 프로필 테이블 생성
--- Supabase 대시보드 SQL Editor에서 직접 실행하거나,
--- CLI로 배포: supabase/migrations/ 와 동기화 후 `npm run supabase:push` (자세한 내용: supabase/README.md)
+-- supabase db push 로 원격 DB에 적용되는 초기 스키마
+-- (기존 supabase-setup.sql 과 동기화 유지 권장)
 
+-- 프로필 테이블 생성
 -- profiles 테이블 생성
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
@@ -16,6 +16,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 -- RLS (Row Level Security) 활성화
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- 기존 정책 삭제 (이미 존재하는 경우 - 재실행 시 에러 방지)
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Authenticated users can view all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 
 -- 정책 생성: 사용자는 자신의 프로필만 조회 가능
 CREATE POLICY "Users can view own profile"
@@ -50,7 +56,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- updated_at 트리거 생성
+-- updated_at 트리거 생성 (이미 존재하면 삭제 후 재생성 - 재실행 시 에러 방지)
+DROP TRIGGER IF EXISTS set_updated_at ON public.profiles;
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW
@@ -78,6 +85,14 @@ CREATE INDEX IF NOT EXISTS idx_homeworks_user_id_number ON public.homeworks(user
 
 -- RLS (Row Level Security) 활성화
 ALTER TABLE public.homeworks ENABLE ROW LEVEL SECURITY;
+
+-- 기존 정책 삭제 (이미 존재하는 경우 - 재실행 시 에러 방지)
+DROP POLICY IF EXISTS "Users can view own homeworks" ON public.homeworks;
+DROP POLICY IF EXISTS "Authenticated users can view all homeworks" ON public.homeworks;
+DROP POLICY IF EXISTS "Users can update own homeworks" ON public.homeworks;
+DROP POLICY IF EXISTS "Users can insert own homeworks" ON public.homeworks;
+DROP POLICY IF EXISTS "Users can delete own homeworks" ON public.homeworks;
+DROP POLICY IF EXISTS "Admins can update all homework statuses" ON public.homeworks;
 
 -- 정책 생성: 사용자는 자신의 과제만 조회 가능
 CREATE POLICY "Users can view own homeworks"
@@ -109,7 +124,8 @@ CREATE POLICY "Users can delete own homeworks"
   FOR DELETE
   USING (auth.uid() = user_id);
 
--- homeworks 테이블의 updated_at 자동 업데이트 트리거 생성
+-- homeworks 테이블의 updated_at 자동 업데이트 트리거 생성 (이미 존재하면 삭제 후 재생성)
+DROP TRIGGER IF EXISTS set_homeworks_updated_at ON public.homeworks;
 CREATE TRIGGER set_homeworks_updated_at
   BEFORE UPDATE ON public.homeworks
   FOR EACH ROW
@@ -142,6 +158,12 @@ CREATE INDEX IF NOT EXISTS idx_assignments_created_by ON public.assignments(crea
 -- RLS (Row Level Security) 활성화
 ALTER TABLE public.assignments ENABLE ROW LEVEL SECURITY;
 
+-- 기존 정책 삭제 (이미 존재하는 경우 - 재실행 시 에러 방지)
+DROP POLICY IF EXISTS "Anyone can view assignments" ON public.assignments;
+DROP POLICY IF EXISTS "Authenticated users can insert assignments" ON public.assignments;
+DROP POLICY IF EXISTS "Users can update own assignments" ON public.assignments;
+DROP POLICY IF EXISTS "Users can delete own assignments" ON public.assignments;
+
 -- 정책 생성: 모든 사용자는 숙제를 조회할 수 있음 (공개)
 CREATE POLICY "Anyone can view assignments"
   ON public.assignments
@@ -166,7 +188,8 @@ CREATE POLICY "Users can delete own assignments"
   FOR DELETE
   USING (auth.uid() = created_by);
 
--- assignments 테이블의 updated_at 자동 업데이트 트리거 생성
+-- assignments 테이블의 updated_at 자동 업데이트 트리거 생성 (이미 존재하면 삭제 후 재생성)
+DROP TRIGGER IF EXISTS set_assignments_updated_at ON public.assignments;
 CREATE TRIGGER set_assignments_updated_at
   BEFORE UPDATE ON public.assignments
   FOR EACH ROW
@@ -362,6 +385,13 @@ CREATE INDEX IF NOT EXISTS idx_consultations_created_at ON public.consultations(
 -- RLS (Row Level Security) 활성화
 ALTER TABLE public.consultations ENABLE ROW LEVEL SECURITY;
 
+-- 기존 정책 삭제 (이미 존재하는 경우 - 재실행 시 에러 방지)
+DROP POLICY IF EXISTS "Students can view own consultations" ON public.consultations;
+DROP POLICY IF EXISTS "Admins can view all consultations" ON public.consultations;
+DROP POLICY IF EXISTS "Authenticated users can insert own consultations" ON public.consultations;
+DROP POLICY IF EXISTS "Students can update own consultations" ON public.consultations;
+DROP POLICY IF EXISTS "Admins can update all consultations" ON public.consultations;
+
 -- 정책 생성: 학생은 자신의 상담만 조회 가능
 CREATE POLICY "Students can view own consultations"
   ON public.consultations
@@ -412,7 +442,8 @@ CREATE POLICY "Admins can update all consultations"
     )
   );
 
--- consultations 테이블의 updated_at 자동 업데이트 트리거 생성
+-- consultations 테이블의 updated_at 자동 업데이트 트리거 생성 (이미 존재하면 삭제 후 재생성)
+DROP TRIGGER IF EXISTS set_consultations_updated_at ON public.consultations;
 CREATE TRIGGER set_consultations_updated_at
   BEFORE UPDATE ON public.consultations
   FOR EACH ROW
