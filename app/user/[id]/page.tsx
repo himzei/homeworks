@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { Check, X, Github, ArrowLeft, Edit } from "lucide-react";
+import { X, Github, ArrowLeft, Edit } from "lucide-react";
+import { LEGACY_GROUPS } from "@/lib/constants";
+import {
+  formatKoreaDateTimeFromUtc,
+  parseSupabaseUtcTimestamp,
+} from "@/lib/format-date";
 
 interface UserProfilePageProps {
   params: Promise<{
@@ -43,17 +48,61 @@ export default async function UserProfilePage({
     notFound();
   }
 
-  // 모든 과제 목록 가져오기
-  const { data: assignmentsData } = await supabase
-    .from("assignments")
-    .select("id, title")
-    .order("created_at", { ascending: false });
+  // 해당 학생이 속한 과정(group_name)에 맞는 과제만 조회 (home과 동일한 LEGACY 규칙)
+  const courseGroupName = profile.group_name?.trim() || null;
 
-  // 해당 사용자의 제출 정보 가져오기
-  const { data: homeworksData } = await supabase
-    .from("homeworks")
-    .select("assignment_id, url, status, created_at")
-    .eq("user_id", id);
+  let assignmentsData: { id: string; title: string; start_date: string }[] | null =
+    null;
+
+  if (courseGroupName) {
+    let assignmentsQuery = supabase
+      .from("assignments")
+      .select("id, title, start_date")
+      .order("created_at", { ascending: false });
+
+    if (LEGACY_GROUPS.includes(courseGroupName as (typeof LEGACY_GROUPS)[number])) {
+      const escaped = courseGroupName.replace(/"/g, '""');
+      assignmentsQuery = assignmentsQuery.or(
+        `group_name.is.null,group_name.eq."${escaped}"`,
+      );
+    } else {
+      assignmentsQuery = assignmentsQuery.eq("group_name", courseGroupName);
+    }
+
+    const { data } = await assignmentsQuery;
+    assignmentsData = data;
+  } else {
+    assignmentsData = [];
+  }
+
+  const now = new Date();
+
+  // 게시 시작일 이전 과제는 목록·통계에서 제외
+  const publishedAssignments = (assignmentsData || []).filter((a) => {
+    const startDate = parseSupabaseUtcTimestamp(a.start_date);
+    return !Number.isNaN(startDate.getTime()) && now >= startDate;
+  });
+
+  const publishedAssignmentIds = publishedAssignments.map((a) => a.id);
+
+  // 게시된 과제에 대한 제출만 조회 (빈 배열이면 .in 호출 생략)
+  let homeworksData:
+    | {
+        assignment_id: string;
+        url: string | null;
+        status: string | null;
+        created_at: string;
+      }[]
+    | null = [];
+
+  if (publishedAssignmentIds.length > 0) {
+    const { data: hw } = await supabase
+      .from("homeworks")
+      .select("assignment_id, url, status, created_at")
+      .eq("user_id", id)
+      .in("assignment_id", publishedAssignmentIds);
+    homeworksData = hw;
+  }
 
   // 과제별 제출 정보를 맵으로 변환
   const submissionMap = new Map();
@@ -99,22 +148,6 @@ export default async function UserProfilePage({
           textColor: "text-gray-700 dark:text-gray-300",
         };
     }
-  };
-
-  // 날짜 및 시간 포맷팅 함수
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const dateStr = date.toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const timeStr = date.toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false, // 24시간 형식 사용
-    });
-    return `${dateStr} ${timeStr}`;
   };
 
   return (
@@ -210,14 +243,23 @@ export default async function UserProfilePage({
           </div>
         </div>
 
-        {/* 과제 진행 상황 */}
+        {/* 과제 진행 상황 — 프로필의 과정(group_name)에 해당하는 과제만 표시 */}
         <div className="mb-8">
           <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-4">
             과제 진행 상황
+            {courseGroupName && (
+              <span className="block text-sm font-normal text-zinc-500 dark:text-zinc-400 mt-1">
+                {courseGroupName} 기준
+              </span>
+            )}
           </h2>
-          {assignmentsData && assignmentsData.length > 0 ? (
+          {!courseGroupName ? (
+            <p className="text-zinc-500 dark:text-zinc-400">
+              과정이 설정되지 않아 해당 과정 과제를 표시할 수 없습니다.
+            </p>
+          ) : publishedAssignments.length > 0 ? (
             <div className="space-y-3">
-              {assignmentsData.map((assignment) => {
+              {publishedAssignments.map((assignment) => {
                 const submission = submissionMap.get(assignment.id);
                 const statusStyle = getStatusStyle(submission?.status);
 
@@ -239,7 +281,7 @@ export default async function UserProfilePage({
                               {statusStyle.text}
                             </span>
                             <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                              제출일: {formatDate(submission.submittedAt)}
+                              제출일: {formatKoreaDateTimeFromUtc(submission.submittedAt)}
                             </span>
                             {submission.url && (
                               <a
@@ -268,21 +310,25 @@ export default async function UserProfilePage({
                 );
               })}
             </div>
+          ) : (assignmentsData?.length ?? 0) > 0 ? (
+            <p className="text-zinc-500 dark:text-zinc-400">
+              게시 시작일이 지난 과제가 아직 없습니다.
+            </p>
           ) : (
             <p className="text-zinc-500 dark:text-zinc-400">
-              등록된 과제가 없습니다.
+              이 과정에 등록된 과제가 없습니다.
             </p>
           )}
         </div>
 
-        {/* 통계 정보 */}
+        {/* 통계 정보 — 게시 시작일이 지난 과제만 집계 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-800">
             <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">
               전체 과제
             </div>
             <div className="text-2xl font-semibold text-black dark:text-zinc-50">
-              {assignmentsData?.length || 0}
+              {publishedAssignments.length}
             </div>
           </div>
           <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-800">
@@ -298,9 +344,10 @@ export default async function UserProfilePage({
               제출률
             </div>
             <div className="text-2xl font-semibold text-black dark:text-zinc-50">
-              {assignmentsData && assignmentsData.length > 0
+              {publishedAssignments.length > 0
                 ? Math.round(
-                    ((homeworksData?.length || 0) / assignmentsData.length) *
+                    ((homeworksData?.length || 0) /
+                      publishedAssignments.length) *
                       100,
                   )
                 : 0}

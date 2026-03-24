@@ -11,6 +11,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
 import { LEGACY_GROUPS } from "@/lib/constants";
+import { parseSupabaseUtcTimestamp } from "@/lib/format-date";
 
 // 동적 렌더링 강제 설정 (세션별로 다른 데이터를 보여주므로 캐싱 방지)
 export const dynamic = "force-dynamic";
@@ -152,11 +153,16 @@ export default async function Home({
     }),
   );
 
-  // 데이터베이스에서 과제 목록 가져오기 (ProgressGrid용)
-  const assignments = (assignmentsData || []).map((assignment) => ({
-    id: assignment.id,
-    name: assignment.title, // title을 name으로 매핑
-  }));
+  // 진행과정 그리드: 게시 시작일 이후 과제만 열·진행데이터에 포함 (과제명은 게시 후에만 노출)
+  const assignments = (assignmentsData || [])
+    .filter((assignment) => {
+      const startDate = parseSupabaseUtcTimestamp(assignment.start_date);
+      return !Number.isNaN(startDate.getTime()) && now >= startDate;
+    })
+    .map((assignment) => ({
+      id: assignment.id,
+      name: assignment.title,
+    }));
 
   // profiles: filterGroup에 따라 필터
   let profilesQuery = supabase
@@ -253,7 +259,7 @@ export default async function Home({
       id: "progress",
       label: "진행과정",
       content: (
-        <div className="w-full">
+        <div className="w-full overflow-auto max-h-[calc(100vh-220px)] rounded-lg">
           <ProgressGrid
             currentUserId={currentUserId}
             assignments={assignments}

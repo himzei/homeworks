@@ -124,10 +124,10 @@ export default function ProgressGrid({
       <div className="w-full bg-zinc-50 dark:bg-black rounded-lg p-6 sm:p-8">
         <div className="text-center py-12">
           <p className="text-zinc-600 dark:text-zinc-400">
-            해당 과정에 등록된 과제가 없습니다.
+            게시 시작일이 지난 과제가 없습니다.
           </p>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
-            관리자가 과제를 등록하면 여기에 표시됩니다.
+            등록된 과제가 없거나, 아직 게시 시작 전일 수 있습니다.
           </p>
         </div>
       </div>
@@ -141,7 +141,7 @@ export default function ProgressGrid({
   return (
     <div className="w-full bg-zinc-50 dark:bg-black rounded-lg p-3 sm:p-6">
       {/* 가로 스크롤 가능한 컨테이너 */}
-      <div className="overflow-x-auto scrollbar-hide">
+      <div className="overflow-x-auto">
         <div className="inline-block min-w-full">
           {/* 그리드 컨테이너 */}
           <div
