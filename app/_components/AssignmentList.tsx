@@ -37,6 +37,21 @@ interface SubmissionUser {
 // 검토 상태 타입 정의
 type SubmissionStatus = "검토중" | "승인" | "수정필요" | "모범답안";
 
+// CheckedList와 동일: 과제별로 구분 (userId만 쓰면 다른 과제 상태가 덮어씀)
+function submissionStatusKey(userId: string, assignmentId: string): string {
+  return `${userId}-${assignmentId}`;
+}
+
+function normalizeDbStatus(
+  raw: string | null | undefined,
+): SubmissionStatus {
+  const allowed: SubmissionStatus[] = ["검토중", "승인", "수정필요", "모범답안"];
+  if (raw && (allowed as readonly string[]).includes(raw)) {
+    return raw as SubmissionStatus;
+  }
+  return "검토중";
+}
+
 interface AssignmentListProps {
   assignments: Assignment[];
 }
@@ -156,12 +171,12 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
           [assignment.id]: submissionUsers,
         }));
 
-        // 상태 정보를 submissionStatuses에 설정
+        // 상태 정보를 submissionStatuses에 설정 (복합 키 = CheckedList 조회와 일치)
         const statuses: Record<string, SubmissionStatus> = {};
         homeworks.forEach((homework) => {
-          // 데이터베이스에서 가져온 상태가 있으면 사용하고, 없으면 기본값 "검토중"
-          statuses[homework.user_id] =
-            (homework.status as SubmissionStatus) || "검토중";
+          // DB에서 가져온 status로 표시 (없거나 값이 없으면 검토중)
+          const key = submissionStatusKey(homework.user_id, assignment.id);
+          statuses[key] = normalizeDbStatus(homework.status);
         });
         setSubmissionStatuses((prev) => ({ ...prev, ...statuses }));
       } catch (error) {
@@ -275,11 +290,11 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
           [assignmentId]: submissionUsers,
         }));
 
-        // 상태 정보 업데이트
+        // 상태 정보 업데이트 (복합 키 = CheckedList 조회와 일치)
         const statuses: Record<string, SubmissionStatus> = {};
         homeworks.forEach((homework) => {
-          statuses[homework.user_id] =
-            (homework.status as SubmissionStatus) || "검토중";
+          const key = submissionStatusKey(homework.user_id, assignmentId);
+          statuses[key] = normalizeDbStatus(homework.status);
         });
         setSubmissionStatuses((prev) => ({ ...prev, ...statuses }));
       } catch (error) {
@@ -294,59 +309,52 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
     [supabase, isAdmin, isCheckingAdmin],
   );
 
-  // 제출 상태를 데이터베이스에 저장하는 함수
+  // 제출 상태를 서버 API를 통해 DB에 저장 (관리자 검증 + RLS/서비스롤)
   const updateSubmissionStatus = useCallback(
     async (userId: string, assignmentId: string, status: SubmissionStatus) => {
+      const key = submissionStatusKey(userId, assignmentId);
+      const previousStatus = submissionStatuses[key] || "검토중";
+
       try {
-        // 먼저 해당 사용자의 해당 과제 제출물 찾기
-        const { data: homework, error: findError } = await supabase
-          .from("homeworks")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("assignment_id", assignmentId)
-          .single();
+        const res = await fetch("/api/admin/homework-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, assignmentId, status }),
+        });
 
-        if (findError || !homework) {
-          console.error("제출물을 찾을 수 없습니다:", findError);
-          return;
-        }
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
 
-        // 상태 업데이트
-        const { error: updateError } = await supabase
-          .from("homeworks")
-          .update({ status })
-          .eq("id", homework.id);
-
-        if (updateError) {
-          console.error("상태 업데이트 실패:", updateError);
-          // 에러 발생 시 이전 상태로 되돌리기
-          const previousStatus = submissionStatuses[userId] || "검토중";
+        if (!res.ok) {
+          console.error("상태 업데이트 실패:", payload);
           setSubmissionStatuses((prev) => ({
             ...prev,
-            [userId]: previousStatus,
+            [key]: previousStatus,
           }));
+          alert(
+            typeof payload?.error === "string"
+              ? payload.error
+              : "상태 저장에 실패했습니다.",
+          );
           return;
         }
 
-        // 성공 시 로컬 상태 업데이트
         setSubmissionStatuses((prev) => ({
           ...prev,
-          [userId]: status,
+          [key]: status,
         }));
-
-        // 해당 과제의 제출 정보 다시 불러오기 (테이블 업데이트)
         await refreshAssignmentSubmissions(assignmentId);
       } catch (error) {
         console.error("상태 업데이트 중 오류:", error);
-        // 에러 발생 시 이전 상태로 되돌리기
-        const previousStatus = submissionStatuses[userId] || "검토중";
         setSubmissionStatuses((prev) => ({
           ...prev,
-          [userId]: previousStatus,
+          [key]: previousStatus,
         }));
+        alert("상태 저장 중 오류가 발생했습니다.");
       }
     },
-    [supabase, submissionStatuses, refreshAssignmentSubmissions],
+    [submissionStatuses, refreshAssignmentSubmissions],
   );
 
   // 날짜와 시간을 포맷팅하는 함수

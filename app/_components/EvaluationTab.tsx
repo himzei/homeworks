@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin } from "@/lib/auth/SessionProvider";
 
@@ -245,62 +245,60 @@ export default function EvaluationTab({
     }, 0);
   };
 
-  // 제출 상태를 데이터베이스에 저장하는 함수
-  const updateEvaluationStatus = async (
-    userId: string,
-    assignmentId: string,
-    status: EvaluationStatus,
-  ) => {
-    try {
-      // 먼저 해당 사용자의 해당 과제 제출물 찾기
-      const { data: homework, error: findError } = await supabase
-        .from("homeworks")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("assignment_id", assignmentId)
-        .single();
+  // 제출 상태를 서버 API로 DB에 저장 (숙제리스트 탭과 동일: 관리자 검증 + RLS/서비스롤)
+  // rollbackFrom: 낙관적 업데이트 전 값 — 콤보 변경 직전에 넘겨야 롤백이 정확함
+  const updateEvaluationStatus = useCallback(
+    async (
+      userId: string,
+      assignmentId: string,
+      status: EvaluationStatus,
+      rollbackFrom: EvaluationStatus,
+    ) => {
+      const key = getEvaluationKey(userId, assignmentId);
 
-      if (findError || !homework) {
-        console.error("제출물을 찾을 수 없습니다:", findError);
-        return;
-      }
+      const statusToSave: "검토중" | "승인" | "수정필요" | "모범답안" =
+        status === "미제출" ? "검토중" : status;
 
-      // 상태 업데이트 (미제출인 경우 null로 저장하지 않고 "검토중"으로 저장)
-      const statusToSave = status === "미제출" ? "검토중" : status;
-      const { error: updateError } = await supabase
-        .from("homeworks")
-        .update({ status: statusToSave })
-        .eq("id", homework.id);
+      try {
+        const res = await fetch("/api/admin/homework-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, assignmentId, status: statusToSave }),
+        });
 
-      if (updateError) {
-        console.error("상태 업데이트 실패:", updateError);
-        // 에러 발생 시 이전 상태로 되돌리기
-        const previousStatus =
-          evaluationStatuses[getEvaluationKey(userId, assignmentId)] ||
-          "미제출";
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+
+        if (!res.ok) {
+          console.error("상태 업데이트 실패:", payload);
+          setEvaluationStatuses((prev) => ({
+            ...prev,
+            [key]: rollbackFrom,
+          }));
+          alert(
+            typeof payload?.error === "string"
+              ? payload.error
+              : "상태 저장에 실패했습니다.",
+          );
+          return;
+        }
+
         setEvaluationStatuses((prev) => ({
           ...prev,
-          [getEvaluationKey(userId, assignmentId)]: previousStatus,
+          [key]: status,
         }));
-        return;
+      } catch (error) {
+        console.error("상태 업데이트 중 오류:", error);
+        setEvaluationStatuses((prev) => ({
+          ...prev,
+          [key]: rollbackFrom,
+        }));
+        alert("상태 저장 중 오류가 발생했습니다.");
       }
-
-      // 성공 시 로컬 상태 업데이트
-      setEvaluationStatuses((prev) => ({
-        ...prev,
-        [getEvaluationKey(userId, assignmentId)]: status,
-      }));
-    } catch (error) {
-      console.error("상태 업데이트 중 오류:", error);
-      // 에러 발생 시 이전 상태로 되돌리기
-      const previousStatus =
-        evaluationStatuses[getEvaluationKey(userId, assignmentId)] || "미제출";
-      setEvaluationStatuses((prev) => ({
-        ...prev,
-        [getEvaluationKey(userId, assignmentId)]: previousStatus,
-      }));
-    }
-  };
+    },
+    [],
+  );
 
   // CSV 파일 다운로드 함수
   const handleDownloadCSV = () => {
@@ -498,16 +496,17 @@ export default function EvaluationTab({
                             onChange={async (e) => {
                               const newStatus = e.target
                                 .value as EvaluationStatus;
+                              const beforeStatus = currentStatus;
                               // 낙관적 업데이트: 먼저 UI 업데이트
                               setEvaluationStatuses((prev) => ({
                                 ...prev,
                                 [key]: newStatus,
                               }));
-                              // 데이터베이스에 저장
                               await updateEvaluationStatus(
                                 user.id,
                                 assignment.id,
                                 newStatus,
+                                beforeStatus,
                               );
                             }}
                             className="text-xs px-2 py-1 border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
