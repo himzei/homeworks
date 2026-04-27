@@ -17,11 +17,13 @@ export const GROUP_OPTIONS = [
   },
 ] as const;
 
-/** 프로필 수정용 과정명 - 14기 교육생만 선택 가능 */
+/** 프로필 수정용 과정명 - 13기(LEGACY) 제외한 신규 기수만 선택 */
 export const PROFILE_GROUP_OPTIONS = [
   { value: "", label: "선택하세요" },
   ...GROUP_OPTIONS.filter(
-    (opt) => opt.value && opt.value.startsWith("14기 교육생 -"),
+    (opt) =>
+      opt.value &&
+      !opt.value.startsWith("13기 교육생 -"),
   ),
 ];
 

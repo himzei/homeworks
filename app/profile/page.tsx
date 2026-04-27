@@ -31,9 +31,6 @@ function ProfilePageContent() {
   const [success, setSuccess] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  /** 과정명이 이미 저장되어 있으면 변경 불가 */
-  const [isGroupNameLocked, setIsGroupNameLocked] = useState(false);
-
   // 사용자 정보 및 프로필 데이터 로드
   useEffect(() => {
     const loadProfile = async () => {
@@ -84,9 +81,7 @@ function ProfilePageContent() {
 
         // 프로필 데이터가 있으면 폼에 채우기
         if (profile) {
-          const savedGroupName = profile.group_name || "";
-          setGroupName(savedGroupName);
-          if (savedGroupName) setIsGroupNameLocked(true);
+          setGroupName(profile.group_name || "");
           setName(profile.name || "");
           setPhone(profile.phone || "");
           setBio(profile.bio || "");
@@ -394,7 +389,7 @@ function ProfilePageContent() {
               </p>
             </div>
 
-            {/* 그룹명 - 선택 후 변경 불가 */}
+            {/* 과정명 - 저장 후에도 변경 가능 */}
             <div>
               <label
                 htmlFor="groupName"
@@ -406,8 +401,7 @@ function ProfilePageContent() {
                 id="groupName"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                disabled={isGroupNameLocked}
-                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {PROFILE_GROUP_OPTIONS.map((opt) => (
                   <option key={opt.value || "empty"} value={opt.value}>
@@ -415,11 +409,6 @@ function ProfilePageContent() {
                   </option>
                 ))}
               </select>
-              {isGroupNameLocked && (
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  과정명은 한 번 선택 후 변경할 수 없습니다.
-                </p>
-              )}
             </div>
 
             {/* 이름 */}
