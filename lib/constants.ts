@@ -4,6 +4,10 @@
 export const GROUP_OPTIONS = [
   { value: "", label: "선택하세요" },
   {
+    value: "15기 교육생 - 빅데이터 전문가 양성과정",
+    label: "15기 교육생 - 빅데이터 전문가 양성과정",
+  },
+  {
     value: "14기 교육생 - 빅데이터 전문가 양성과정",
     label: "14기 교육생 - 빅데이터 전문가 양성과정",
   },
@@ -16,7 +20,9 @@ export const GROUP_OPTIONS = [
 /** 프로필 수정용 과정명 - 14기 교육생만 선택 가능 */
 export const PROFILE_GROUP_OPTIONS = [
   { value: "", label: "선택하세요" },
-  ...GROUP_OPTIONS.filter((opt) => opt.value && opt.value.startsWith("14기 교육생 -")),
+  ...GROUP_OPTIONS.filter(
+    (opt) => opt.value && opt.value.startsWith("14기 교육생 -"),
+  ),
 ];
 
 /**
