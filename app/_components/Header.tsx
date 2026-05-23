@@ -19,7 +19,7 @@ export default function Header() {
   const router = useRouter();
 
   // 전역 세션에서 사용자 정보 가져오기
-  const { user, profile, isLoading } = useSession();
+  const { user, profile, isLoading, isAdmin } = useSession();
   const supabase = createClient();
 
   // 모달 상태 관리
@@ -40,7 +40,7 @@ export default function Header() {
           <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
             <Link href="/home" className="w-full sm:w-auto">
               <h1 className="text-base sm:text-xl font-semibold text-black dark:text-zinc-50 cursor-pointer hover:opacity-80 transition-opacity">
-                기초교육과정 과제 관리
+                AI 빅데이터 전문가 양성과정 과제관리
               </h1>
             </Link>
             {/* 과제제출방법 버튼 */}
@@ -129,6 +129,15 @@ export default function Header() {
                   >
                     과제
                   </DropdownMenuItem>
+                  {/* 관리자 대시보드 메뉴 (관리자에게만 노출) */}
+                  {isAdmin ? (
+                    <DropdownMenuItem
+                      onClick={() => router.push("/admin")}
+                      className="cursor-pointer"
+                    >
+                      관리자 대시보드
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuSeparator />
                   {/* 로그아웃 메뉴 */}
                   <DropdownMenuItem
