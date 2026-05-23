@@ -16,7 +16,6 @@ import {
 import { Button } from "@/app/_components/ui/button";
 import { useSession } from "@/lib/auth/SessionProvider";
 import LadderBoard from "./LadderBoard";
-import LadderVotePanel from "./LadderVotePanel";
 import { deleteVotesForLadderGame } from "@/lib/ladder-votes";
 import {
   MAX_PARTICIPANTS,
@@ -401,32 +400,23 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
         </p>
       ) : null}
 
-      {/* 사다리(왼쪽) + 투표(오른쪽) — 큰 화면에서 가로 배치 */}
-      <div className="flex flex-1 min-h-0 flex-col gap-4 lg:flex-row lg:gap-4">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <LadderBoard
-            game={boardGame}
-            mode={isEditing ? "edit" : "play"}
-            onParticipantNameChange={handleParticipantNameChange}
-            onResultItemChange={handleResultItemChange}
-            onEmptyParticipantClick={
-              isEditing ? undefined : handleEmptyParticipantClick
-            }
-            onGameStart={handleGameStart}
-            onShuffleParticipants={
-              !isPlayed && !isEditing ? handleShuffleParticipants : undefined
-            }
-            onShuffleResults={
-              !isPlayed && !isEditing ? handleShuffleResults : undefined
-            }
-          />
-        </div>
-
-        {!isEditing ? (
-          <aside className="flex h-[min(420px,40vh)] shrink-0 flex-col lg:h-auto lg:w-[min(100%,22rem)] lg:max-w-sm">
-            <LadderVotePanel ladderGameId={gameId} />
-          </aside>
-        ) : null}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <LadderBoard
+          game={boardGame}
+          mode={isEditing ? "edit" : "play"}
+          onParticipantNameChange={handleParticipantNameChange}
+          onResultItemChange={handleResultItemChange}
+          onEmptyParticipantClick={
+            isEditing ? undefined : handleEmptyParticipantClick
+          }
+          onGameStart={handleGameStart}
+          onShuffleParticipants={
+            !isPlayed && !isEditing ? handleShuffleParticipants : undefined
+          }
+          onShuffleResults={
+            !isPlayed && !isEditing ? handleShuffleResults : undefined
+          }
+        />
       </div>
 
       {/* 사다리 아래쪽: 편집 모드의 저장/취소 + 검증 에러 */}

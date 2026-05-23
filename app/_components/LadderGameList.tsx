@@ -49,8 +49,6 @@ export default function LadderGameList() {
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             글쓰기 버튼으로 사다리를 만들고, 목록에서 다시 열어볼 수 있습니다.
-            <br className="hidden sm:block" />
-            데이터는 이 브라우저에만 저장됩니다.
           </p>
         </div>
         <Button asChild>
@@ -62,7 +60,9 @@ export default function LadderGameList() {
       </header>
 
       {!isHydrated ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">불러오는 중...</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          불러오는 중...
+        </p>
       ) : games.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -70,8 +70,7 @@ export default function LadderGameList() {
           </p>
           <Button asChild className="mt-4">
             <Link href="/ladder/new">
-              <PencilLine className="size-4" aria-hidden />
-              첫 사다리 만들기
+              <PencilLine className="size-4" aria-hidden />첫 사다리 만들기
             </Link>
           </Button>
         </div>

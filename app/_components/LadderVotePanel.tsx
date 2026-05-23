@@ -28,19 +28,23 @@ import {
 import {
   MAX_VOTE_OPTIONS,
   MIN_VOTE_OPTIONS,
+  addLadderVoteOption,
   castLadderVoteBallot,
   computeLadderVoteResults,
   createLadderVote,
   deleteLadderVote,
   describeVoteError,
-  listVotesForLadder,
+  endLadderVote,
+  listAllLadderVotes,
   startLadderVote,
   type LadderVoteRecord,
 } from "@/lib/ladder-votes";
 import { cn } from "@/lib/utils";
+import VoteFireworks from "./VoteFireworks";
 
 type LadderVotePanelProps = {
-  ladderGameId: string;
+  /** 페이지 전체 레이아웃 (기본값 page) */
+  variant?: "page" | "sidebar";
 };
 
 type PanelView = "list" | "create" | "detail";
@@ -58,20 +62,42 @@ function formatVoteDate(timestamp: number): string {
 }
 
 function statusLabel(status: LadderVoteRecord["status"]): string {
-  return status === "draft" ? "작성 중" : "투표 중";
+  switch (status) {
+    case "draft":
+      return "작성 중";
+    case "active":
+      return "투표 중";
+    case "closed":
+      return "종료";
+  }
 }
+
+function statusBadgeClass(status: LadderVoteRecord["status"]): string {
+  switch (status) {
+    case "active":
+      return "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300";
+    case "closed":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
+    default:
+      return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300";
+  }
+}
+
+const VOTE_END_COUNTDOWN_SECONDS = 5;
 
 type LadderVotePanelContentProps = LadderVotePanelProps;
 
 /**
- * 사다리 상세 오른쪽 투표 게시판.
+ * 투표 게시판 (/vote).
  * - 목록 / 작성 / 상세(투표·결과)
  * - 로그인 사용자만 투표
  * - 익명·실명 결과 표시
  */
 export default function LadderVotePanel({
-  ladderGameId,
+  variant = "page",
 }: LadderVotePanelContentProps) {
+  const isPageLayout = variant === "page";
+
   const { user, profile, isLoading: isSessionLoading } = useSession();
   const [votes, setVotes] = useState<LadderVoteRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -79,6 +105,9 @@ export default function LadderVotePanel({
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  /** 투표 종료 카운트다운 (초) */
+  const [endCountdown, setEndCountdown] = useState<number | null>(null);
+  const [showFireworks, setShowFireworks] = useState(false);
 
   // 작성 폼
   const [draftTitle, setDraftTitle] = useState("");
@@ -88,6 +117,8 @@ export default function LadderVotePanel({
 
   // 상세: 투표 선택
   const [selectedOptionId, setSelectedOptionId] = useState<string>("");
+  /** 투표 중 추가할 새 선택지 */
+  const [newActiveOptionLabel, setNewActiveOptionLabel] = useState("");
 
   const resultsExportRef = useRef<HTMLDivElement>(null);
 
@@ -101,8 +132,8 @@ export default function LadderVotePanel({
   }, [profile, user?.email]);
 
   const reloadVotes = useCallback(() => {
-    setVotes(listVotesForLadder(ladderGameId));
-  }, [ladderGameId]);
+    setVotes(listAllLadderVotes());
+  }, []);
 
   useEffect(() => {
     reloadVotes();
@@ -122,6 +153,24 @@ export default function LadderVotePanel({
     );
   }, [selectedVote, currentUserId]);
 
+  const hasVoted = Boolean(myBallot);
+  const isVoteSelectionChanged =
+    hasVoted &&
+    Boolean(selectedOptionId) &&
+    selectedOptionId !== myBallot?.optionId;
+  const canSubmitBallot =
+    Boolean(selectedOptionId) && (!hasVoted || isVoteSelectionChanged);
+
+  // 상세 진입·투표 반영 시 내 선택지 동기화
+  useEffect(() => {
+    if (view !== "detail" || !selectedVote) return;
+    if (myBallot) {
+      setSelectedOptionId(myBallot.optionId);
+    } else {
+      setSelectedOptionId("");
+    }
+  }, [view, selectedVote?.id, myBallot?.optionId]);
+
   const resultRows = useMemo(
     () => (selectedVote ? computeLadderVoteResults(selectedVote) : []),
     [selectedVote],
@@ -131,6 +180,14 @@ export default function LadderVotePanel({
   const isAuthor =
     Boolean(selectedVote && currentUserId) &&
     selectedVote?.authorUserId === currentUserId;
+
+  const showVoteResults = selectedVote?.status === "closed";
+  const isEndingVote = endCountdown !== null;
+
+  const resetEndVoteUi = useCallback(() => {
+    setEndCountdown(null);
+    setShowFireworks(false);
+  }, []);
 
   const resetCreateForm = useCallback(() => {
     setDraftTitle("");
@@ -150,12 +207,61 @@ export default function LadderVotePanel({
     setView("create");
   }, [currentUserId, resetCreateForm]);
 
-  const openDetail = useCallback((voteId: string) => {
-    setSelectedVoteId(voteId);
-    setSelectedOptionId("");
+  const openDetail = useCallback(
+    (voteId: string) => {
+      setSelectedVoteId(voteId);
+      setSelectedOptionId("");
+      setNewActiveOptionLabel("");
+      setFormError(null);
+      resetEndVoteUi();
+      setView("detail");
+    },
+    [resetEndVoteUi],
+  );
+
+  /** 작성자: 5초 카운트다운 후 투표 종료 + 폭죽 */
+  const handleStartEndVote = useCallback(() => {
+    if (!selectedVote || !currentUserId || !isAuthor) return;
+    if (selectedVote.status !== "active") return;
+    if (
+      !window.confirm(
+        "투표를 종료할까요? 5초 후 폭죽과 함께 결과가 발표됩니다.",
+      )
+    ) {
+      return;
+    }
     setFormError(null);
-    setView("detail");
-  }, []);
+    setEndCountdown(VOTE_END_COUNTDOWN_SECONDS);
+  }, [selectedVote, currentUserId, isAuthor]);
+
+  useEffect(() => {
+    if (endCountdown === null) return;
+
+    if (endCountdown <= 0) {
+      if (!selectedVote || !currentUserId) {
+        setEndCountdown(null);
+        return;
+      }
+
+      const result = endLadderVote(selectedVote.id, currentUserId);
+      if ("error" in result) {
+        setFormError(describeVoteError(result.error));
+        setEndCountdown(null);
+        return;
+      }
+
+      reloadVotes();
+      setEndCountdown(null);
+      setShowFireworks(true);
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setEndCountdown((prev) => (prev === null ? null : prev - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timerId);
+  }, [endCountdown, selectedVote, currentUserId, reloadVotes]);
 
   const handleCreateVote = useCallback(() => {
     if (!currentUserId) {
@@ -164,7 +270,6 @@ export default function LadderVotePanel({
     }
 
     const result = createLadderVote({
-      ladderGameId,
       title: draftTitle,
       description: draftDescription,
       isAnonymous: draftIsAnonymous,
@@ -187,7 +292,6 @@ export default function LadderVotePanel({
     draftIsAnonymous,
     draftOptionLabels,
     draftTitle,
-    ladderGameId,
     openDetail,
     reloadVotes,
   ]);
@@ -202,6 +306,25 @@ export default function LadderVotePanel({
     reloadVotes();
     setFormError(null);
   }, [selectedVote, currentUserId, reloadVotes]);
+
+  /** 작성자: 투표 진행 중 선택지 추가 */
+  const handleAddActiveOption = useCallback(() => {
+    if (!selectedVote || !currentUserId) return;
+
+    const result = addLadderVoteOption(
+      selectedVote.id,
+      currentUserId,
+      newActiveOptionLabel,
+    );
+    if ("error" in result) {
+      setFormError(describeVoteError(result.error));
+      return;
+    }
+
+    reloadVotes();
+    setNewActiveOptionLabel("");
+    setFormError(null);
+  }, [selectedVote, currentUserId, newActiveOptionLabel, reloadVotes]);
 
   const handleCastBallot = useCallback(() => {
     if (!selectedVote || !currentUserId) {
@@ -248,6 +371,10 @@ export default function LadderVotePanel({
     setFormError(null);
   }, [selectedVote, currentUserId, reloadVotes]);
 
+  const handleFireworksComplete = useCallback(() => {
+    setShowFireworks(false);
+  }, []);
+
   const handleDownloadResults = useCallback(async () => {
     const element = resultsExportRef.current;
     if (!element || !selectedVote) return;
@@ -290,10 +417,18 @@ export default function LadderVotePanel({
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col rounded-xl border border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-950/50"
+      className={cn(
+        "flex flex-col rounded-xl border border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-950/50",
+        isPageLayout ? "min-h-[min(70vh,720px)]" : "h-full min-h-0",
+      )}
       aria-label="투표"
     >
-      <header className="shrink-0 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+      <header
+        className={cn(
+          "shrink-0 border-b border-zinc-200 dark:border-zinc-800",
+          isPageLayout ? "px-4 sm:px-6 py-4" : "px-4 py-3",
+        )}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {view !== "list" ? (
@@ -305,20 +440,32 @@ export default function LadderVotePanel({
                 onClick={() => {
                   setView("list");
                   setFormError(null);
+                  resetEndVoteUi();
                 }}
                 aria-label="목록으로"
               >
                 <ChevronLeft className="size-4" aria-hidden />
               </Button>
             ) : (
-              <Vote className="size-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
+              <Vote
+                className={cn(
+                  "shrink-0 text-blue-600 dark:text-blue-400",
+                  isPageLayout ? "size-6" : "size-4",
+                )}
+                aria-hidden
+              />
             )}
-            <h2 className="text-sm font-semibold text-black dark:text-zinc-50 truncate">
+            <h2
+              className={cn(
+                "font-semibold text-black dark:text-zinc-50 truncate",
+                isPageLayout ? "text-xl sm:text-2xl" : "text-sm",
+              )}
+            >
               {view === "list"
                 ? "투표"
                 : view === "create"
                   ? "새 투표 작성"
-                  : selectedVote?.title ?? "투표 상세"}
+                  : (selectedVote?.title ?? "투표 상세")}
             </h2>
           </div>
           {view === "list" ? (
@@ -328,12 +475,22 @@ export default function LadderVotePanel({
             </Button>
           ) : null}
         </div>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <p
+          className={cn(
+            "mt-1 text-zinc-500 dark:text-zinc-400",
+            isPageLayout ? "text-sm" : "text-xs",
+          )}
+        >
           로그인한 사용자만 투표할 수 있습니다.
         </p>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+      <div
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto",
+          isPageLayout ? "p-4 sm:p-6" : "p-3",
+        )}
+      >
         {formError ? (
           <p
             className="mb-3 text-sm text-red-600 dark:text-red-400"
@@ -367,9 +524,7 @@ export default function LadderVotePanel({
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                        vote.status === "active"
-                          ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+                        statusBadgeClass(vote.status),
                       )}
                     >
                       {statusLabel(vote.status)}
@@ -377,7 +532,7 @@ export default function LadderVotePanel({
                   </div>
                   <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                     {vote.authorName} · {formatVoteDate(vote.createdAt)}
-                    {vote.status === "active"
+                    {vote.status !== "draft"
                       ? ` · ${vote.ballots.length}표`
                       : null}
                   </p>
@@ -523,7 +678,8 @@ export default function LadderVotePanel({
             ) : null}
 
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              {selectedVote.authorName} · {formatVoteDate(selectedVote.createdAt)}
+              {selectedVote.authorName} ·{" "}
+              {formatVoteDate(selectedVote.createdAt)}
               {selectedVote.isAnonymous ? " · 익명" : " · 실명"}
             </p>
 
@@ -539,10 +695,7 @@ export default function LadderVotePanel({
                 <CardContent className="px-4 space-y-2">
                   <ul className="text-sm space-y-1">
                     {selectedVote.options.map((opt, index) => (
-                      <li
-                        key={opt.id}
-                        className="text-black dark:text-zinc-50"
-                      >
+                      <li key={opt.id} className="text-black dark:text-zinc-50">
                         {index + 1}. {opt.label}
                       </li>
                     ))}
@@ -577,21 +730,80 @@ export default function LadderVotePanel({
                   </p>
                 ) : null}
 
-                {myBallot ? (
-                  <p className="text-sm text-green-700 dark:text-green-400">
-                    투표 완료했습니다. (
-                    {
-                      selectedVote.options.find(
-                        (o) => o.id === myBallot.optionId,
-                      )?.label
-                    }
-                    )
+                {isEndingVote ? (
+                  <p className="text-sm text-blue-600 dark:text-blue-400 text-center py-4">
+                    {endCountdown}초 후 결과를 발표합니다…
                   </p>
-                ) : currentUserId ? (
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-black dark:text-zinc-50">
-                      항목을 선택하고 투표해 주세요
+                ) : null}
+
+                {isAuthor && !isEndingVote ? (
+                  <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900/50 dark:bg-blue-950/20 space-y-2">
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
+                      투표 중 항목 추가 (작성자)
                     </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newActiveOptionLabel}
+                        onChange={(e) =>
+                          setNewActiveOptionLabel(e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddActiveOption();
+                          }
+                        }}
+                        placeholder="새 선택지 이름"
+                        maxLength={50}
+                        className={inputClassName}
+                        disabled={
+                          selectedVote.options.length >= MAX_VOTE_OPTIONS
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={handleAddActiveOption}
+                        disabled={
+                          selectedVote.options.length >= MAX_VOTE_OPTIONS
+                        }
+                      >
+                        <Plus className="size-4" aria-hidden />
+                        추가
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80">
+                      현재 {selectedVote.options.length}/{MAX_VOTE_OPTIONS}개 ·
+                      추가해도 기존 투표는 유지됩니다
+                    </p>
+                  </div>
+                ) : null}
+
+                {currentUserId && !isEndingVote ? (
+                  <div className="space-y-3">
+                    {hasVoted ? (
+                      <p className="text-sm text-green-700 dark:text-green-400">
+                        투표 완료:{" "}
+                        <span className="font-medium">
+                          {
+                            selectedVote.options.find(
+                              (o) => o.id === myBallot?.optionId,
+                            )?.label
+                          }
+                        </span>
+                        {" · "}
+                        다른 항목을 고른 뒤{" "}
+                        <span className="font-medium">투표 수정</span>을 누르면
+                        변경됩니다.
+                      </p>
+                    ) : (
+                      <p className="text-sm font-medium text-black dark:text-zinc-50">
+                        항목을 선택하고 투표해 주세요
+                      </p>
+                    )}
                     <RadioGroup
                       value={selectedOptionId}
                       onValueChange={setSelectedOptionId}
@@ -608,21 +820,39 @@ export default function LadderVotePanel({
                         </label>
                       ))}
                     </RadioGroup>
-                    <Button
-                      type="button"
-                      className="w-full"
-                      onClick={handleCastBallot}
-                    >
-                      투표하기
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        className="flex-1"
+                        onClick={handleCastBallot}
+                        disabled={!canSubmitBallot}
+                      >
+                        {hasVoted ? "투표 수정" : "투표하기"}
+                      </Button>
+                      {isAuthor ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={handleStartEndVote}
+                        >
+                          투표 종료
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
               </>
             ) : null}
 
-            {/* 결과 (진행 중이면 투표 후에도, 초안이면 0표) */}
-            {(selectedVote.status === "active" ||
-              selectedVote.ballots.length > 0) ? (
+            {selectedVote.status === "closed" ? (
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                투표가 종료되었습니다. 최종 결과입니다.
+              </p>
+            ) : null}
+
+            {/* 결과 — 종료 후에만 공개 */}
+            {showVoteResults ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-black dark:text-zinc-50">
@@ -646,7 +876,11 @@ export default function LadderVotePanel({
                 <div
                   ref={resultsExportRef}
                   data-export-expand
-                  className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 space-y-3"
+                  className={cn(
+                    "rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 space-y-3 transition-all duration-500",
+                    showFireworks &&
+                      "ring-2 ring-blue-400/80 shadow-lg shadow-blue-500/20",
+                  )}
                 >
                   <div>
                     <p className="text-base font-bold text-black dark:text-zinc-50">
@@ -656,7 +890,9 @@ export default function LadderVotePanel({
                       총 {totalBallots}표 ·{" "}
                       {selectedVote.isAnonymous ? "익명" : "실명"} ·{" "}
                       {formatVoteDate(
-                        selectedVote.startedAt ?? selectedVote.createdAt,
+                        selectedVote.endedAt ??
+                          selectedVote.startedAt ??
+                          selectedVote.createdAt,
                       )}
                     </p>
                   </div>
@@ -718,6 +954,27 @@ export default function LadderVotePanel({
           <p className="text-sm text-zinc-500">투표를 찾을 수 없습니다.</p>
         ) : null}
       </div>
+
+      {isEndingVote ? (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[2px]"
+          role="status"
+          aria-live="polite"
+          aria-label="투표 종료 카운트다운"
+        >
+          <p className="text-7xl sm:text-8xl font-bold tabular-nums text-white drop-shadow-lg">
+            {endCountdown}
+          </p>
+          <p className="mt-4 text-base sm:text-lg text-white/90">
+            잠시 후 결과가 발표됩니다
+          </p>
+        </div>
+      ) : null}
+
+      <VoteFireworks
+        isActive={showFireworks}
+        onComplete={handleFireworksComplete}
+      />
     </section>
   );
 }

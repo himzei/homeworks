@@ -52,6 +52,11 @@ export const STUDENT_NAV_ITEMS: HeaderNavItem[] = [
     label: "사다리게임",
     authRequired: true,
   },
+  {
+    href: "/vote",
+    label: "투표",
+    authRequired: true,
+  },
 ];
 
 /** 관리자 패널 진입 */

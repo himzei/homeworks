@@ -1,10 +1,11 @@
 /**
- * 사다리게임 상세 화면용 투표 — localStorage 저장.
- * - 사다리 게임과 동일하게 브라우저에만 보관
+ * 투표 — localStorage 저장 (DB 미사용).
+ * - 브라우저에만 보관
  * - 로그인 사용자만 투표 가능 (userId 기준 1인 1표)
+ * - ladderGameId 는 예전 사다리 연동 데이터 호환용(선택)
  */
 
-export type LadderVoteStatus = "draft" | "active";
+export type LadderVoteStatus = "draft" | "active" | "closed";
 
 export type LadderVoteOption = {
   id: string;
@@ -23,7 +24,8 @@ export type LadderVoteBallot = {
 /** 투표 게시글 */
 export type LadderVoteRecord = {
   id: string;
-  ladderGameId: string;
+  /** 예전 사다리 연동 투표만 존재 (신규 투표에는 없음) */
+  ladderGameId?: string;
   title: string;
   description: string;
   /** true: 결과에 투표자 이름 미표시 */
@@ -34,11 +36,12 @@ export type LadderVoteRecord = {
   authorName: string;
   createdAt: number;
   startedAt: number | null;
+  /** 투표 종료 시각 (status === closed) */
+  endedAt?: number | null;
   ballots: LadderVoteBallot[];
 };
 
 export type CreateLadderVoteInput = {
-  ladderGameId: string;
   title: string;
   description?: string;
   isAnonymous: boolean;
@@ -64,7 +67,10 @@ export type LadderVoteValidationError =
   | { kind: "not_active" }
   | { kind: "not_author" }
   | { kind: "already_voted" }
-  | { kind: "invalid_option" };
+  | { kind: "invalid_option" }
+  | { kind: "option_label_empty" }
+  | { kind: "options_max_reached" }
+  | { kind: "option_duplicate" };
 
 export type LadderVoteResultRow = {
   optionId: string;
@@ -136,6 +142,11 @@ function validateVoteContent(
   return null;
 }
 
+/** 전체 투표 목록 (최신순) */
+export function listAllLadderVotes(): LadderVoteRecord[] {
+  return readAll().sort((a, b) => b.createdAt - a.createdAt);
+}
+
 /** 특정 사다리에 연결된 투표 목록 (최신순) */
 export function listVotesForLadder(ladderGameId: string): LadderVoteRecord[] {
   return readAll()
@@ -158,7 +169,6 @@ export function createLadderVote(
   const nonEmptyLabels = trimmedLabels.filter(Boolean);
   const record: LadderVoteRecord = {
     id: createId("vote"),
-    ladderGameId: input.ladderGameId,
     title: input.title.trim(),
     description: (input.description ?? "").trim(),
     isAnonymous: input.isAnonymous,
@@ -236,7 +246,58 @@ export function startLadderVote(
   return { vote: target };
 }
 
-/** 투표하기 — 로그인 사용자, 진행 중 투표만 */
+/** 투표 중 선택지 추가 — 작성자만, 기존 항목·득표는 유지 */
+export function addLadderVoteOption(
+  id: string,
+  userId: string,
+  label: string,
+): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
+  const records = readAll();
+  const target = records.find((record) => record.id === id);
+  if (!target) return { error: { kind: "not_found" } };
+  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
+  if (target.status !== "active") return { error: { kind: "not_active" } };
+
+  const trimmedLabel = label.trim();
+  if (!trimmedLabel) return { error: { kind: "option_label_empty" } };
+  if (target.options.length >= MAX_VOTE_OPTIONS) {
+    return { error: { kind: "options_max_reached" } };
+  }
+  if (
+    target.options.some(
+      (option) => option.label.toLowerCase() === trimmedLabel.toLowerCase(),
+    )
+  ) {
+    return { error: { kind: "option_duplicate" } };
+  }
+
+  target.options.push({
+    id: createId("opt"),
+    label: trimmedLabel,
+  });
+
+  writeAll(records);
+  return { vote: target };
+}
+
+/** 투표 종료 — 작성자만, 진행 중 → 종료 */
+export function endLadderVote(
+  id: string,
+  userId: string,
+): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
+  const records = readAll();
+  const target = records.find((record) => record.id === id);
+  if (!target) return { error: { kind: "not_found" } };
+  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
+  if (target.status !== "active") return { error: { kind: "not_active" } };
+
+  target.status = "closed";
+  target.endedAt = Date.now();
+  writeAll(records);
+  return { vote: target };
+}
+
+/** 투표하기 / 수정 — 로그인 사용자, 진행 중 투표만 (이미 투표한 경우 선택지 변경) */
 export function castLadderVoteBallot(
   voteId: string,
   userId: string,
@@ -253,17 +314,30 @@ export function castLadderVoteBallot(
   const optionExists = target.options.some((opt) => opt.id === optionId);
   if (!optionExists) return { error: { kind: "invalid_option" } };
 
-  if (target.ballots.some((ballot) => ballot.userId === userId)) {
-    return { error: { kind: "already_voted" } };
-  }
-
   const displayName = voterName.trim() || "이름 없음";
-  target.ballots.push({
-    userId,
-    optionId,
-    voterName: displayName,
-    votedAt: Date.now(),
-  });
+  const existingIndex = target.ballots.findIndex(
+    (ballot) => ballot.userId === userId,
+  );
+
+  if (existingIndex >= 0) {
+    const existing = target.ballots[existingIndex];
+    if (existing.optionId === optionId) {
+      return { vote: target };
+    }
+    target.ballots[existingIndex] = {
+      ...existing,
+      optionId,
+      voterName: displayName,
+      votedAt: Date.now(),
+    };
+  } else {
+    target.ballots.push({
+      userId,
+      optionId,
+      voterName: displayName,
+      votedAt: Date.now(),
+    });
+  }
 
   writeAll(records);
   return { vote: target };
@@ -285,7 +359,9 @@ export function deleteLadderVote(
 
 /** 사다리 삭제 시 연결 투표 일괄 제거 */
 export function deleteVotesForLadderGame(ladderGameId: string): void {
-  writeAll(readAll().filter((record) => record.ladderGameId !== ladderGameId));
+  writeAll(
+    readAll().filter((record) => record.ladderGameId !== ladderGameId),
+  );
 }
 
 /** 결과 집계 */
@@ -330,12 +406,18 @@ export function describeVoteError(error: LadderVoteValidationError): string {
     case "not_draft":
       return "이미 시작된 투표는 수정할 수 없습니다.";
     case "not_active":
-      return "아직 시작되지 않았거나 종료된 투표입니다.";
+      return "아직 시작되지 않았거나 이미 종료된 투표입니다.";
     case "not_author":
       return "작성자만 이 작업을 할 수 있습니다.";
     case "already_voted":
       return "이미 투표하셨습니다.";
     case "invalid_option":
       return "유효하지 않은 선택지입니다.";
+    case "option_label_empty":
+      return "추가할 항목 이름을 입력해 주세요.";
+    case "options_max_reached":
+      return `선택지는 최대 ${MAX_VOTE_OPTIONS}개까지 추가할 수 있습니다.`;
+    case "option_duplicate":
+      return "이미 같은 이름의 선택지가 있습니다.";
   }
 }
