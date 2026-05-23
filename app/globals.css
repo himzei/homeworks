@@ -44,83 +44,112 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* 브랜드 색상 팔레트 */
+  --color-brand-navy: oklch(0.185 0.083 262);   /* 진한 네이비 #12163a */
+  --color-brand-blue: oklch(0.42 0.127 264);    /* 중간 블루 #4a5296 */
+  --color-brand-steel: oklch(0.6 0.082 254);    /* 스틸 블루 #7a8ab8 */
+  --color-brand-cream: oklch(0.94 0.022 90);    /* 크림 베이지 #f0ead8 */
+  --color-brand-section: #4b5694;                 /* 서브페이지 히어로 #4B5694 */
+  --color-brand-footer: #eae0cf;                  /* 푸터 배경 #EAE0CF */
+  --color-brand-point: #111844;                   /* 히어로 포인트 텍스트 #111844 */
 }
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* 라이트 모드: 본문 배경 연한 크림, 텍스트 진한 네이비 */
+  --background: oklch(0.98 0.006 90);
+  --foreground: oklch(0.185 0.083 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.185 0.083 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.185 0.083 262);
+  /* primary = 진한 네이비 (버튼, 배지 등) */
+  --primary: oklch(0.185 0.083 262);
+  --primary-foreground: oklch(0.97 0.015 85);
+  /* secondary = 연한 크림 영역 */
+  --secondary: oklch(0.95 0.015 90);
+  --secondary-foreground: oklch(0.185 0.083 262);
+  --muted: oklch(0.95 0.015 90);
+  /* muted-foreground = 스틸 블루 (서브 텍스트) */
+  --muted-foreground: oklch(0.55 0.082 254);
+  /* accent = 중간 블루 (강조, 링크) */
+  --accent: oklch(0.42 0.127 264);
+  --accent-foreground: oklch(0.97 0.015 85);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
+  /* border = 연한 블루-보라 톤 */
+  --border: oklch(0.85 0.04 262);
+  --input: oklch(0.85 0.04 262);
+  --ring: oklch(0.42 0.127 264);
+  --chart-1: oklch(0.42 0.127 264);
+  --chart-2: oklch(0.6 0.082 254);
+  --chart-3: oklch(0.185 0.083 262);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.95 0.015 90);
+  --sidebar-foreground: oklch(0.185 0.083 262);
+  --sidebar-primary: oklch(0.185 0.083 262);
+  --sidebar-primary-foreground: oklch(0.97 0.015 85);
+  --sidebar-accent: oklch(0.42 0.127 264);
+  --sidebar-accent-foreground: oklch(0.97 0.015 85);
+  --sidebar-border: oklch(0.85 0.04 262);
+  --sidebar-ring: oklch(0.42 0.127 264);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* 다크 모드: 배경 진한 네이비, 텍스트 크림 */
+  --background: oklch(0.13 0.065 262);
+  --foreground: oklch(0.94 0.022 90);
+  --card: oklch(0.19 0.075 262);
+  --card-foreground: oklch(0.94 0.022 90);
+  --popover: oklch(0.19 0.075 262);
+  --popover-foreground: oklch(0.94 0.022 90);
+  /* 다크 모드 primary = 중간 블루 */
+  --primary: oklch(0.42 0.127 264);
+  --primary-foreground: oklch(0.97 0.015 85);
+  --secondary: oklch(0.22 0.075 262);
+  --secondary-foreground: oklch(0.94 0.022 90);
+  --muted: oklch(0.22 0.075 262);
+  /* muted-foreground = 밝은 스틸 블루 */
+  --muted-foreground: oklch(0.7 0.065 254);
+  --accent: oklch(0.42 0.127 264);
+  --accent-foreground: oklch(0.94 0.022 90);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
+  --ring: oklch(0.6 0.082 254);
+  --chart-1: oklch(0.6 0.082 254);
+  --chart-2: oklch(0.7 0.065 254);
+  --chart-3: oklch(0.94 0.022 90);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.19 0.075 262);
+  --sidebar-foreground: oklch(0.94 0.022 90);
+  --sidebar-primary: oklch(0.42 0.127 264);
+  --sidebar-primary-foreground: oklch(0.97 0.015 85);
+  --sidebar-accent: oklch(0.22 0.075 262);
+  --sidebar-accent-foreground: oklch(0.94 0.022 90);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.6 0.082 254);
 }
 
 @layer base {
+  /* 스크롤바 유무에 따른 가로 폭 변화(레이아웃 시프트) 방지 */
+  html {
+    scrollbar-gutter: stable;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Radix 드롭다운 열릴 때 padding-right 보정으로 헤더가 밀리는 현상 방지 */
+  body[data-scroll-locked] {
+    padding-right: 0 !important;
+    margin-right: 0 !important;
   }
 }
 
@@ -156,15 +185,6 @@
 .evaluation-grid-scroll {
   overflow-x: auto;
   overflow-y: visible;
-}
-
-/* 카테고리 배지가 상단 테두리에 걸치도록 헤더 셀 클리핑 방지 */
-.evaluation-grid-column-header {
-  isolation: isolate;
-}
-
-.evaluation-grid-category-badge {
-  white-space: nowrap;
 }
 
 .evaluation-grid-sticky-corner {
@@ -205,10 +225,47 @@
   box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.45);
 }
 
-/* 점수 입력: 브라우저 기본 증감(▲▼) 버튼 숨김 */
+/* 점수 입력: 셀 너비에 맞춤, 상자는 셀 중앙, 숫자는 오른쪽 정렬 */
 .evaluation-score-input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   -moz-appearance: textfield;
   appearance: textfield;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 총합 등 입력 없이 표시만 하는 점수 */
+.evaluation-score-display {
+  display: block;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 총합 열: 필드 제목(헤더)만 중앙 */
+.evaluation-grid-total-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.evaluation-grid-total-header > * {
+  width: 100%;
+  text-align: center;
+}
+
+/* 총합 열: 제목 외 모든 셀 — 내용 오른쪽 정렬 */
+.evaluation-grid-total-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.evaluation-grid-total-cell > * {
+  width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .evaluation-score-input::-webkit-outer-spin-button,

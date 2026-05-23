@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { Plus } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
+import { buildAdminAssignmentsListPath } from "@/lib/admin/admin-assignments-path";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { Button } from "@/app/_components/ui/button";
 import AssignmentList from "@/app/_components/AssignmentList";
@@ -138,6 +139,12 @@ export default async function AdminAssignmentsPage({
     ? `/admin/assignments/new?group=${encodeURIComponent(filterGroup)}`
     : "/admin/assignments/new";
 
+  // 수정 완료 후 돌아올 목록 URL (그룹·포커스 과제 유지)
+  const assignmentsListPath = buildAdminAssignmentsListPath({
+    filterGroup,
+    focusAssignmentId,
+  });
+
   return (
     <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
       <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
@@ -181,6 +188,7 @@ export default async function AdminAssignmentsPage({
         <AssignmentList
           assignments={assignmentListData}
           focusAssignmentId={focusAssignmentId}
+          assignmentsListPath={assignmentsListPath}
         />
       </main>
     </div>

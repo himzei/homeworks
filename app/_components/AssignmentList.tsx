@@ -13,6 +13,7 @@ import {
   PaginationPrevious,
 } from "@/app/_components/ui/pagination";
 import { createClient } from "@/lib/supabase/client";
+import { buildAssignmentEditHref } from "@/lib/admin/admin-assignments-path";
 import { useAdmin } from "@/lib/auth/SessionProvider";
 import CheckedList from "./CheckedList";
 
@@ -56,14 +57,25 @@ interface AssignmentListProps {
   assignments: Assignment[];
   /** URL `assignment` 파라미터 — 해당 과제 페이지로 이동·강조 */
   focusAssignmentId?: string | null;
+  /** 수정 완료 후 돌아갈 관리자 목록 경로 (있으면 수정 링크에 returnTo 포함) */
+  assignmentsListPath?: string;
 }
 
 export default function AssignmentList({
   assignments,
   focusAssignmentId = null,
+  assignmentsListPath,
 }: AssignmentListProps) {
   const router = useRouter();
   const supabase = createClient();
+
+  const getEditHref = useCallback(
+    (assignmentId: string) =>
+      assignmentsListPath
+        ? buildAssignmentEditHref(assignmentId, assignmentsListPath)
+        : `/assignment/edit/${assignmentId}`,
+    [assignmentsListPath],
+  );
 
   // 전역 세션에서 관리자 권한 가져오기
   const { isAdmin, isCheckingAdmin } = useAdmin();
@@ -561,10 +573,7 @@ export default function AssignmentList({
                   </div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <a
-                    href={`/assignment/edit/${assignment.id}`}
-                    className="flex-1"
-                  >
+                  <a href={getEditHref(assignment.id)} className="flex-1">
                     <Button
                       variant="outline"
                       size="sm"
@@ -631,7 +640,7 @@ export default function AssignmentList({
 
                 {/* 수정/삭제 버튼 — a 태그로 전체 페이지 로드 (클라이언트 네비게이션 시 Supabase 요청 멈춤 회피) */}
                 <div className="col-span-2 flex items-center gap-2">
-                  <a href={`/assignment/edit/${assignment.id}`}>
+                  <a href={getEditHref(assignment.id)}>
                     <Button
                       variant="outline"
                       size="sm"

@@ -20,18 +20,8 @@ export default function GitHowPage() {
   };
 
   return (
-    <div className="min-h-full bg-zinc-50 dark:bg-black py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-full bg-zinc-50 dark:bg-zinc-950 py-8 px-4 sm:px-6 lg:px-8">
       <div className="container">
-        {/* 헤더 */}
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-black dark:text-zinc-50 mb-4">
-            Git 기초 가이드
-          </h1>
-          <p className="text-lg text-zinc-600 dark:text-zinc-400">
-            버전 관리 시스템의 기본을 배워봅시다
-          </p>
-        </div>
-
         {/* 섹션 1: Git이 뭔가요? */}
         <section className="bg-white dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 p-6 mb-6">
           <button

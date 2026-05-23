@@ -78,6 +78,25 @@ export const MAX_PARTICIPANTS = 35;
 export const MIN_RUNGS_PER_COLUMN_PAIR = 5;
 /** 대각선 가로줄에 허용된 span 후보 (몇 칸을 건너뛸지) */
 const DIAGONAL_SPAN_OPTIONS = [2, 3, 4] as const;
+
+/**
+ * 추가로 "보장해서" 배치되는 긴 점프 가로줄 명세.
+ * - span: 몇 칸을 건너뛰는지 (예: 5 → 5칸 건너 swap)
+ * - count: 보장 개수
+ * - 참가자 수가 span 보다 작거나 같으면 (배치 공간 부족) 자동 스킵
+ * - row 충돌·column 충돌이 심해 maxAttempts 안에 못 넣은 경우엔 가능한 만큼만 배치
+ */
+const REQUIRED_LONG_DIAGONALS: ReadonlyArray<{
+  span: number;
+  count: number;
+}> = [
+  { span: 5, count: 2 },
+  { span: 6, count: 2 },
+  { span: 7, count: 2 },
+  { span: 8, count: 2 },
+  { span: 10, count: 1 },
+];
+
 const STORAGE_KEY = "ladder-games:v1";
 
 /**
@@ -172,6 +191,32 @@ export function buildLadder(participantCount: number): {
       const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
       diagonalRungs.push({ row, fromCol, toCol, direction });
       occ.push([fromCol, toCol]);
+    }
+  }
+
+  // 3) 긴 점프 가로줄 보장 배치 (5/6/7/8 칸 각 2개, 10칸 1개)
+  //    - span 이 큰 것부터 시도해서 자리 확보 우선순위 부여
+  //    - 참가자 수가 span 보다 작거나 같으면 (배치 공간이 없음) 자동 스킵
+  const longDiagonalsPriority = [...REQUIRED_LONG_DIAGONALS].sort(
+    (a, b) => b.span - a.span,
+  );
+  for (const { span, count } of longDiagonalsPriority) {
+    const fromColMax = participantCount - 1 - span;
+    if (fromColMax < 0) continue; // 참가자 수 부족 - 배치 불가
+    let placed = 0;
+    let attempts = 0;
+    const maxAttempts = LADDER_ROW_COUNT * 10;
+    while (placed < count && attempts < maxAttempts) {
+      attempts += 1;
+      const row = Math.floor(Math.random() * LADDER_ROW_COUNT);
+      const fromCol = Math.floor(Math.random() * (fromColMax + 1));
+      const toCol = fromCol + span;
+      const occ = getOccupancy(row);
+      if (isRangeOverlapping(occ, fromCol, toCol)) continue;
+      const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+      diagonalRungs.push({ row, fromCol, toCol, direction });
+      occ.push([fromCol, toCol]);
+      placed += 1;
     }
   }
 

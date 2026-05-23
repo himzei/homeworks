@@ -43,28 +43,32 @@ type EvaluationStatus = "미제출" | "검토중" | "수정필요" | "승인" | 
 const EVALUATION_SCORES: Record<EvaluationStatus, number> = {
   미제출: 0,
   검토중: 0,
-  수정필요: 5,
+  수정필요: 7, // 미흡
   승인: 10,
-  모범답안: 15,
+  모범답안: 13,
 };
 
 /** 과제 점수 입력 허용 값 */
-const ALLOWED_ASSIGNMENT_SCORES = [0, 5, 10, 15] as const;
+const ALLOWED_ASSIGNMENT_SCORES = [0, 7, 10, 13] as const;
 
 const ASSIGNMENT_SCORE_MIN = 0;
-const ASSIGNMENT_SCORE_MAX = 15;
+const ASSIGNMENT_SCORE_MAX = 13;
 
 const SCORE_TO_STATUS = {
   0: "검토중",
-  5: "수정필요",
+  7: "수정필요",
   10: "승인",
-  15: "모범답안",
+  13: "모범답안",
 } as const satisfies Record<
   (typeof ALLOWED_ASSIGNMENT_SCORES)[number],
   Exclude<EvaluationStatus, "미제출">
 >;
 
-/** 입력 점수를 허용 값(0·5·10·15) 중 가장 가까운 값으로 맞춤 */
+/** 평가 그리드 열 너비 (이름 · 총합·과제·추가 필드 박스) */
+const EVALUATION_NAME_COLUMN_WIDTH = "96px";
+const EVALUATION_FIELD_COLUMN_WIDTH = "88px";
+
+/** 입력 점수를 허용 값(0·7·10·13) 중 가장 가까운 값으로 맞춤 */
 function snapAssignmentScore(score: number): (typeof ALLOWED_ASSIGNMENT_SCORES)[number] {
   const clamped = Math.min(
     ASSIGNMENT_SCORE_MAX,
@@ -121,22 +125,7 @@ function parseInputDateAsLocalDay(value: string): Date | null {
   return parsed;
 }
 
-/** 평가 그리드 열 카테고리 */
-type EvaluationColumnCategory = "과제" | "시험" | "프로젝트";
-
-const EVALUATION_CATEGORY_STYLES: Record<
-  EvaluationColumnCategory,
-  string
-> = {
-  과제:
-    "text-zinc-600 bg-zinc-100 dark:text-zinc-300 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700",
-  시험:
-    "text-violet-700 bg-violet-100 dark:text-violet-300 dark:bg-violet-900/40 border-violet-200 dark:border-violet-800",
-  프로젝트:
-    "text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-900/40 border-amber-200 dark:border-amber-800",
-};
-
-/** 그리드 열 배경·테두리 (과제 / 시험 / 프로젝트 구분) */
+/** 그리드 열 배경·테두리 (과제 / 추가 필드) */
 const EVALUATION_COLUMN_CELL_STYLES = {
   assignment: {
     headerContainer:
@@ -147,25 +136,7 @@ const EVALUATION_COLUMN_CELL_STYLES = {
     scoreInput:
       "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 focus:ring-blue-500",
   },
-  exam: {
-    headerContainer:
-      "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800",
-    headerTitle: "text-violet-900 dark:text-violet-100",
-    scoreCell:
-      "bg-violet-50/90 dark:bg-violet-950/25 border-violet-200 dark:border-violet-800",
-    scoreInput:
-      "border-violet-300 dark:border-violet-600 bg-white dark:bg-violet-950/50 text-violet-900 dark:text-violet-100 focus:ring-violet-500",
-  },
-  project: {
-    headerContainer:
-      "bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800",
-    headerTitle: "text-amber-900 dark:text-amber-100",
-    scoreCell:
-      "bg-amber-50/90 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800",
-    scoreInput:
-      "border-amber-300 dark:border-amber-700 bg-white dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 focus:ring-amber-500",
-  },
-  extraDefault: {
+  extra: {
     headerContainer:
       "bg-zinc-50 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-700",
     headerTitle: "text-zinc-800 dark:text-zinc-200",
@@ -176,54 +147,14 @@ const EVALUATION_COLUMN_CELL_STYLES = {
   },
 } as const;
 
-function getExtraFieldColumnStyles(fieldTitle: string) {
-  const category = resolveExtraFieldCategory(fieldTitle);
-  if (category === "프로젝트") {
-    return EVALUATION_COLUMN_CELL_STYLES.project;
-  }
-  if (category === "시험") {
-    return EVALUATION_COLUMN_CELL_STYLES.exam;
-  }
-  return EVALUATION_COLUMN_CELL_STYLES.extraDefault;
-}
-
-/** 추가 필드 제목에서 시험/프로젝트 구분 (키워드 기준) */
-function resolveExtraFieldCategory(
-  fieldTitle: string,
-): EvaluationColumnCategory | null {
-  const normalizedTitle = fieldTitle.trim();
-  if (!normalizedTitle) return null;
-  if (normalizedTitle.includes("프로젝트")) return "프로젝트";
-  if (normalizedTitle.includes("시험")) return "시험";
-  return null;
-}
-
-/** 카테고리 라벨 (셀 상단 테두리에 걸침) */
-function EvaluationCategoryBadge({
-  category,
-}: {
-  category: EvaluationColumnCategory;
-}) {
-  return (
-    <span
-      className={`evaluation-grid-category-badge inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[9px] font-bold leading-none border shadow-sm ${EVALUATION_CATEGORY_STYLES[category]}`}
-    >
-      {category}
-    </span>
-  );
-}
-
-/** 평가 그리드 열 헤더: 카테고리(테두리) · 날짜 · 제목 */
+/** 평가 그리드 열 헤더: 날짜 · 제목 */
 function EvaluationColumnHeader({
-  category,
   dateLabel,
   title,
   stickyClassName = "",
   containerClassName,
   titleClassName,
 }: {
-  /** null이면 카테고리 라벨 생략 (제목에 시험/프로젝트 키워드 없을 때) */
-  category: EvaluationColumnCategory | null;
   dateLabel: string;
   title: string;
   stickyClassName?: string;
@@ -232,18 +163,13 @@ function EvaluationColumnHeader({
 }) {
   return (
     <div
-      className={`${stickyClassName} ${containerClassName} evaluation-grid-column-header relative overflow-visible flex flex-col items-center justify-center gap-0.5 min-h-[60px] px-2 pb-2 shadow-sm border rounded-lg ${category ? "pt-3.5" : "pt-2"}`}
+      className={`${stickyClassName} ${containerClassName} evaluation-grid-column-header relative flex flex-col items-center justify-center gap-0.5 min-h-[60px] px-2 py-2 shadow-sm border rounded-lg`}
     >
-      {category ? (
-        <div className="absolute left-1/2 top-0 z-40 -translate-x-1/2 -translate-y-1/2">
-          <EvaluationCategoryBadge category={category} />
-        </div>
-      ) : null}
       <span className="text-[14px] font-medium text-zinc-500 dark:text-zinc-400 tabular-nums">
         {dateLabel}
       </span>
       <span
-        className={`text-[10px] font-medium text-center line-clamp-2 ${titleClassName}`}
+        className={`w-full text-[10px] font-medium text-center line-clamp-2 ${titleClassName}`}
       >
         {title}
       </span>
@@ -353,7 +279,7 @@ export default function EvaluationTab({
   const assignmentEditRollbackRef = useRef<Record<string, EvaluationStatus>>(
     {},
   );
-  // 과제 점수 입력 중 표시용 (10·15 등 여러 자리 입력 시 깜빡임 방지)
+  // 과제 점수 입력 중 표시용 (10·13 등 여러 자리 입력 시 깜빡임 방지)
   const [assignmentScoreDraftByKey, setAssignmentScoreDraftByKey] = useState<
     Record<string, string>
   >({});
@@ -1184,11 +1110,11 @@ export default function EvaluationTab({
     document.body.removeChild(link);
   };
 
-  // 그리드 열 템플릿 (이름 · 총합 · 날짜순 정렬된 점수 열)
+  // 그리드 열 템플릿 (이름 · 총합 · 날짜순 정렬된 점수 열 — 필드 박스 너비 통일)
   const scoreColumnWidths = sortedGridColumns
-    .map((column) => (column.kind === "assignment" ? "88px" : "64px"))
+    .map(() => EVALUATION_FIELD_COLUMN_WIDTH)
     .join(" ");
-  const gridCols = `96px 64px${scoreColumnWidths ? ` ${scoreColumnWidths}` : ""}`;
+  const gridCols = `${EVALUATION_NAME_COLUMN_WIDTH} ${EVALUATION_FIELD_COLUMN_WIDTH}${scoreColumnWidths ? ` ${scoreColumnWidths}` : ""}`;
 
   // 관리자 권한 확인 중이거나 사용자 목록 로딩 중일 때 로딩 표시
   // isCheckingAdmin이 false로 바뀌지 않으면 무한 로딩이 될 수 있으므로,
@@ -1524,8 +1450,8 @@ export default function EvaluationTab({
                 </span>
               </div>
 
-              {/* 부분합 헤더 */}
-              <div className="evaluation-grid-sticky-header bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2 py-2 shadow-md border-2 border-blue-200 dark:border-blue-700 flex items-center justify-center">
+              {/* 총합 헤더 (필드 제목만 중앙 정렬) */}
+              <div className="evaluation-grid-sticky-header evaluation-grid-total-header bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2 py-2 shadow-md border-2 border-blue-200 dark:border-blue-700">
                 <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
                   총합
                 </span>
@@ -1539,7 +1465,6 @@ export default function EvaluationTab({
                   return (
                     <EvaluationColumnHeader
                       key={`header-assignment-${column.assignment.id}`}
-                      category={null}
                       dateLabel={formatDateMMDD(column.assignment.startDate)}
                       title={column.assignment.title}
                       stickyClassName="evaluation-grid-sticky-header"
@@ -1549,17 +1474,11 @@ export default function EvaluationTab({
                   );
                 }
 
-                const extraCategory = resolveExtraFieldCategory(
-                  column.field.title,
-                );
-                const extraStyles = getExtraFieldColumnStyles(
-                  column.field.title,
-                );
+                const extraStyles = EVALUATION_COLUMN_CELL_STYLES.extra;
 
                 return (
                   <EvaluationColumnHeader
                     key={`header-extra-${column.field.id}`}
-                    category={extraCategory}
                     dateLabel={formatDateMMDD(
                       getExtraFieldDisplayDate(column.field),
                     )}
@@ -1584,8 +1503,8 @@ export default function EvaluationTab({
                     </span>
                   </div>
 
-                  {/* 부분합 셀 */}
-                  <div className="bg-blue-50/80 dark:bg-blue-900/15 rounded-lg px-2 py-2 shadow-md border-2 border-blue-200 dark:border-blue-800 flex items-center justify-center">
+                  {/* 총합 점수 셀 (제목 외 — 오른쪽 정렬) */}
+                  <div className="evaluation-grid-total-cell bg-blue-50/80 dark:bg-blue-900/15 rounded-lg px-2 py-2 shadow-md border-2 border-blue-200 dark:border-blue-800">
                     <span className="text-sm font-bold text-blue-700 dark:text-blue-300 whitespace-nowrap">
                       {getTotalScore(user.id)}점
                     </span>
@@ -1688,12 +1607,12 @@ export default function EvaluationTab({
                                 );
                                 delete assignmentEditRollbackRef.current[key];
                               }}
-                              className={`evaluation-score-input w-14 text-center text-sm font-semibold px-1 py-1 border rounded-md focus:outline-none focus:ring-2 ${assignmentStyles.scoreInput}`}
+                              className={`evaluation-score-input text-sm font-semibold px-1 py-1 border rounded-md focus:outline-none focus:ring-2 ${assignmentStyles.scoreInput}`}
                               aria-label={`${user.name} ${assignment.title} 점수`}
                             />
                           ) : (
                             <span
-                              className="text-sm font-semibold text-zinc-400 dark:text-zinc-500"
+                              className="evaluation-score-display text-center text-sm font-semibold text-zinc-400 dark:text-zinc-500"
                               title="미제출"
                             >
                               —
@@ -1704,7 +1623,7 @@ export default function EvaluationTab({
                     }
 
                     const { field } = column;
-                    const extraStyles = getExtraFieldColumnStyles(field.title);
+                    const extraStyles = EVALUATION_COLUMN_CELL_STYLES.extra;
                     const scoreKey = getExtraScoreKey(user.id, field.id);
                     const currentScore = extraScores[scoreKey] ?? 0;
 
@@ -1743,7 +1662,7 @@ export default function EvaluationTab({
                             );
                             void updateExtraScore(user.id, field.id, next);
                           }}
-                          className={`evaluation-score-input w-12 text-center text-sm font-semibold px-1 py-1 border rounded-md focus:outline-none focus:ring-2 ${extraStyles.scoreInput}`}
+                          className={`evaluation-score-input text-sm font-semibold px-1 py-1 border rounded-md focus:outline-none focus:ring-2 ${extraStyles.scoreInput}`}
                           aria-label={`${user.name} ${field.title} 점수`}
                         />
                       </div>

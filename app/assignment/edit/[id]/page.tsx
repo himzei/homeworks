@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { GROUP_OPTIONS } from "@/lib/constants";
@@ -10,6 +10,7 @@ import {
   formatTime24FromDate,
   normalizeTime24,
 } from "@/lib/time-24h";
+import { getSafeAdminAssignmentsReturnPath } from "@/lib/admin/admin-assignments-path";
 import {
   getCachedAssignment,
   setCachedAssignment,
@@ -32,9 +33,18 @@ function useAssignmentId(): string | null {
 
 export default function EditAssignmentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const assignmentId = useAssignmentId();
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
+
+  // 관리자 목록에서 진입 시 returnTo로 돌아감, 없으면 과제 홈
+  const returnPath = useMemo(() => {
+    const safePath = getSafeAdminAssignmentsReturnPath(
+      searchParams.get("returnTo"),
+    );
+    return safePath ?? "/home";
+  }, [searchParams]);
 
   // 폼 상태 관리
   const [formData, setFormData] = useState({
@@ -320,7 +330,7 @@ export default function EditAssignmentPage() {
 
       alert("숙제가 수정되었습니다!");
       setIsSubmitting(false);
-      router.push("/home");
+      router.push(returnPath);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "알 수 없는 오류";
       const status = err && typeof err === "object" && "status" in err ? (err as { status?: number }).status : undefined;
@@ -342,7 +352,7 @@ export default function EditAssignmentPage() {
   // 취소 버튼 핸들러
   const handleCancel = () => {
     if (confirm("작성 중인 내용이 사라집니다. 정말 취소하시겠습니까?")) {
-      router.push("/home");
+      router.push(returnPath);
     }
   };
 

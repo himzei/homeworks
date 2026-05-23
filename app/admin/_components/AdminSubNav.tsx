@@ -72,7 +72,7 @@ export default function AdminSubNav() {
   return (
     <nav
       aria-label="관리자 페이지 내비게이션"
-      className="flex gap-1 overflow-x-auto scrollbar-hide border-b border-zinc-200 dark:border-zinc-800 mb-4 sm:mb-6"
+      className="sticky top-0 z-40 -mx-4 sm:-mx-8 px-4 sm:px-8 flex gap-1 overflow-x-auto scrollbar-hide border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black mb-4 sm:mb-6"
     >
       {ADMIN_NAV_ITEMS.map((item) => {
         const isActive = item.exact

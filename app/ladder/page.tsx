@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function LadderPage() {
   return (
-    <div className="flex min-h-full justify-center bg-zinc-50 font-sans dark:bg-black">
-      <div className="flex min-h-full w-full container flex-col py-4 sm:py-8 px-4 sm:px-8 bg-white dark:bg-black">
+    <div className="flex min-h-full justify-center">
+      <div className="flex min-h-full w-full container flex-col py-4 sm:py-8 px-4 sm:px-8">
         <LadderGameList />
       </div>
     </div>
