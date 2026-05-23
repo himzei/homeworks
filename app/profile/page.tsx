@@ -285,15 +285,15 @@ function ProfilePageContent() {
   // 로딩 중
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-full items-center justify-center">
         <div className="text-zinc-500">로딩 중...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-2xl flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
+    <div className="flex min-h-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="flex min-h-full w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
         <div className="w-full">
           {/* 헤더 */}
           <div className="mb-8">
@@ -578,7 +578,7 @@ export default function ProfilePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center">
+        <div className="flex min-h-full items-center justify-center">
           <div className="text-zinc-500">로딩 중...</div>
         </div>
       }

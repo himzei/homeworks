@@ -184,7 +184,7 @@ export default function HomeworkSubmission({
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 mt-6 sm:mt-8">
+      <div className="max-w-7xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 mt-6 sm:mt-8">
         <p className="text-center text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
           로딩 중...
         </p>
@@ -193,7 +193,7 @@ export default function HomeworkSubmission({
   }
 
   return (
-    <div className="max-w-3xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 mt-6 sm:mt-8">
+    <div className="max-w-7xl mx-auto bg-white dark:bg-zinc-900 rounded-lg shadow-md border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 mt-6 sm:mt-8">
       {/* 제목 */}
       <h3 className="text-lg sm:text-xl font-semibold text-black dark:text-zinc-50 text-center mb-3 sm:mb-4">
         과제 제출하기

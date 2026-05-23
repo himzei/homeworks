@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ interface StatCardProps {
   accentClassName?: string;
   /** 강조 표시 여부 (검토 대기 같은 액션 필요 항목) */
   highlight?: boolean;
+  /** 클릭 시 이동할 경로 (있으면 카드 전체가 링크) */
+  href?: string;
 }
 
 /**
@@ -27,16 +30,18 @@ export default function StatCard({
   icon,
   accentClassName,
   highlight = false,
+  href,
 }: StatCardProps) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border bg-card p-4 sm:p-5 shadow-sm transition-shadow hover:shadow-md",
-        highlight
-          ? "border-amber-300 dark:border-amber-700/60"
-          : "border-zinc-200 dark:border-zinc-800",
-      )}
-    >
+  const cardClassName = cn(
+    "rounded-xl border bg-card p-4 sm:p-5 shadow-sm transition-shadow hover:shadow-md",
+    highlight
+      ? "border-amber-300 dark:border-amber-700/60"
+      : "border-zinc-200 dark:border-zinc-800",
+    href && "hover:border-blue-300 dark:hover:border-blue-700/60",
+  );
+
+  const cardBody = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs sm:text-sm font-medium text-zinc-500 dark:text-zinc-400">
@@ -68,6 +73,16 @@ export default function StatCard({
           {icon}
         </div>
       </div>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className={cn("block", cardClassName)}>
+        {cardBody}
+      </Link>
+    );
+  }
+
+  return <div className={cardClassName}>{cardBody}</div>;
 }

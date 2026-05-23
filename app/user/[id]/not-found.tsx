@@ -3,8 +3,8 @@ import { ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-2xl flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black items-center justify-center">
+    <div className="flex min-h-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="flex min-h-full w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black items-center justify-center">
         <div className="text-center">
           <h1 className="text-4xl font-semibold text-black dark:text-zinc-50 mb-4">
             사용자를 찾을 수 없습니다

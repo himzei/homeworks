@@ -20,8 +20,8 @@ export default function GitHowPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-full bg-zinc-50 dark:bg-black py-8 px-4 sm:px-6 lg:px-8">
+      <div className="container">
         {/* 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-black dark:text-zinc-50 mb-4">

@@ -34,16 +34,29 @@ interface Question {
 interface SurveyTabProps {
   /** 과정 필터 - 지정 시 해당 과정 설문만 표시 (공통 설문 포함) */
   selectedGroup?: string | null;
+  /**
+   * 화면 동작 모드 (라우트가 명시적으로 결정)
+   * - "student": 진행 중 설문 응답 UI만 표시 (관리자가 /home 에 와도 학생과 동일 화면)
+   * - "admin": 설문 생성·삭제·응답 수 등 관리 UI 활성화 (실제 isAdmin 권한과 함께 검사)
+   * @default "student"
+   */
+  viewMode?: "student" | "admin";
 }
 
 const ADMIN_CHECK_TIMEOUT_MS = 2500;
 
-export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
+export default function SurveyTab({
+  selectedGroup = null,
+  viewMode = "student",
+}: SurveyTabProps) {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
 
-  // 관리자 권한 확인
+  // 관리자 권한 확인 (실제 권한 가드는 isAdmin, UI 분기는 isAdminView)
   const { isAdmin, isCheckingAdmin } = useAdmin();
+
+  // 라우트 의도(viewMode) + 실제 권한(isAdmin)이 모두 참일 때만 관리자 UI를 노출
+  const isAdminView = viewMode === "admin" && isAdmin;
 
   // 탭 전환 후 isCheckingAdmin이 멈출 경우를 위한 타임아웃 (클라이언트 네비게이션 이슈 회피)
   const [adminCheckTimedOut, setAdminCheckTimedOut] = useState(false);
@@ -57,7 +70,9 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
     return () => clearTimeout(timer);
   }, [isCheckingAdmin]);
 
-  const showAdminCheck = isCheckingAdmin && !adminCheckTimedOut;
+  // 학생용 화면에선 권한 확인 로딩을 보여줄 필요 없음 (응답 UI는 비관리자도 동일)
+  const showAdminCheck =
+    viewMode === "admin" && isCheckingAdmin && !adminCheckTimedOut;
 
   // 설문조사 목록 상태
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -96,11 +111,12 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
   }, [supabase]);
 
   // 설문조사 목록 가져오기 (권한 확인 중이거나 타임아웃 후면 실행)
+  // isAdminView 변경 시(권한 체크 완료 후) 응답 수 조회 여부가 달라지므로 함께 의존성에 포함
   useEffect(() => {
     if (showAdminCheck) return;
 
     fetchSurveys();
-  }, [showAdminCheck, currentUserId, selectedGroup]);
+  }, [showAdminCheck, currentUserId, selectedGroup, isAdminView]);
 
   const fetchSurveys = async () => {
     try {
@@ -138,9 +154,9 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
           const endDate = new Date(survey.end_date);
           const isActive = now >= startDate && now <= endDate;
 
-          // 관리자인 경우 응답 수 가져오기
+          // 관리자 화면에서만 응답 수 가져오기 (학생 화면에선 불필요한 쿼리 회피)
           let responseCount = 0;
-          if (isAdmin && currentUserId) {
+          if (isAdminView && currentUserId) {
             // 설문조사에 질문이 있는지 확인
             const { data: questionsData } = await supabase
               .from("survey_questions")
@@ -506,7 +522,7 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
           설문조사
         </h2>
         <p className="text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-          {isAdmin
+          {isAdminView
             ? "설문조사를 작성하고 관리할 수 있습니다."
             : "진행 중인 설문조사에 응답할 수 있습니다."}
         </p>
@@ -519,8 +535,8 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
         </div>
       )}
 
-      {/* 설문조사 작성 폼 (관리자만) */}
-      {!showAdminCheck && isAdmin && !isWriting && (
+      {/* 설문조사 작성 버튼 (관리자 화면에서만) */}
+      {!showAdminCheck && isAdminView && !isWriting && (
         <div className="mb-6">
           <Button
             onClick={() => setIsWriting(true)}
@@ -532,8 +548,8 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
         </div>
       )}
 
-      {/* 설문조사 작성 폼 */}
-      {!showAdminCheck && isAdmin && isWriting && (
+      {/* 설문조사 작성 폼 (관리자 화면에서만) */}
+      {!showAdminCheck && isAdminView && isWriting && (
         <div className="mb-6 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
           <h3 className="text-lg font-semibold text-black dark:text-zinc-50 mb-4">
             새 설문조사 작성
@@ -849,17 +865,17 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
                         minute: "2-digit",
                       })}
                     </span>
-                    {isAdmin && survey.response_count !== undefined && (
+                    {isAdminView && survey.response_count !== undefined && (
                       <span>응답 수: {survey.response_count}개</span>
                     )}
                   </div>
                 </div>
 
                 <div className="flex gap-2 ml-4">
-                  {/* 응답 버튼 (진행 중이고 아직 응답하지 않은 경우) */}
-                  {survey.is_active &&
-                    !survey.has_responded &&
-                    !isAdmin && (
+                  {/* 응답 버튼: 학생 화면에서만 노출 (관리자가 admin 라우트에 있을 땐 숨김) */}
+                  {!isAdminView &&
+                    survey.is_active &&
+                    !survey.has_responded && (
                       <Button
                         onClick={() => {
                           setSelectedSurvey(survey);
@@ -872,8 +888,8 @@ export default function SurveyTab({ selectedGroup = null }: SurveyTabProps) {
                       </Button>
                     )}
 
-                  {/* 삭제 버튼 (관리자만) */}
-                  {isAdmin && (
+                  {/* 삭제 버튼 (관리자 화면에서만) */}
+                  {isAdminView && (
                     <Button
                       onClick={() => handleDelete(survey.id)}
                       variant="destructive"

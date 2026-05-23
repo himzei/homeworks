@@ -10,12 +10,14 @@ import {
   FileText,
   CheckCircle2,
   Plus,
+  ListChecks,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { Button } from "@/app/_components/ui/button";
 
+import AdminSubNav from "./_components/AdminSubNav";
 import GroupTabs from "./_components/GroupTabs";
 import StatCard from "./_components/StatCard";
 import AssignmentProgressCard, {
@@ -28,6 +30,9 @@ import PendingConsultationList, {
   type PendingConsultationItem,
 } from "./_components/PendingConsultationList";
 import DashboardSection from "./_components/DashboardSection";
+import AdminAccountCards, {
+  type AdminAccountItem,
+} from "./_components/AdminAccountCards";
 
 // 동적 렌더링 강제 (세션별/그룹별 데이터를 매 요청마다 새로 조회)
 export const dynamic = "force-dynamic";
@@ -107,15 +112,25 @@ export default async function AdminDashboardPage({
     .select("id, name, group_name")
     .neq("role", "admin");
 
+  const adminProfilesQuery = supabase
+    .from("profiles")
+    .select(
+      "id, name, phone, avatar_url, university, major",
+    )
+    .eq("role", "admin")
+    .order("name", { ascending: true });
+
   const [
     assignmentsResult,
     profilesResult,
+    adminProfilesResult,
     homeworksResult,
     consultationsResult,
     surveysResult,
   ] = await Promise.all([
     buildAssignmentsQuery(),
     allProfilesQuery,
+    adminProfilesQuery,
     supabase
       .from("homeworks")
       .select("id, user_id, assignment_id, url, status, created_at"),
@@ -130,6 +145,7 @@ export default async function AdminDashboardPage({
 
   const assignments = assignmentsResult.data ?? [];
   const allProfiles = profilesResult.data ?? [];
+  const adminProfiles = adminProfilesResult.data ?? [];
   const allHomeworks = homeworksResult.data ?? [];
   const allConsultations = consultationsResult.data ?? [];
   const allSurveys = surveysResult.data ?? [];
@@ -137,6 +153,9 @@ export default async function AdminDashboardPage({
   // 그룹별 학생 수 집계 (탭 배지 표시용)
   // - "all": 전체 학생 수
   // - 각 group_name 키: 해당 그룹에 정확히 매칭되는 학생 수
+  // - 특정 기수 탭을 선택해도 "그룹 미지정" 학생은 함께 노출되므로,
+  //   각 기수 카운트에는 미지정 인원을 더해 실제 표시될 인원과 일치시킨다.
+  const unsetGroupCount = allProfiles.filter((p) => !p.group_name).length;
   const studentCountsByGroup: Record<string, number> = {
     all: allProfiles.length,
   };
@@ -147,10 +166,19 @@ export default async function AdminDashboardPage({
         (studentCountsByGroup[groupKey] ?? 0) + 1;
     }
   }
+  // 각 기수 카운트에 미지정 인원 합산 (탭에 보이는 실제 인원과 일치)
+  for (const key of Object.keys(studentCountsByGroup)) {
+    if (key !== "all") {
+      studentCountsByGroup[key] += unsetGroupCount;
+    }
+  }
 
-  // 선택된 그룹에 해당하는 학생만 추출 (전체 선택 시 그대로 사용)
+  // 선택된 그룹에 해당하는 학생 추출 (전체 선택 시 그대로 사용)
+  // - 특정 기수 선택 시에도 "그룹 미지정(null)" 학생을 함께 포함
   const filteredProfiles = filterGroup
-    ? allProfiles.filter((p) => p.group_name === filterGroup)
+    ? allProfiles.filter(
+        (p) => p.group_name === filterGroup || !p.group_name,
+      )
     : allProfiles;
 
   // 3) 통계 계산
@@ -241,6 +269,7 @@ export default async function AdminDashboardPage({
       id: h.id,
       studentId: h.user_id,
       studentName: profileNameMap.get(h.user_id) ?? "알 수 없는 학생",
+      assignmentId: h.assignment_id,
       assignmentTitle:
         assignmentTitleMap.get(h.assignment_id) ?? "삭제된 과제",
       submissionUrl: h.url,
@@ -259,15 +288,50 @@ export default async function AdminDashboardPage({
       createdAt: c.created_at,
     }));
 
-  // 7) 화면에 표시할 그룹 라벨 (탭이 짧은 라벨이라 헤더에선 풀네임 노출)
+  // 7) 관리자 계정 카드 데이터 (이메일 RPC 병렬 조회)
+  const adminIds = adminProfiles.map((p) => p.id);
+  let adminEmailMap = new Map<string, string>();
+  if (adminIds.length > 0) {
+    const { data: adminEmailData } = await supabase.rpc("get_user_emails", {
+      user_ids: adminIds,
+    });
+    if (adminEmailData) {
+      adminEmailMap = new Map(
+        adminEmailData.map((item: { user_id: string; email: string }) => [
+          item.user_id,
+          item.email,
+        ]),
+      );
+    }
+  }
+
+  const adminAccounts: AdminAccountItem[] = adminProfiles.map((profile) => ({
+    id: profile.id,
+    name: profile.name ?? "이름 없음",
+    email: adminEmailMap.get(profile.id) ?? null,
+    phone: profile.phone,
+    avatar_url: profile.avatar_url,
+    university: profile.university,
+    major: profile.major,
+  }));
+
+  // 8) 화면에 표시할 그룹 라벨 (탭이 짧은 라벨이라 헤더에선 풀네임 노출)
   const groupLabel = filterGroup ?? "전체 과정";
   // 현재 보고 있는 데이터 범위 안내 문구
   const scopeDescription = filterGroup
-    ? "선택한 과정의 데이터만 표시됩니다."
+    ? "선택한 과정과 그룹 미지정 회원을 함께 표시합니다."
     : "모든 과정의 데이터를 합산해 표시합니다.";
 
+  const newAssignmentHref = filterGroup
+    ? `/admin/assignments/new?group=${encodeURIComponent(filterGroup)}`
+    : "/admin/assignments/new";
+
+  const adminAssignmentsHref = filterGroup
+    ? `/admin/assignments?group=${encodeURIComponent(filterGroup)}`
+    : "/admin/assignments";
+
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans dark:bg-black">
+    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
       <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
         {/* 페이지 헤더 */}
         <div className="mb-4 sm:mb-6">
@@ -284,7 +348,7 @@ export default async function AdminDashboardPage({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/assignment/new">
+              <Link href={newAssignmentHref}>
                 <Button className="bg-blue-500 hover:bg-blue-600 text-white">
                   <Plus className="size-4" />새 과제 등록
                 </Button>
@@ -296,6 +360,11 @@ export default async function AdminDashboardPage({
           </div>
         </div>
 
+        {/* 관리자 패널 내 페이지 전환 */}
+        <Suspense fallback={null}>
+          <AdminSubNav />
+        </Suspense>
+
         {/* 과정(기수) 탭 필터 - 클릭한 그룹의 데이터만 하단에 표시됨 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
@@ -305,6 +374,16 @@ export default async function AdminDashboardPage({
             />
           </Suspense>
         </div>
+
+        {/* 관리자 계정 (학생 상담 전체 탭과 분리) */}
+        <section className="mb-6 sm:mb-8">
+          <DashboardSection
+            title="관리자 계정"
+            description={`등록된 관리자 ${adminAccounts.length}명 · 프로필을 클릭하면 상세 정보를 확인할 수 있습니다.`}
+          >
+            <AdminAccountCards admins={adminAccounts} />
+          </DashboardSection>
+        </section>
 
         {/* 상단 KPI 카드 */}
         <section
@@ -332,6 +411,7 @@ export default async function AdminDashboardPage({
             icon={<AlertCircle className="size-5" />}
             accentClassName="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
             highlight={pendingHomeworkCount > 0}
+            href={adminAssignmentsHref}
           />
           <StatCard
             label="답변 대기 상담"
@@ -359,7 +439,7 @@ export default async function AdminDashboardPage({
             <DashboardSection
               title="진행중 과제 제출 현황"
               description="현재 기간 중인 과제와 학생들의 제출률입니다."
-              moreHref="/home?tab=assignment-list"
+              moreHref="/admin/assignments"
               moreLabel="숙제 리스트 보기"
             >
               <AssignmentProgressCard items={activeAssignmentsWithProgress} />
@@ -371,10 +451,13 @@ export default async function AdminDashboardPage({
             <DashboardSection
               title="검토 대기 제출물"
               description={`최근 ${pendingHomeworks.length}건 (전체 ${pendingHomeworkCount}건)`}
-              moreHref="/home?tab=evaluation"
-              moreLabel="평가 화면"
+              moreHref={adminAssignmentsHref}
+              moreLabel="숙제 리스트 보기"
             >
-              <PendingHomeworkList items={pendingHomeworks} />
+              <PendingHomeworkList
+                items={pendingHomeworks}
+                filterGroup={filterGroup}
+              />
             </DashboardSection>
           </div>
         </div>
@@ -386,7 +469,7 @@ export default async function AdminDashboardPage({
             <DashboardSection
               title="답변 대기 상담"
               description={`최근 ${pendingConsultations.length}건 (전체 ${pendingConsultationCount}건)`}
-              moreHref="/home?tab=consultation"
+              moreHref="/admin/consultations"
             >
               <PendingConsultationList items={pendingConsultations} />
             </DashboardSection>
@@ -400,27 +483,36 @@ export default async function AdminDashboardPage({
             >
               <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-card p-2">
                 <QuickActionLink
-                  href="/assignment/new"
+                  href={newAssignmentHref}
                   label="새 과제 등록"
                   icon={<FileText className="size-4" />}
                 />
                 <QuickActionLink
-                  href="/home?tab=survey"
+                  href="/admin/assignments"
+                  label="숙제 리스트 관리"
+                  icon={<ListChecks className="size-4" />}
+                />
+                <QuickActionLink
+                  href="/admin/surveys"
                   label="설문조사 관리"
                   icon={<ClipboardCheck className="size-4" />}
                 />
                 <QuickActionLink
-                  href="/home?tab=consultation"
+                  href="/admin/consultations"
                   label="학생 상담 관리"
                   icon={<MessageSquare className="size-4" />}
                 />
                 <QuickActionLink
-                  href="/home?tab=evaluation"
+                  href="/admin/evaluation"
                   label="제출물 평가"
                   icon={<CheckCircle2 className="size-4" />}
                 />
                 <QuickActionLink
-                  href="/home?tab=progress"
+                  href={
+                    filterGroup
+                      ? `/admin/progress?group=${encodeURIComponent(filterGroup)}`
+                      : "/admin/progress"
+                  }
                   label="진행 과정 보기"
                   icon={<Users className="size-4" />}
                   isLast

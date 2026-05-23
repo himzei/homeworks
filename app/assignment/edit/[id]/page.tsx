@@ -6,6 +6,11 @@ import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { GROUP_OPTIONS } from "@/lib/constants";
 import {
+  filterTime24Input,
+  formatTime24FromDate,
+  normalizeTime24,
+} from "@/lib/time-24h";
+import {
   getCachedAssignment,
   setCachedAssignment,
   invalidateAssignmentCache,
@@ -66,9 +71,9 @@ export default function EditAssignmentPage() {
         content: cached.content || "",
         groupName: cached.group_name || "",
         startDate: startDate.toISOString().split("T")[0],
-        startTime: startDate.toTimeString().slice(0, 5),
+        startTime: formatTime24FromDate(startDate),
         endDate: endDate.toISOString().split("T")[0],
-        endTime: endDate.toTimeString().slice(0, 5),
+        endTime: formatTime24FromDate(endDate),
         lectureMaterialUrl: cached.lecture_material_url || "",
         previousAnswerUrl: cached.previous_answer_url || "",
       });
@@ -149,9 +154,9 @@ export default function EditAssignmentPage() {
         content: data.content || "",
         groupName: data.group_name || "",
         startDate: startDate.toISOString().split("T")[0],
-        startTime: startDate.toTimeString().slice(0, 5),
+        startTime: formatTime24FromDate(startDate),
         endDate: endDate.toISOString().split("T")[0],
-        endTime: endDate.toTimeString().slice(0, 5),
+        endTime: formatTime24FromDate(endDate),
         lectureMaterialUrl: data.lecture_material_url || "",
         previousAnswerUrl: data.previous_answer_url || "",
       });
@@ -169,6 +174,23 @@ export default function EditAssignmentPage() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  // 24시간 형식 시간 입력 (HH:mm)
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: filterTime24Input(value),
+    }));
+  };
+
+  const handleTimeBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const normalized = normalizeTime24(value);
+    if (normalized) {
+      setFormData((prev) => ({ ...prev, [name]: normalized }));
+    }
   };
 
   // 폼 제출 핸들러
@@ -191,9 +213,35 @@ export default function EditAssignmentPage() {
       return;
     }
 
+    const normalizedStartTime = normalizeTime24(formData.startTime);
+    const normalizedEndTime = normalizeTime24(formData.endTime);
+
+    if (!normalizedStartTime) {
+      alert(
+        "게시 시작 시간을 24시간 형식(HH:mm)으로 입력해주세요. 예: 09:00, 22:00",
+      );
+      return;
+    }
+
+    if (!normalizedEndTime) {
+      alert(
+        "게시 종료 시간을 24시간 형식(HH:mm)으로 입력해주세요. 예: 09:00, 22:00",
+      );
+      return;
+    }
+
     // 날짜와 시간을 결합하여 Date 객체 생성
-    const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
-    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+    const startDateTime = new Date(
+      `${formData.startDate}T${normalizedStartTime}:00`,
+    );
+    const endDateTime = new Date(
+      `${formData.endDate}T${normalizedEndTime}:00`,
+    );
+
+    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+      alert("게시 일시가 올바르지 않습니다.");
+      return;
+    }
 
     // 종료일이 시작일보다 이전인지 확인
     if (endDateTime <= startDateTime) {
@@ -301,8 +349,8 @@ export default function EditAssignmentPage() {
   // 로딩 중일 때
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-        <main className="flex min-h-screen w-full max-w-4xl flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
+      <div className="flex min-h-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+        <main className="flex min-h-full w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
           <div className="text-center py-12">
             <p className="text-zinc-600 dark:text-zinc-400">로딩 중...</p>
           </div>
@@ -312,8 +360,8 @@ export default function EditAssignmentPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-4xl flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
+    <div className="flex min-h-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="flex min-h-full w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
         {/* 헤더 */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-black dark:text-zinc-50 mb-2">
@@ -417,14 +465,22 @@ export default function EditAssignmentPage() {
                 게시 시작 시간 <span className="text-red-500">*</span>
               </label>
               <input
-                type="time"
+                type="text"
+                inputMode="numeric"
                 id="startTime"
                 name="startTime"
                 value={formData.startTime}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                onChange={handleTimeChange}
+                onBlur={handleTimeBlur}
+                placeholder="22:00"
+                maxLength={5}
+                autoComplete="off"
+                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 required
               />
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                24시간 형식 (예: 09:00, 22:00 — 오후 10시는 22:00)
+              </p>
             </div>
           </div>
 
@@ -455,14 +511,22 @@ export default function EditAssignmentPage() {
                 게시 종료 시간 <span className="text-red-500">*</span>
               </label>
               <input
-                type="time"
+                type="text"
+                inputMode="numeric"
                 id="endTime"
                 name="endTime"
                 value={formData.endTime}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                onChange={handleTimeChange}
+                onBlur={handleTimeBlur}
+                placeholder="22:00"
+                maxLength={5}
+                autoComplete="off"
+                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 required
               />
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                24시간 형식 (예: 09:00, 22:00 — 오후 10시는 22:00)
+              </p>
             </div>
           </div>
 

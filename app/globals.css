@@ -125,7 +125,7 @@
 }
 
 .container {
-  @apply max-w-5xl mx-auto px-4 sm:px-6 lg:px-8;
+  @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
 }
 
 /* 모바일 스크롤바 숨김 (가로 스크롤용) */
@@ -140,14 +140,91 @@
 
 /* 그리드 패턴 배경 */
 .bg-grid-pattern {
-  background-image: 
+  background-image:
     linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
 .dark .bg-grid-pattern {
-  background-image: 
+  background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+/* 과제 평가 그리드: 가로만 스크롤, 세로는 페이지 스크롤 */
+.evaluation-grid-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* 카테고리 배지가 상단 테두리에 걸치도록 헤더 셀 클리핑 방지 */
+.evaluation-grid-column-header {
+  isolation: isolate;
+}
+
+.evaluation-grid-category-badge {
+  white-space: nowrap;
+}
+
+.evaluation-grid-sticky-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  box-shadow:
+    4px 0 8px -4px rgba(0, 0, 0, 0.12),
+    0 4px 8px -4px rgba(0, 0, 0, 0.12);
+}
+
+.dark .evaluation-grid-sticky-corner {
+  box-shadow:
+    4px 0 8px -4px rgba(0, 0, 0, 0.45),
+    0 4px 8px -4px rgba(0, 0, 0, 0.45);
+}
+
+.evaluation-grid-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 4px 8px -4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .evaluation-grid-sticky-header {
+  box-shadow: 0 4px 8px -4px rgba(0, 0, 0, 0.4);
+}
+
+.evaluation-grid-sticky-name {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.12);
+}
+
+.dark .evaluation-grid-sticky-name {
+  box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.45);
+}
+
+/* 점수 입력: 브라우저 기본 증감(▲▼) 버튼 숨김 */
+.evaluation-score-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.evaluation-score-input::-webkit-outer-spin-button,
+.evaluation-score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 앱 셸: 헤더(auto) + 메인(1fr) + 푸터(auto) = 100dvh */
+.app-shell {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-rows: auto 1fr auto;
+}
+
+.app-shell-main {
+  width: 100%;
+  min-height: 0;
 }

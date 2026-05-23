@@ -54,9 +54,14 @@ function normalizeDbStatus(
 
 interface AssignmentListProps {
   assignments: Assignment[];
+  /** URL `assignment` 파라미터 — 해당 과제 페이지로 이동·강조 */
+  focusAssignmentId?: string | null;
 }
 
-export default function AssignmentList({ assignments }: AssignmentListProps) {
+export default function AssignmentList({
+  assignments,
+  focusAssignmentId = null,
+}: AssignmentListProps) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -383,10 +388,34 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
     }
   };
 
-  // assignments가 변경되면 첫 페이지로 리셋
+  // assignments 변경 시 페이지 설정 (포커스 과제가 있으면 해당 페이지로)
   useEffect(() => {
-    setCurrentPage(1);
-  }, [assignments.length]);
+    if (!focusAssignmentId || assignments.length === 0) {
+      setCurrentPage(1);
+      return;
+    }
+
+    const targetIndex = assignments.findIndex((a) => a.id === focusAssignmentId);
+    if (targetIndex === -1) {
+      setCurrentPage(1);
+      return;
+    }
+
+    setCurrentPage(targetIndex + 1);
+  }, [assignmentIds, focusAssignmentId, assignments]);
+
+  // 포커스 과제가 화면에 그려진 뒤 스크롤·강조
+  useEffect(() => {
+    if (!focusAssignmentId) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      document
+        .getElementById(`assignment-${focusAssignmentId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 200);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [focusAssignmentId, currentPage]);
 
   // 삭제 버튼 클릭 핸들러
   const handleDelete = async (assignmentId: string) => {
@@ -479,10 +508,18 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
           </div>
         ) : (
           // 숙제 목록 렌더링 (현재 페이지의 항목만)
-          currentAssignments.map((assignment, index) => (
+          currentAssignments.map((assignment, index) => {
+            const isFocusedAssignment = focusAssignmentId === assignment.id;
+
+            return (
             <div
               key={assignment.id}
-              className="divide-y divide-zinc-200 dark:divide-zinc-700"
+              id={`assignment-${assignment.id}`}
+              className={`divide-y divide-zinc-200 dark:divide-zinc-700 scroll-mt-24 ${
+                isFocusedAssignment
+                  ? "ring-2 ring-amber-400 dark:ring-amber-500 ring-inset"
+                  : ""
+              }`}
             >
               {/* 모바일 카드 형태 - 데스크톱에서 숨김 */}
               <div className="md:hidden p-4 space-y-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
@@ -629,7 +666,8 @@ export default function AssignmentList({ assignments }: AssignmentListProps) {
                 />
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 

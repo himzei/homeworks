@@ -151,8 +151,8 @@ export default async function UserProfilePage({
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-4xl flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
+    <div className="flex min-h-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+      <main className="flex min-h-full w-full container flex-col py-8 px-4 sm:px-8 bg-white dark:bg-black">
         {/* 뒤로가기 및 프로필 수정 버튼 */}
         <div className="mb-6 flex items-center justify-between">
           <Link

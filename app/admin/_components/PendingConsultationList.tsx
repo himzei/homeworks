@@ -70,7 +70,7 @@ export default function PendingConsultationList({
       </ul>
       <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
         <Link
-          href="/home?tab=consultation"
+          href="/admin/consultations"
           className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
         >
           상담 전체 보기 →

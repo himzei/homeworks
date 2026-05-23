@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useAdmin } from "@/lib/auth/SessionProvider";
+import { useAdmin, useSession } from "@/lib/auth/SessionProvider";
 import {
   Avatar,
   AvatarImage,
   AvatarFallback,
 } from "@/app/_components/ui/avatar";
 import StudentConsultationModal from "@/app/_components/StudentConsultationModal";
+import DeleteStudentDialog from "@/app/admin/_components/DeleteStudentDialog";
 
 // 학생 프로필 타입 정의
 interface StudentProfile {
@@ -16,6 +18,7 @@ interface StudentProfile {
   name: string;
   email: string | null;
   group_name: string | null;
+  role: string | null; // 'admin' 또는 'user' (그 외 null)
   phone: string | null;
   bio: string | null;
   avatar_url: string | null;
@@ -38,6 +41,8 @@ export default function ConsultationTab({
 }: ConsultationTabProps) {
   // 전역 세션에서 관리자 권한 가져오기
   const { isAdmin, isCheckingAdmin } = useAdmin();
+  // 현재 로그인 사용자 (본인 삭제 방지용으로 ID만 사용)
+  const { user: currentUser } = useSession();
 
   // 학생 목록 상태
   const [students, setStudents] = useState<StudentProfile[]>([]);
@@ -50,6 +55,11 @@ export default function ConsultationTab({
   );
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
+  // 회원 삭제 다이얼로그 상태
+  const [studentToDelete, setStudentToDelete] = useState<StudentProfile | null>(
+    null,
+  );
+
   // 학생 목록 가져오기
   useEffect(() => {
     const fetchStudents = async () => {
@@ -61,17 +71,22 @@ export default function ConsultationTab({
         // Supabase 클라이언트 생성 (effect 내부에서 생성하여 의존성 문제 방지)
         const client = createClient();
 
-        // 관리자가 아닌 학생들만 조회
+        // 학생만 조회 (관리자 계정은 /admin 대시보드에서 카드로 표시)
         let profilesQuery = client
           .from("profiles")
           .select(
-            "id, name, group_name, phone, bio, avatar_url, github_url, university, major, created_at",
+            "id, name, group_name, role, phone, bio, avatar_url, github_url, university, major, created_at",
           )
-          .neq("role", "admin") // 관리자 제외
+          .neq("role", "admin")
           .order("name", { ascending: true });
 
         if (selectedGroup) {
-          profilesQuery = profilesQuery.eq("group_name", selectedGroup);
+          // 선택된 기수와 일치하거나, 그룹이 설정되지 않은(null) 사용자도 포함
+          // 그룹명에 쉼표/특수문자가 있을 수 있어 큰따옴표로 이스케이프
+          const escaped = selectedGroup.replace(/"/g, '""');
+          profilesQuery = profilesQuery.or(
+            `group_name.eq."${escaped}",group_name.is.null`,
+          );
         }
 
         const { data, error: fetchError } = await profilesQuery;
@@ -87,7 +102,7 @@ export default function ConsultationTab({
         const studentIds = (data || []).map((student) => student.id);
 
         // 이메일 정보 가져오기 (RPC 함수 사용)
-        let emailMap = new Map<string, string>();
+        const emailMap = new Map<string, string>();
         if (studentIds.length > 0) {
           const { data: emailData, error: emailError } = await client.rpc(
             "get_user_emails",
@@ -215,8 +230,24 @@ export default function ConsultationTab({
                 setSelectedStudent(student);
                 setIsModalOpen(true);
               }}
-              className="bg-white h-64 flex flex-col justify-between dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 p-4 hover:shadow-md transition-shadow cursor-pointer"
+              className="relative bg-white h-64 flex flex-col justify-between dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 p-4 hover:shadow-md transition-shadow cursor-pointer"
             >
+              {/* 회원 삭제 버튼 - 관리자만, 본인 계정 제외 */}
+              {isAdmin && currentUser?.id !== student.id ? (
+                <button
+                  type="button"
+                  aria-label={`${student.name || "학생"} 회원 삭제`}
+                  title="회원 삭제"
+                  onClick={(e) => {
+                    // 카드 onClick(모달 열림) 방지
+                    e.stopPropagation();
+                    setStudentToDelete(student);
+                  }}
+                  className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 dark:hover:text-rose-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              ) : null}
               <div className="h-full flex flex-col">
                 {/* 학생 아바타 및 이름 */}
                 <div className="flex items-center gap-3 mb-3">
@@ -235,9 +266,17 @@ export default function ConsultationTab({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-black dark:text-zinc-50 truncate">
-                      {student.name || "이름 없음"}
-                    </h3>
+                    {/* 이름 + role/group 상태 배지 */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="text-lg font-semibold text-black dark:text-zinc-50 truncate">
+                        {student.name || "이름 없음"}
+                      </h3>
+                      {!student.group_name ? (
+                        <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[10px] font-medium px-1.5 py-0.5">
+                          그룹 미지정
+                        </span>
+                      ) : null}
+                    </div>
                     {student.email && (
                       <p className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
                         {student.email}
@@ -328,6 +367,25 @@ export default function ConsultationTab({
           setSelectedStudent(null);
         }}
         student={selectedStudent}
+      />
+
+      {/* 회원 삭제 확인 다이얼로그 */}
+      <DeleteStudentDialog
+        isOpen={!!studentToDelete}
+        onClose={() => setStudentToDelete(null)}
+        studentId={studentToDelete?.id ?? null}
+        studentName={studentToDelete?.name ?? null}
+        onDeleted={(deletedId) => {
+          // 목록에서 즉시 제거하여 UI 갱신
+          setStudents((prev) =>
+            prev.filter((student) => student.id !== deletedId),
+          );
+          // 동일 학생의 상담 모달이 열려 있다면 닫기
+          if (selectedStudent?.id === deletedId) {
+            setIsModalOpen(false);
+            setSelectedStudent(null);
+          }
+        }}
       />
     </div>
   );
