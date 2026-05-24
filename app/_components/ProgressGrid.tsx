@@ -3,6 +3,8 @@
 import { Check, X } from "lucide-react";
 import Link from "next/link";
 
+import ClassOfficerBadge from "@/app/admin/_components/ClassOfficerBadge";
+
 // 과제 타입 정의
 interface Assignment {
   id: string;
@@ -13,7 +15,11 @@ interface Assignment {
 interface User {
   id: string;
   name: string;
-  section: "your" | "everyone"; // "YOUR PROGRESS" 또는 "EVERYONE'S PROGRESS"
+  section: "your" | "everyone";
+  classOfficerRole?: string | null;
+  teamNumber?: number | null;
+  isTeamLeader?: boolean;
+  honorBadgeLabels?: string[];
 }
 
 // 진행 상태 타입 정의
@@ -187,13 +193,19 @@ export default function ProgressGrid({
                     style={{ display: "contents" }}
                   >
                     {/* 사용자 이름 셀 */}
-                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-4 py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center gap-1">
                       <Link
                         href={`/user/${user.id}`}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors"
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors text-center"
                       >
                         {user.name}
                       </Link>
+                      <ClassOfficerBadge
+                        classOfficerRole={user.classOfficerRole}
+                        teamNumber={user.teamNumber}
+                        isTeamLeader={user.isTeamLeader}
+                        honorBadgeLabels={user.honorBadgeLabels}
+                      />
                     </div>
 
                     {/* 각 과제별 진행 상태 셀 */}
@@ -269,13 +281,19 @@ export default function ProgressGrid({
                     style={{ display: "contents" }}
                   >
                     {/* 사용자 이름 셀 */}
-                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
+                    <div className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center gap-1">
                       <Link
                         href={`/user/${user.id}`}
                         className="text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline transition-colors break-words text-center"
                       >
                         {user.name}
                       </Link>
+                      <ClassOfficerBadge
+                        classOfficerRole={user.classOfficerRole}
+                        teamNumber={user.teamNumber}
+                        isTeamLeader={user.isTeamLeader}
+                        honorBadgeLabels={user.honorBadgeLabels}
+                      />
                     </div>
 
                     {/* 각 과제별 진행 상태 셀 */}

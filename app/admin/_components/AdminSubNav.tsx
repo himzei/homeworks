@@ -2,16 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import {
-  LayoutDashboard,
-  MessageSquare,
-  ListChecks,
-  CheckCircle2,
-  ClipboardCheck,
-  Users,
-  LayoutGrid,
-  BookOpen,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** 관리자 패널 내 페이지 정의 */
@@ -19,50 +9,47 @@ const ADMIN_NAV_ITEMS = [
   {
     href: "/admin",
     label: "대시보드",
-    icon: LayoutDashboard,
     // 정확히 /admin일 때만 active로 판단
     exact: true,
   },
   {
     href: "/admin/assignments",
     label: "숙제 리스트",
-    icon: ListChecks,
     exact: false,
   },
   {
     href: "/admin/evaluation",
     label: "평가",
-    icon: CheckCircle2,
     exact: false,
   },
   {
     href: "/admin/surveys",
     label: "설문조사",
-    icon: ClipboardCheck,
     exact: false,
   },
   {
     href: "/admin/consultations",
     label: "학생 상담",
-    icon: MessageSquare,
     exact: false,
   },
   {
     href: "/admin/progress",
     label: "진행과정",
-    icon: Users,
+    exact: false,
+  },
+  {
+    href: "/admin/class-roles",
+    label: "반·조 관리",
     exact: false,
   },
   {
     href: "/admin/seating",
     label: "자리배치도",
-    icon: LayoutGrid,
     exact: false,
   },
   {
     href: "/admin/courses",
     label: "과정 관리",
-    icon: BookOpen,
     exact: false,
   },
 ] as const;
@@ -92,20 +79,18 @@ export default function AdminSubNav() {
         const isActive = item.exact
           ? pathname === item.href
           : pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const Icon = item.icon;
         return (
           <Link
             key={item.href}
             href={`${item.href}${preservedQuery}`}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+              "inline-flex items-center px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
               isActive
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-zinc-50 hover:border-zinc-300 dark:hover:border-zinc-700",
             )}
           >
-            <Icon className="size-4" />
             {item.label}
           </Link>
         );

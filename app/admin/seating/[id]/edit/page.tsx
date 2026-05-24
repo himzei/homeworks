@@ -5,7 +5,10 @@ import { ArrowLeft } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { fetchGroupOptions } from "@/lib/fetch-group-options";
-import type { SeatingChartRecord } from "@/lib/seating";
+import {
+  getOfficerSnapshotFromRecord,
+  type SeatingChartRecord,
+} from "@/lib/seating";
 import { Button } from "@/app/_components/ui/button";
 
 import AdminSubNav from "../../../_components/AdminSubNav";
@@ -70,6 +73,8 @@ export default async function AdminSeatingEditPage({
   }
 
   const record = chart as SeatingChartRecord;
+  const savedOfficerByStudentName =
+    getOfficerSnapshotFromRecord(record) ?? undefined;
   const groupOptions = await fetchGroupOptions(supabase);
 
   const listHref = filterGroup
@@ -116,6 +121,7 @@ export default async function AdminSeatingEditPage({
               colCount: record.col_count,
               aisleAfterColumns: record.aisle_after_columns ?? [],
               seatAssignments: record.seat_assignments ?? {},
+              officerByStudentName: savedOfficerByStudentName,
             }}
             listHref={listHref}
             groupOptions={groupOptions}

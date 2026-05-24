@@ -16,6 +16,13 @@ import {
 } from "@/lib/seating-drag";
 import { Button } from "@/app/_components/ui/button";
 import {
+  buildOfficerInfoByStudentName,
+  mergeHonorBadgesIntoOfficerByStudentName,
+  fetchClassRoleStudents,
+  type StudentOfficerInfo,
+} from "@/lib/class-officers";
+import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
+import {
   buildSeatingChartDefaultTitle,
   type CourseScheduleForTitle,
 } from "@/lib/seating-chart-title";
@@ -37,6 +44,7 @@ type SeatingChartFormProps = {
     colCount: number;
     aisleAfterColumns: number[];
     seatAssignments: Record<string, string>;
+    officerByStudentName?: Record<string, StudentOfficerInfo>;
   };
   /** 저장 후 이동할 목록 URL */
   listHref: string;
@@ -95,12 +103,29 @@ export default function SeatingChartForm({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingRoster, setIsLoadingRoster] = useState(false);
   const [studentRoster, setStudentRoster] = useState<string[]>([]);
+  const [officerByStudentName, setOfficerByStudentName] = useState<
+    Record<string, StudentOfficerInfo>
+  >(initialData?.officerByStudentName ?? {});
 
-  /** 선택 기수 학생 명단 불러오기 */
+  /** 선택 기수 학생 명단·반·조 불러오기 */
   const loadStudentRoster = useCallback(async (targetGroupName: string) => {
     const supabase = createClient();
-    const names = await fetchSeatingStudentNames(supabase, targetGroupName);
+    const [names, roleStudents] = await Promise.all([
+      fetchSeatingStudentNames(supabase, targetGroupName),
+      fetchClassRoleStudents(supabase, targetGroupName),
+    ]);
     setStudentRoster(names);
+    const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
+      supabase,
+      roleStudents.map((s) => s.id),
+    );
+    setOfficerByStudentName(
+      mergeHonorBadgesIntoOfficerByStudentName(
+        buildOfficerInfoByStudentName(roleStudents),
+        roleStudents,
+        honorLabelsByProfileId,
+      ),
+    );
     return names;
   }, []);
 
@@ -245,6 +270,26 @@ export default function SeatingChartForm({
         return;
       }
 
+      // 저장 시점의 반장·조장·조원을 스냅샷으로 고정
+      let officersSnapshot = officerByStudentName;
+      const trimmedGroup = groupName.trim();
+      if (trimmedGroup) {
+        const roleStudents = await fetchClassRoleStudents(
+          supabase,
+          trimmedGroup,
+        );
+        const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
+          supabase,
+          roleStudents.map((s) => s.id),
+        );
+        officersSnapshot = mergeHonorBadgesIntoOfficerByStudentName(
+          buildOfficerInfoByStudentName(roleStudents),
+          roleStudents,
+          honorLabelsByProfileId,
+        );
+        setOfficerByStudentName(officersSnapshot);
+      }
+
       const payload = {
         title: trimmedTitle,
         group_name: groupName || null,
@@ -252,6 +297,7 @@ export default function SeatingChartForm({
         col_count: colCount,
         aisle_after_columns: aisleAfterColumns,
         seat_assignments: cleanedAssignments,
+        officer_by_student_name: officersSnapshot,
       };
 
       if (isEditMode && initialData) {
@@ -458,6 +504,7 @@ export default function SeatingChartForm({
                 dragDropEnabled={studentRoster.length > 0}
                 onSeatChange={handleSeatChange}
                 onSeatDrop={handleSeatDrop}
+                officerByStudentName={officerByStudentName}
               />
             </div>
           </div>

@@ -10,9 +10,17 @@ import {
   fetchSeatingStudents,
 } from "@/lib/fetch-group-students";
 import {
+  buildOfficerInfoByStudentName,
+  fetchClassRoleStudents,
+  fetchOfficersByStudentNames,
+  mergeHonorBadgesIntoOfficerByStudentName,
+} from "@/lib/class-officers";
+import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
+import {
   buildProfileIdByName,
   countAssignedSeats,
   getAssignedStudentNames,
+  getOfficerSnapshotFromRecord,
   type SeatingChartRecord,
 } from "@/lib/seating";
 import { Button } from "@/app/_components/ui/button";
@@ -126,6 +134,34 @@ export default async function AdminSeatingDetailPage({
         ),
       );
 
+  const roleStudents = record.group_name
+    ? await fetchClassRoleStudents(supabase, record.group_name)
+    : [];
+
+  const honorLabelsByProfileId =
+    roleStudents.length > 0
+      ? await fetchHonorBadgeLabelsByProfileId(
+          supabase,
+          roleStudents.map((s) => s.id),
+        )
+      : {};
+
+  // 저장 시점 스냅샷 우선 (없으면 live 조회) + 명예 배지 병합
+  const baseOfficerByStudentName =
+    getOfficerSnapshotFromRecord(record) ??
+    (record.group_name
+      ? buildOfficerInfoByStudentName(roleStudents)
+      : await fetchOfficersByStudentNames(
+          supabase,
+          getAssignedStudentNames(seatAssignments),
+        ));
+
+  const officerByStudentName = mergeHonorBadgesIntoOfficerByStudentName(
+    baseOfficerByStudentName,
+    roleStudents,
+    honorLabelsByProfileId,
+  );
+
   return (
     <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
       <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
@@ -173,6 +209,7 @@ export default async function AdminSeatingDetailPage({
           assignedCount={assignedCount}
           totalSeats={totalSeats}
           profileIdByName={profileIdByName}
+          officerByStudentName={officerByStudentName}
         />
       </main>
     </div>

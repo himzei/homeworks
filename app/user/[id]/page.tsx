@@ -2,6 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { X, Github, ArrowLeft, Edit } from "lucide-react";
+import ClassOfficerBadge from "@/app/admin/_components/ClassOfficerBadge";
+import { CLASS_OFFICER_ROLE } from "@/lib/class-officers";
+import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import {
   formatKoreaDateTimeFromUtc,
@@ -47,6 +50,30 @@ export default async function UserProfilePage({
     // 다른 사용자의 프로필을 찾을 수 없으면 not-found 페이지 표시
     notFound();
   }
+
+  let presidentIsTeamLeader = false;
+  if (
+    profile.class_officer_role === CLASS_OFFICER_ROLE.CLASS_PRESIDENT &&
+    typeof profile.team_number === "number" &&
+    profile.group_name
+  ) {
+    const { data: teamLeaderInSameTeam } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("group_name", profile.group_name)
+      .eq("class_officer_role", CLASS_OFFICER_ROLE.TEAM_LEADER)
+      .eq("team_number", profile.team_number)
+      .neq("role", "admin")
+      .maybeSingle();
+
+    presidentIsTeamLeader = !teamLeaderInSameTeam;
+  }
+
+  const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
+    supabase,
+    [profile.id],
+  );
+  const honorBadgeLabels = honorLabelsByProfileId[profile.id] ?? [];
 
   // 해당 학생이 속한 과정(group_name)에 맞는 과제만 조회 (home과 동일한 LEGACY 규칙)
   const courseGroupName = profile.group_name?.trim() || null;
@@ -193,9 +220,18 @@ export default async function UserProfilePage({
 
             {/* 사용자 정보 */}
             <div className="flex-1">
-              <h1 className="text-3xl font-semibold text-black dark:text-zinc-50 mb-2">
-                {profile.name}
-              </h1>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <h1 className="text-3xl font-semibold text-black dark:text-zinc-50">
+                  {profile.name}
+                </h1>
+                <ClassOfficerBadge
+                  classOfficerRole={profile.class_officer_role}
+                  teamNumber={profile.team_number}
+                  isTeamLeader={presidentIsTeamLeader}
+                  honorBadgeLabels={honorBadgeLabels}
+                  className="text-xs"
+                />
+              </div>
               {profile.group_name && (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
                   {profile.group_name}

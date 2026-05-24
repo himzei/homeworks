@@ -9,6 +9,8 @@ import {
 } from "@/lib/download-element-as-image";
 import { Button } from "@/app/_components/ui/button";
 
+import type { StudentOfficerInfo } from "@/lib/class-officers";
+
 import SeatingGrid from "./SeatingGrid";
 
 type SeatingChartDetailArticleProps = {
@@ -23,6 +25,7 @@ type SeatingChartDetailArticleProps = {
   assignedCount: number;
   totalSeats: number;
   profileIdByName?: Record<string, string>;
+  officerByStudentName?: Record<string, StudentOfficerInfo>;
 };
 
 /**
@@ -40,6 +43,7 @@ export default function SeatingChartDetailArticle({
   assignedCount,
   totalSeats,
   profileIdByName,
+  officerByStudentName,
 }: SeatingChartDetailArticleProps) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -129,6 +133,7 @@ export default function SeatingChartDetailArticle({
             seatAssignments={seatAssignments}
             editable={false}
             profileIdByName={profileIdByName}
+            officerByStudentName={officerByStudentName}
           />
         </div>
       </div>

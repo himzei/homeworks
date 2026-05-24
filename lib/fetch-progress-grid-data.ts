@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { CLASS_OFFICER_ROLE } from "@/lib/class-officers";
+import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { parseSupabaseUtcTimestamp } from "@/lib/format-date";
 
@@ -14,6 +16,10 @@ export type ProgressGridUser = {
   id: string;
   name: string;
   section: "your" | "everyone";
+  classOfficerRole: string | null;
+  teamNumber: number | null;
+  isTeamLeader?: boolean;
+  honorBadgeLabels?: string[];
 };
 
 /** 사용자·과제별 제출 상태 */
@@ -123,7 +129,7 @@ export async function fetchProgressGridData(
   // profiles 조회 (관리자 제외)
   let profilesQuery = supabase
     .from("profiles")
-    .select("id, name, role, group_name")
+    .select("id, name, role, group_name, class_officer_role, team_number")
     .neq("role", "admin")
     .order("created_at", { ascending: true });
 
@@ -137,7 +143,7 @@ export async function fetchProgressGridData(
     console.error("진행과정 프로필 조회 오류:", profilesError);
   }
 
-  const users: ProgressGridUser[] = (profilesRaw ?? [])
+  const usersMapped: ProgressGridUser[] = (profilesRaw ?? [])
     .filter((profile) => {
       if (!filterGroup) return true;
       return belongsToCourseGroup(profile.group_name, filterGroup);
@@ -149,7 +155,41 @@ export async function fetchProgressGridData(
         profile.id === currentUserId
           ? ("your" as const)
           : ("everyone" as const),
+      classOfficerRole: profile.class_officer_role ?? null,
+      teamNumber:
+        typeof profile.team_number === "number" ? profile.team_number : null,
     }));
+
+  const teamsWithTeamLeader = new Set<number>();
+  for (const user of usersMapped) {
+    if (
+      user.classOfficerRole === CLASS_OFFICER_ROLE.TEAM_LEADER &&
+      user.teamNumber
+    ) {
+      teamsWithTeamLeader.add(user.teamNumber);
+    }
+  }
+
+  let users: ProgressGridUser[] = usersMapped.map((user) => {
+    if (
+      user.classOfficerRole !== CLASS_OFFICER_ROLE.CLASS_PRESIDENT ||
+      !user.teamNumber ||
+      teamsWithTeamLeader.has(user.teamNumber)
+    ) {
+      return user;
+    }
+    return { ...user, isTeamLeader: true };
+  });
+
+  const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
+    supabase,
+    users.map((u) => u.id),
+  );
+
+  users = users.map((user) => ({
+    ...user,
+    honorBadgeLabels: honorLabelsByProfileId[user.id] ?? [],
+  }));
 
   const { data: allHomeworks, error: homeworksError } = await supabase
     .from("homeworks")

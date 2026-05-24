@@ -1,3 +1,6 @@
+import type { StudentOfficerInfo } from "@/lib/class-officers";
+import { parseOfficerByStudentNameFromJson } from "@/lib/class-officers";
+
 /** 좌석 키 생성 (1-based row, col) */
 export function buildSeatKey(row: number, col: number): string {
   return `${row}-${col}`;
@@ -82,10 +85,24 @@ export type SeatingChartRecord = {
   col_count: number;
   aisle_after_columns: number[];
   seat_assignments: Record<string, string>;
+  officer_by_student_name: Record<string, StudentOfficerInfo> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
+
+/** 저장된 반·조 스냅샷 (없으면 null → 호출부에서 live 조회) */
+export function getOfficerSnapshotFromRecord(
+  record: SeatingChartRecord,
+): Record<string, StudentOfficerInfo> | null {
+  const parsed = parseOfficerByStudentNameFromJson(
+    record.officer_by_student_name ?? {},
+  );
+  if (Object.keys(parsed).length === 0) {
+    return null;
+  }
+  return parsed;
+}
 
 /** 목록·폼에서 사용하는 직렬화 타입 */
 export type SeatingChartListItem = {
