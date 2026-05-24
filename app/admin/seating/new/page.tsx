@@ -5,25 +5,29 @@ import { ArrowLeft } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { fetchGroupOptions } from "@/lib/fetch-group-options";
+import {
+  buildCourseScheduleMap,
+  buildSeatingChartDefaultTitle,
+} from "@/lib/seating-chart-title";
 import { Button } from "@/app/_components/ui/button";
 
 import AdminSubNav from "../../_components/AdminSubNav";
-import NewAssignmentForm from "../../_components/NewAssignmentForm";
+import SeatingChartForm from "../../_components/SeatingChartForm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "새 과제 등록",
-  description: "관리자 패널에서 새 숙제를 작성합니다.",
+  title: "자리배치도 작성",
+  description: "관리자 패널에서 새 자리배치도를 작성합니다.",
 };
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 /**
- * 관리자 - 새 과제 작성 페이지
+ * 관리자 - 자리배치도 작성 페이지
  */
-export default async function AdminNewAssignmentPage({
+export default async function AdminNewSeatingPage({
   searchParams,
 }: {
   searchParams: SearchParams;
@@ -54,18 +58,40 @@ export default async function AdminNewAssignmentPage({
     redirect("/home");
   }
 
-  const groupOptions = await fetchGroupOptions(supabase);
+  const [groupOptions, coursesResult] = await Promise.all([
+    fetchGroupOptions(supabase),
+    supabase
+      .from("training_courses")
+      .select(
+        "name, main_education_start_date, exclude_saturday, exclude_sunday, exclude_legal_holidays, exclude_substitute_holidays, custom_excluded_dates",
+      )
+      .eq("is_active", true),
+  ]);
 
-  // 탭에서 선택한 과정이 유효하면 대상 과정 기본값으로 사용
+  if (coursesResult.error) {
+    console.error("과정 일정 조회 오류:", coursesResult.error);
+  }
+
+  const courseSchedulesByGroupName = buildCourseScheduleMap(
+    coursesResult.data ?? [],
+  );
+
   const validGroupValues = new Set<string>(
     groupOptions.map((opt) => opt.value).filter(Boolean),
   );
   const initialGroupName =
     filterGroup && validGroupValues.has(filterGroup) ? filterGroup : "";
 
+  const initialSuggestedTitle = initialGroupName
+    ? buildSeatingChartDefaultTitle(
+        initialGroupName,
+        courseSchedulesByGroupName[initialGroupName],
+      )
+    : "";
+
   const listHref = filterGroup
-    ? `/admin/assignments?group=${encodeURIComponent(filterGroup)}`
-    : "/admin/assignments";
+    ? `/admin/seating?group=${encodeURIComponent(filterGroup)}`
+    : "/admin/seating";
 
   return (
     <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
@@ -74,16 +100,16 @@ export default async function AdminNewAssignmentPage({
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50">
-                새 과제 등록
+                자리배치도 작성
               </h1>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                관리자 패널에서 숙제를 작성합니다.
+                행·열·통로를 설정하고 학생을 배치하세요.
               </p>
             </div>
             <Link href={listHref}>
               <Button variant="outline">
                 <ArrowLeft className="size-4" />
-                숙제 리스트
+                목록
               </Button>
             </Link>
           </div>
@@ -93,13 +119,14 @@ export default async function AdminNewAssignmentPage({
           <AdminSubNav />
         </Suspense>
 
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 sm:p-6">
-          <Suspense fallback={<p className="text-sm text-zinc-500">로딩 중...</p>}>
-            <NewAssignmentForm
-              initialGroupName={initialGroupName}
-              groupOptions={groupOptions}
-            />
-          </Suspense>
+        <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 sm:p-6">
+          <SeatingChartForm
+            initialGroupName={initialGroupName}
+            initialSuggestedTitle={initialSuggestedTitle}
+            courseSchedulesByGroupName={courseSchedulesByGroupName}
+            listHref={listHref}
+            groupOptions={groupOptions}
+          />
         </div>
       </main>
     </div>

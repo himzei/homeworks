@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import SurveyTab from "@/app/_components/SurveyTab";
 
 import AdminSubNav from "../_components/AdminSubNav";
-import GroupTabs from "../_components/GroupTabs";
+import GroupTabsLoader from "../_components/GroupTabsLoader";
 
 // 동적 렌더링 강제 (그룹 선택에 따라 매 요청 다른 데이터)
 export const dynamic = "force-dynamic";
@@ -104,7 +104,7 @@ export default async function AdminSurveysPage({
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabs
+            <GroupTabsLoader
               selectedGroup={selectedGroupParam}
               studentCountsByGroup={studentCountsByGroup}
             />

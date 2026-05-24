@@ -18,7 +18,7 @@ import { LEGACY_GROUPS } from "@/lib/constants";
 import { Button } from "@/app/_components/ui/button";
 
 import AdminSubNav from "./_components/AdminSubNav";
-import GroupTabs from "./_components/GroupTabs";
+import GroupTabsLoader from "./_components/GroupTabsLoader";
 import StatCard from "./_components/StatCard";
 import AssignmentProgressCard, {
   type AssignmentProgressItem,
@@ -353,8 +353,11 @@ export default async function AdminDashboardPage({
                   <Plus className="size-4" />새 과제 등록
                 </Button>
               </Link>
-              <Link href="/home">
-                <Button variant="outline">홈으로 이동</Button>
+              <Link href="/admin/courses/new">
+                <Button variant="outline">
+                  <Plus className="size-4" />
+                  새 과정 등록
+                </Button>
               </Link>
             </div>
           </div>
@@ -368,7 +371,7 @@ export default async function AdminDashboardPage({
         {/* 과정(기수) 탭 필터 - 클릭한 그룹의 데이터만 하단에 표시됨 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabs
+            <GroupTabsLoader
               selectedGroup={selectedGroupParam}
               studentCountsByGroup={studentCountsByGroup}
             />

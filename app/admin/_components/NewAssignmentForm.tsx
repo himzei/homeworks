@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { GROUP_OPTIONS } from "@/lib/constants";
+import type { GroupOption } from "@/lib/fetch-group-options";
 import {
   filterTime24Input,
   normalizeTime24,
@@ -13,11 +14,15 @@ import {
 type NewAssignmentFormProps = {
   /** URL group 쿼리로 전달된 기본 대상 과정 */
   initialGroupName?: string;
+  /** 서버에서 조회한 과정 옵션 */
+  groupOptions?: GroupOption[];
 };
 
 export default function NewAssignmentForm({
   initialGroupName = "",
+  groupOptions,
 }: NewAssignmentFormProps) {
+  const resolvedGroupOptions = groupOptions ?? GROUP_OPTIONS;
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -302,7 +307,7 @@ export default function NewAssignmentForm({
           onChange={handleChange}
           className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
         >
-          {GROUP_OPTIONS.map((opt) => (
+          {resolvedGroupOptions.map((opt) => (
             <option key={opt.value || "empty"} value={opt.value}>
               {opt.label}
             </option>

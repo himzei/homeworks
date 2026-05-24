@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Users,
+  LayoutGrid,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +51,18 @@ const ADMIN_NAV_ITEMS = [
     href: "/admin/progress",
     label: "진행과정",
     icon: Users,
+    exact: false,
+  },
+  {
+    href: "/admin/seating",
+    label: "자리배치도",
+    icon: LayoutGrid,
+    exact: false,
+  },
+  {
+    href: "/admin/courses",
+    label: "과정 관리",
+    icon: BookOpen,
     exact: false,
   },
 ] as const;

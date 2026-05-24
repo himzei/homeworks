@@ -10,7 +10,7 @@ import { Button } from "@/app/_components/ui/button";
 import AssignmentList from "@/app/_components/AssignmentList";
 
 import AdminSubNav from "../_components/AdminSubNav";
-import GroupTabs from "../_components/GroupTabs";
+import GroupTabsLoader from "../_components/GroupTabsLoader";
 
 // 동적 렌더링 강제 (그룹별/세션별 데이터를 매 요청마다 새로 조회)
 export const dynamic = "force-dynamic";
@@ -177,7 +177,7 @@ export default async function AdminAssignmentsPage({
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabs
+            <GroupTabsLoader
               selectedGroup={selectedGroupParam}
               studentCountsByGroup={studentCountsByGroup}
             />

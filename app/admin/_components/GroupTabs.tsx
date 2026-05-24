@@ -4,12 +4,15 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { GROUP_OPTIONS } from "@/lib/constants";
+import type { GroupOption } from "@/lib/fetch-group-options";
 
 interface GroupTabsProps {
   /** 현재 선택된 그룹 값 (없으면 "전체") */
   selectedGroup: string | null;
   /** 그룹별 학생 수 집계 (key: group_name, "all" 키는 전체 학생 수) */
   studentCountsByGroup?: Record<string, number>;
+  /** 서버에서 조회한 과정 옵션 (없으면 constants 폴백) */
+  groupOptions?: GroupOption[];
 }
 
 /**
@@ -21,6 +24,7 @@ interface GroupTabsProps {
 export default function GroupTabs({
   selectedGroup,
   studentCountsByGroup = {},
+  groupOptions,
 }: GroupTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -28,8 +32,10 @@ export default function GroupTabs({
   // 라우팅 중 UI 응답성 유지를 위해 transition 사용
   const [isPending, startTransition] = useTransition();
 
-  // 빈 옵션 제외한 그룹 목록
-  const groupOptions = GROUP_OPTIONS.filter((opt) => opt.value);
+  // 빈 옵션 제외한 그룹 목록 (DB 연동 또는 constants 폴백)
+  const resolvedGroupOptions =
+    groupOptions?.filter((opt) => opt.value) ??
+    GROUP_OPTIONS.filter((opt) => opt.value);
   const isAllSelected = !selectedGroup || selectedGroup === "all";
 
   // 탭 클릭 → URL 업데이트
@@ -62,7 +68,7 @@ export default function GroupTabs({
           label="전체"
           count={studentCountsByGroup.all}
         />
-        {groupOptions.map((opt) => (
+        {resolvedGroupOptions.map((opt) => (
           <GroupTabButton
             key={opt.value}
             isActive={selectedGroup === opt.value}

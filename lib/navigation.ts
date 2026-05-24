@@ -2,6 +2,9 @@
 export const HOMEWORK_GUIDE_URL =
   "https://himzei.notion.site/13-2fcd0a6ad3d780468f31c3eff7e9a23b?source=copy_link";
 
+/** 블로그 페이지 */
+export const BLOG_PATH = "/blog";
+
 /** Git 기초 가이드 페이지 */
 export const GIT_HOW_PATH = "/git-how";
 
@@ -52,6 +55,12 @@ export const ASSIGNMENT_NAV_ITEM: HeaderNavItem = {
   ],
 };
 
+/** 블로그 메뉴 (로그인 여부와 관계없이 표시) */
+export const BLOG_NAV_ITEM: HeaderNavItem = {
+  href: BLOG_PATH,
+  label: "블로그",
+};
+
 /** 커뮤니티 드롭다운 */
 export const COMMUNITY_NAV_ITEM: HeaderNavItem = {
   label: "커뮤니티",
@@ -67,6 +76,7 @@ export const STUDENT_NAV_ITEMS: HeaderNavItem[] = [
   ASSIGNMENT_NAV_ITEM,
   COMMUNITY_NAV_ITEM,
   USAGE_GUIDE_NAV_ITEM,
+  BLOG_NAV_ITEM,
 ];
 
 /** 과제 섹션 서브메뉴 (히어로 하단 탭) */
@@ -153,7 +163,7 @@ export function getHeaderNavItems(options: {
     return STUDENT_NAV_ITEMS;
   }
 
-  return [...PUBLIC_NAV_ITEMS, USAGE_GUIDE_NAV_ITEM];
+  return [...PUBLIC_NAV_ITEMS, USAGE_GUIDE_NAV_ITEM, BLOG_NAV_ITEM];
 }
 
 /** 현재 경로·탭 기준 active 여부 */

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchProgressGridData } from "@/lib/fetch-progress-grid-data";
 
 import AdminSubNav from "../_components/AdminSubNav";
-import GroupTabs from "../_components/GroupTabs";
+import GroupTabsLoader from "../_components/GroupTabsLoader";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -122,7 +122,7 @@ export default async function AdminProgressPage({
 
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabs
+            <GroupTabsLoader
               selectedGroup={selectedGroupParam}
               studentCountsByGroup={studentCountsByGroup}
             />

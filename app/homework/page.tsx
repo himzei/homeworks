@@ -3,6 +3,7 @@ import TodayAssignments from "@/app/_components/TodayAssignments";
 import GroupSelector from "@/app/_components/GroupSelector";
 import { createClient } from "@/lib/supabase/server";
 import { fetchTodayAssignments } from "@/lib/fetch-today-assignments";
+import { fetchGroupOptions } from "@/lib/fetch-group-options";
 
 // 세션별로 다른 데이터를 보여주므로 캐싱 방지
 export const dynamic = "force-dynamic";
@@ -54,13 +55,20 @@ export default async function HomeworkPage({
     adminSelectedGroup,
   });
 
+  const adminGroupOptions = isAdmin
+    ? await fetchGroupOptions(supabase)
+    : undefined;
+
   return (
     <div className="flex min-h-full items-start justify-center">
       <div className="flex min-h-full w-full container flex-col py-4 sm:py-8 px-4 sm:px-8 sm:items-start">
         {/* 관리자용 과정 필터 */}
         {isAdmin && (
           <Suspense fallback={null}>
-            <GroupSelector selectedGroup={adminSelectedGroup} />
+            <GroupSelector
+              selectedGroup={adminSelectedGroup}
+              groupOptions={adminGroupOptions}
+            />
           </Suspense>
         )}
 

@@ -1,5 +1,6 @@
 /**
- * 과정(그룹) 선택 옵션 - 숙제 생성, 관리자 필터 등에서 공통 사용
+ * 과정(그룹) 선택 옵션 — DB(training_courses) 미적용 시 폴백용
+ * 운영 환경에서는 lib/fetch-group-options.ts 로 DB에서 조회한다.
  */
 export const GROUP_OPTIONS = [
   { value: "", label: "선택하세요" },
