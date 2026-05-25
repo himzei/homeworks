@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isApprovedMember } from "@/lib/profile-approval";
+
+export const metadata: Metadata = {
+  title: "과제 홈",
+  robots: { index: false, follow: false },
+};
 
 // 세션별로 다른 데이터를 보여주므로 캐싱 방지
 export const dynamic = "force-dynamic";

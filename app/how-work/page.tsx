@@ -71,6 +71,19 @@ export default function WorkHowPage() {
   return (
     <div className="min-h-full bg-zinc-50 dark:bg-zinc-950 py-8 px-4 sm:px-6 lg:px-8">
       <div className="container max-w-3xl">
+        <header className="mb-8">
+          <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
+            빅데이터 전문가 양성과정
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-black dark:text-zinc-50 mb-3">
+            과제 제출 방법
+          </h1>
+          <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            GitHub Secret Gist로 과제를 작성하고 플랫폼에 URL을 제출하는 전체
+            흐름을 안내합니다.
+          </p>
+        </header>
+
         {/* 요약 카드 */}
         <section className="bg-gradient-to-br from-blue-50 to-emerald-50 dark:from-blue-900/20 dark:to-emerald-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-6 mb-8">
           <h2 className="text-lg font-semibold text-black dark:text-zinc-50 mb-3">

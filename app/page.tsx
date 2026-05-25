@@ -2,32 +2,35 @@ import MainHero from "@/app/_components/MainHero";
 import TodayAssignments from "@/app/_components/TodayAssignments";
 import { createClient } from "@/lib/supabase/server";
 import { fetchTodayAssignments } from "@/lib/fetch-today-assignments";
+import { buildHomePageJsonLd, JsonLd } from "@/lib/seo/json-ld";
+import { createPageMetadata } from "@/lib/seo/site";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const homeDescription =
+  "빅데이터 전문가 양성과정으로 AI·데이터 분석 실무를 배우세요. K-Digital Training 기반 교육, Git 과제 제출·학습 관리 플랫폼.";
+
+/** 랜딩(/) — 빅데이터 전문가 양성과정 메인 색인 페이지 */
+export const metadata = {
+  ...createPageMetadata({
+    title: "빅데이터 전문가 양성과정",
+    description: homeDescription,
+    path: "/",
+  }),
+  // template 중복 방지: 메인 페이지만 절대 제목 사용
+  title: {
+    absolute: "빅데이터 전문가 양성과정 | K-Digital Training AI·데이터 분석 교육",
+  },
+};
 
 export default async function Home() {
   const supabase = await createClient();
   const todayAssignments = await fetchTodayAssignments(supabase);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Course",
-    name: "빅데이터 전문가 양성과정",
-    description:
-      "빅데이터 전문가 양성과정으로 AI·데이터 분석부터 실무 프로젝트까지 체계적으로 배웁니다. K-Digital Training 기반 전문가 교육.",
-    provider: {
-      "@type": "Organization",
-      name: "빅데이터 전문가 양성과정",
-    },
-  };
-
   return (
     <div className="min-h-full bg-white dark:bg-black">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd graph={buildHomePageJsonLd()} />
 
       <MainHero />
 

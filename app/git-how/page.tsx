@@ -22,6 +22,19 @@ export default function GitHowPage() {
   return (
     <div className="min-h-full bg-zinc-50 dark:bg-zinc-950 py-8 px-4 sm:px-6 lg:px-8">
       <div className="container">
+        <header className="mb-8 max-w-3xl">
+          <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
+            빅데이터 전문가 양성과정
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-black dark:text-zinc-50 mb-3">
+            깃(Git)이란?
+          </h1>
+          <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            과제 제출 전 알아두면 좋은 Git·GitHub·Gist 기초를 단계별로
+            정리했습니다.
+          </p>
+        </header>
+
         {/* 섹션 1: Git이 뭔가요? */}
         <section className="bg-white dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 p-6 mb-6">
           <button

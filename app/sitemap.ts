@@ -1,42 +1,18 @@
 import type { MetadataRoute } from "next";
+import { PUBLIC_SITEMAP_PATHS, getSiteUrl } from "@/lib/seo/site";
 
 /**
- * sitemap.xml 생성 - 검색엔진에 주요 페이지 목록 제공
- * 빅데이터 전문가 양성과정 사이트 SEO 지원
+ * sitemap.xml — Google에 색인할 공개 페이지만 등록
+ * (회원 전용·리다이렉트 경로는 제외)
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com";
+  const baseUrl = getSiteUrl();
+  const lastModified = new Date();
 
-  return [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 1,
-    },
-    {
-      url: `${baseUrl}/home`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/git-how`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/how-work`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/blog`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-  ];
+  return PUBLIC_SITEMAP_PATHS.map(({ path, changeFrequency, priority }) => ({
+    url: `${baseUrl}${path === "/" ? "" : path}`,
+    lastModified,
+    changeFrequency,
+    priority,
+  }));
 }

@@ -17,10 +17,10 @@ export default function Footer() {
           {/* 브랜드 */}
           <div className="space-y-3 sm:col-span-2 lg:col-span-1">
             <Link
-              href="/home"
+              href="/"
               className="inline-block text-base font-semibold text-brand-navy hover:opacity-80 transition-opacity"
             >
-              AI 빅데이터 전문가 양성과정
+              빅데이터 전문가 양성과정
             </Link>
             <p className="text-sm leading-relaxed text-brand-navy/70 max-w-sm">
               K-Digital Training 기반 빅데이터·AI 실무 교육 과제 제출 및

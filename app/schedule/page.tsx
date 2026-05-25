@@ -14,14 +14,18 @@ import {
   type TrainingCourseRecord,
 } from "@/lib/courses";
 import { cn } from "@/lib/utils";
+import { createPageMetadata } from "@/lib/seo/site";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export const metadata = {
+export const metadata = createPageMetadata({
   title: "교육일정",
-  description: "소속 과정의 사전·본교육 일정을 캘린더로 확인합니다.",
-};
+  description:
+    "빅데이터 전문가 양성과정 교육생 전용 — 사전·본교육 일정 캘린더.",
+  path: "/schedule",
+  noIndex: true,
+});
 
 function buildPeriodSummary(detail: TrainingCourseDetail): string | null {
   const periodParts = [

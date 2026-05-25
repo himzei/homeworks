@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
+import { absoluteUrl } from "@/lib/seo/site";
 
 /**
- * robots.txt 생성 - 검색엔진 크롤러가 수집할 수 있는 경로 안내
- * 빅데이터 전문가 양성과정 사이트 SEO 지원
+ * robots.txt — 크롤러 허용·차단 경로
+ * 회원·관리자·API는 색인에서 제외
  */
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -11,11 +12,21 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: [
         "/api/",
-        "/assignment/new",
-        "/assignment/edit/",
-        "/admin/assignments/new",
+        "/admin/",
+        "/profile",
+        "/pending-approval",
+        "/homework",
+        "/progress",
+        "/survey",
+        "/schedule",
+        "/vote/",
+        "/ladder/",
+        "/user/",
+        "/assignment/",
+        "/home",
       ],
     },
-    sitemap: "/sitemap.xml",
+    sitemap: absoluteUrl("/sitemap.xml"),
+    host: absoluteUrl("/"),
   };
 }

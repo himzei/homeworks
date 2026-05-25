@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HOW_WORK_PATH } from "@/lib/navigation";
+import { createPageMetadata } from "@/lib/seo/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPageMetadata({
   title: "블로그",
   description:
-    "빅데이터 전문가 양성과정 학습 노트, 실습 팁, 교육 소식을 확인할 수 있습니다.",
-};
+    "빅데이터 전문가 양성과정 블로그 — 학습 노트, 데이터·AI 실습 팁, K-Digital Training 교육 소식.",
+  path: "/blog",
+});
 
 /** 블로그 목록 페이지 (추후 글 목록 연동 예정) */
 export default function BlogPage() {
@@ -21,7 +23,7 @@ export default function BlogPage() {
             블로그
           </h1>
           <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            학습 노트, 실습 팁, 교육 소식을 모아두는 공간입니다.
+            빅데이터·AI 학습 노트, 실습 팁, 교육 소식을 모아두는 공간입니다.
           </p>
         </header>
 
