@@ -143,13 +143,14 @@ const EVALUATION_COLUMN_CELL_STYLES = {
       "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 focus:ring-blue-500",
   },
   extra: {
+  // 추가 필드: 총합(파란색)·과제(흰색)와 구분되는 앰버 톤
     headerContainer:
-      "bg-zinc-50 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-700",
-    headerTitle: "text-zinc-800 dark:text-zinc-200",
+      "bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-700",
+    headerTitle: "text-amber-900 dark:text-amber-200",
     scoreCell:
-      "bg-zinc-50/90 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-700",
+      "bg-amber-50/80 dark:bg-amber-900/15 border-amber-200 dark:border-amber-700",
     scoreInput:
-      "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 focus:ring-zinc-500",
+      "border-amber-300 dark:border-amber-600 bg-white dark:bg-zinc-800 text-amber-900 dark:text-amber-100 focus:ring-amber-500",
   },
 } as const;
 
