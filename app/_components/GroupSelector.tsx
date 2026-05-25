@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { GROUP_OPTIONS } from "@/lib/constants";
 import type { GroupOption } from "@/lib/fetch-group-options";
+import { cn } from "@/lib/utils";
 
 /** "전체"를 나타내는 값 (URL에 표시하지 않음) */
 export const GROUP_ALL = "all";
@@ -12,6 +13,10 @@ interface GroupSelectorProps {
   selectedGroup: string | null;
   /** 서버에서 조회한 과정 옵션 */
   groupOptions?: GroupOption[];
+  /** 래퍼 추가 클래스 (여백·정렬 조정) */
+  className?: string;
+  /** select 추가 클래스 (높이·너비 등) */
+  selectClassName?: string;
 }
 
 /**
@@ -20,6 +25,8 @@ interface GroupSelectorProps {
 export default function GroupSelector({
   selectedGroup,
   groupOptions,
+  className,
+  selectClassName,
 }: GroupSelectorProps) {
   const resolvedGroupOptions =
     groupOptions?.filter((opt) => opt.value) ??
@@ -49,18 +56,21 @@ export default function GroupSelector({
     !selectedGroup || selectedGroup === GROUP_ALL ? GROUP_ALL : selectedGroup;
 
   return (
-    <div className="flex items-center gap-2 mb-4 sm:mb-6">
-      <label
-        htmlFor="admin-group-select"
-        className="text-sm font-medium text-zinc-700 dark:text-zinc-300 shrink-0"
-      >
-        과정 필터:
-      </label>
+    <div
+      className={cn(
+        "flex items-center mb-4 sm:mb-6",
+        className,
+      )}
+    >
       <select
         id="admin-group-select"
         value={displayValue}
         onChange={handleChange}
-        className="px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        aria-label="과정 선택"
+        className={cn(
+          "px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent",
+          selectClassName,
+        )}
       >
         <option value={GROUP_ALL}>전체</option>
         {resolvedGroupOptions.map((opt) => (

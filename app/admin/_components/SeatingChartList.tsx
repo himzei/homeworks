@@ -52,25 +52,36 @@ export default function SeatingChartList({
     router.refresh();
   };
 
+  const writeButton = (
+    <Button
+      asChild
+      className="bg-blue-500 hover:bg-blue-600 text-white shrink-0"
+    >
+      <Link href={newChartHref}>
+        <PencilLine className="size-4" />
+        글쓰기
+      </Link>
+    </Button>
+  );
+
   if (charts.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center bg-white dark:bg-zinc-950">
-        <LayoutGrid className="mx-auto size-10 text-zinc-300 dark:text-zinc-600" />
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-          아직 등록된 자리배치도가 없습니다.
-        </p>
-        <Button asChild className="mt-4">
-          <Link href={newChartHref}>
-            <PencilLine className="size-4" />
-            첫 자리배치도 작성
-          </Link>
-        </Button>
+      <div className="space-y-4">
+        <div className="flex justify-end">{writeButton}</div>
+        <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center bg-white dark:bg-zinc-950">
+          <LayoutGrid className="mx-auto size-10 text-zinc-300 dark:text-zinc-600" />
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            아직 등록된 자리배치도가 없습니다.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <div className="space-y-4">
+      <div className="flex justify-end">{writeButton}</div>
+      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
       {charts.map((chart) => (
         <li
           key={chart.id}
@@ -121,6 +132,7 @@ export default function SeatingChartList({
           </div>
         </li>
       ))}
-    </ul>
+      </ul>
+    </div>
   );
 }

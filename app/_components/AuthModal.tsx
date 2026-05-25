@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  isApprovedMember,
+  PROFILE_APPROVAL_STATUS,
+} from "@/lib/profile-approval";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -94,7 +98,9 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
       if (data.user) {
         // 세션이 있으면 즉시 로그인됨 (이메일 확인 불필요 설정) → 프로필로 이동
         if (data.session) {
-          setSuccess("회원가입이 완료되었습니다! 프로필 페이지로 이동합니다.");
+          setSuccess(
+            "회원가입이 완료되었습니다. 프로필을 입력한 뒤 관리자 승인을 기다려 주세요.",
+          );
           setTimeout(() => {
             handleClose();
             router.push("/profile");
@@ -132,17 +138,23 @@ export default function AuthModal({ isOpen, onClose, mode }: AuthModalProps) {
 
       if (data.user) {
         // profiles 테이블에서 현재 로그인한 유저가 있는지 확인
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from("profiles")
-          .select("id")
+          .select("id, role, approval_status")
           .eq("id", data.user.id)
-          .single();
+          .maybeSingle();
 
-        // 프로필이 있으면 메인페이지로, 없으면 프로필 페이지로 이동
-        // profile이 null이 아니면 프로필이 존재하는 것으로 판단
-        // PGRST116은 데이터가 없을 때 발생하는 정상적인 에러 코드이므로 무시
-        const hasProfile = profile !== null;
-        const redirectPath = hasProfile ? "/" : "/profile";
+        // 프로필 없음 → 프로필 입력, 승인 대기/거절 → 안내 페이지
+        let redirectPath = "/profile";
+        if (profile) {
+          if (profile.approval_status === PROFILE_APPROVAL_STATUS.rejected) {
+            redirectPath = "/pending-approval?status=rejected";
+          } else if (!isApprovedMember(profile)) {
+            redirectPath = "/pending-approval";
+          } else {
+            redirectPath = "/homework";
+          }
+        }
 
         setSuccess("로그인 성공!");
         // 모달 닫기 후 적절한 페이지로 이동

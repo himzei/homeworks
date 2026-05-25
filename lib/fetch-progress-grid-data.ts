@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
+
 import { CLASS_OFFICER_ROLE } from "@/lib/class-officers";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { LEGACY_GROUPS } from "@/lib/constants";
@@ -131,6 +133,7 @@ export async function fetchProgressGridData(
     .from("profiles")
     .select("id, name, role, group_name, class_officer_role, team_number")
     .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
     .order("created_at", { ascending: true });
 
   if (filterGroup) {

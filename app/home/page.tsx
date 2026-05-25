@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isApprovedMember } from "@/lib/profile-approval";
 
 // 세션별로 다른 데이터를 보여주므로 캐싱 방지
 export const dynamic = "force-dynamic";
@@ -18,6 +19,20 @@ export default async function HomeRedirectPage() {
   } = await supabase.auth.getUser();
 
   if (currentUser?.id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, approval_status")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+
+    if (!profile) {
+      redirect("/profile");
+    }
+
+    if (!isApprovedMember(profile)) {
+      redirect("/pending-approval");
+    }
+
     redirect("/homework");
   }
 

@@ -7,6 +7,11 @@ import {
   formValuesToDbPayload,
   type CourseFormValues,
 } from "@/lib/courses";
+import {
+  parseCustomExcludedDatesInput,
+  parseCustomHolidays,
+  parseEventSchedules,
+} from "@/lib/course-schedule";
 import { getServiceRoleClient } from "@/lib/supabase/service-role";
 
 function parseCourseFormBody(body: unknown): CourseFormValues | null {
@@ -62,10 +67,17 @@ function parseCourseFormBody(body: unknown): CourseFormValues | null {
       typeof raw.excludeSubstituteHolidays === "boolean"
         ? raw.excludeSubstituteHolidays
         : defaults.excludeSubstituteHolidays,
-    customExcludedDatesInput:
-      typeof raw.customExcludedDatesInput === "string"
-        ? raw.customExcludedDatesInput
-        : defaults.customExcludedDatesInput,
+    customHolidays: Array.isArray(raw.customHolidays)
+      ? parseCustomHolidays(raw.customHolidays)
+      : typeof raw.customExcludedDatesInput === "string"
+        ? parseCustomHolidays(
+            [],
+            parseCustomExcludedDatesInput(raw.customExcludedDatesInput),
+          )
+        : defaults.customHolidays,
+    eventSchedules: Array.isArray(raw.eventSchedules)
+      ? parseEventSchedules(raw.eventSchedules)
+      : defaults.eventSchedules,
   };
 }
 

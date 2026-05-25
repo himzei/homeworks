@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { Crown, PencilLine } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { fetchClassRoleStudents } from "@/lib/class-officers";
@@ -10,9 +8,6 @@ import {
   toClassRoleSnapshotListItem,
   type ClassRoleSnapshotRecord,
 } from "@/lib/class-role-snapshots";
-import { Button } from "@/app/_components/ui/button";
-
-import AdminSubNav from "../_components/AdminSubNav";
 import ClassPresidentPanel from "../_components/ClassPresidentPanel";
 import HonorBadgeSectionsManager from "../_components/HonorBadgeSectionsManager";
 import ClassRoleSnapshotList from "../_components/ClassRoleSnapshotList";
@@ -116,10 +111,6 @@ export default async function AdminClassRolesPage({
     }
   }
 
-  const scopeDescription = filterGroup
-    ? `${filterGroup} · 반장은 아래에서, 조 편성은 게시판 글로 관리합니다.`
-    : "모든 과정의 조 편성 글을 표시합니다.";
-
   const groupQuery = filterGroup
     ? `?group=${encodeURIComponent(filterGroup)}`
     : "";
@@ -129,43 +120,7 @@ export default async function AdminClassRolesPage({
     : "/admin/class-roles/new";
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50 flex items-center gap-2">
-                <Crown className="size-7 shrink-0 text-amber-600 dark:text-amber-400" />
-                반·조 관리
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                {scopeDescription} 저장 시 학생 프로필·진행과정에 반영됩니다.
-              </p>
-            </div>
-            {filterGroup ? (
-              <Link href={newSnapshotHref}>
-                <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-                  <PencilLine className="size-4" />
-                  글쓰기
-                </Button>
-              </Link>
-            ) : (
-              <Button
-                className="bg-blue-500 hover:bg-blue-600 text-white opacity-60 cursor-not-allowed"
-                disabled
-                title="기수 탭을 선택한 뒤 작성할 수 있습니다"
-              >
-                <PencilLine className="size-4" />
-                글쓰기
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
+    <>
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
             <GroupTabsLoader
@@ -199,7 +154,6 @@ export default async function AdminClassRolesPage({
           newSnapshotHref={newSnapshotHref}
           groupQuery={groupQuery}
         />
-      </main>
-    </div>
+    </>
   );
 }

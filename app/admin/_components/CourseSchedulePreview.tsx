@@ -93,8 +93,8 @@ export default function CourseSchedulePreview({
         return false;
       })() ? (
         <p className="text-xs text-amber-700 dark:text-amber-400">
-          일부 연도의 법정공휴일 데이터가 없습니다. 추가 휴일란에 직접
-          입력해 주세요.
+          일부 연도의 법정공휴일 데이터가 없습니다. 휴일 직접 입력란에
+          날짜와 이름을 등록해 주세요.
         </p>
       ) : null}
     </div>

@@ -1,15 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { Plus } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { buildAdminAssignmentsListPath } from "@/lib/admin/admin-assignments-path";
 import { LEGACY_GROUPS } from "@/lib/constants";
-import { Button } from "@/app/_components/ui/button";
 import AssignmentList from "@/app/_components/AssignmentList";
 
-import AdminSubNav from "../_components/AdminSubNav";
 import GroupTabsLoader from "../_components/GroupTabsLoader";
 
 // 동적 렌더링 강제 (그룹별/세션별 데이터를 매 요청마다 새로 조회)
@@ -130,15 +126,6 @@ export default async function AdminAssignmentsPage({
     }),
   );
 
-  // 5) 헤더 안내 문구
-  const scopeDescription = filterGroup
-    ? `${filterGroup} · 해당 과정과 공통 과제를 표시합니다.`
-    : "모든 과정의 과제를 표시합니다.";
-
-  const newAssignmentHref = filterGroup
-    ? `/admin/assignments/new?group=${encodeURIComponent(filterGroup)}`
-    : "/admin/assignments/new";
-
   // 수정 완료 후 돌아올 목록 URL (그룹·포커스 과제 유지)
   const assignmentsListPath = buildAdminAssignmentsListPath({
     filterGroup,
@@ -146,34 +133,7 @@ export default async function AdminAssignmentsPage({
   });
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        {/* 페이지 헤더 */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50">
-                숙제 리스트
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                {scopeDescription}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link href={newAssignmentHref}>
-                <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-                  <Plus className="size-4" />새 과제 등록
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* 관리자 패널 내 페이지 전환 */}
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
+    <>
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
@@ -190,7 +150,6 @@ export default async function AdminAssignmentsPage({
           focusAssignmentId={focusAssignmentId}
           assignmentsListPath={assignmentsListPath}
         />
-      </main>
-    </div>
+    </>
   );
 }

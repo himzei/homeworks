@@ -9,15 +9,11 @@ import {
   ClipboardCheck,
   FileText,
   CheckCircle2,
-  Plus,
   ListChecks,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { LEGACY_GROUPS } from "@/lib/constants";
-import { Button } from "@/app/_components/ui/button";
-
-import AdminSubNav from "./_components/AdminSubNav";
 import GroupTabsLoader from "./_components/GroupTabsLoader";
 import StatCard from "./_components/StatCard";
 import AssignmentProgressCard, {
@@ -316,12 +312,6 @@ export default async function AdminDashboardPage({
   }));
 
   // 8) 화면에 표시할 그룹 라벨 (탭이 짧은 라벨이라 헤더에선 풀네임 노출)
-  const groupLabel = filterGroup ?? "전체 과정";
-  // 현재 보고 있는 데이터 범위 안내 문구
-  const scopeDescription = filterGroup
-    ? "선택한 과정과 그룹 미지정 회원을 함께 표시합니다."
-    : "모든 과정의 데이터를 합산해 표시합니다.";
-
   const newAssignmentHref = filterGroup
     ? `/admin/assignments/new?group=${encodeURIComponent(filterGroup)}`
     : "/admin/assignments/new";
@@ -331,43 +321,7 @@ export default async function AdminDashboardPage({
     : "/admin/assignments";
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        {/* 페이지 헤더 */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50">
-                관리자 대시보드
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {groupLabel}
-                </span>{" "}
-                · {scopeDescription}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link href={newAssignmentHref}>
-                <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-                  <Plus className="size-4" />새 과제 등록
-                </Button>
-              </Link>
-              <Link href="/admin/courses/new">
-                <Button variant="outline">
-                  <Plus className="size-4" />
-                  새 과정 등록
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* 관리자 패널 내 페이지 전환 */}
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
+    <>
         {/* 과정(기수) 탭 필터 - 클릭한 그룹의 데이터만 하단에 표시됨 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
@@ -524,8 +478,7 @@ export default async function AdminDashboardPage({
             </DashboardSection>
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }
 

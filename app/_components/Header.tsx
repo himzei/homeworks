@@ -28,7 +28,7 @@ function HeaderNavWithSession({
 }
 
 const navFallback = (
-  <div className="h-9 text-sm text-brand-cream/50">메뉴 로딩...</div>
+  <div className="h-10 text-base text-white/70">메뉴 로딩...</div>
 );
 
 /** 계정 영역 (로그인/아바타) */

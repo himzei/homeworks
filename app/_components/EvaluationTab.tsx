@@ -4,11 +4,17 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   ChevronDown,
   ChevronUp,
+  Download,
   GripVertical,
+  Loader2,
   Trash2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin } from "@/lib/auth/SessionProvider";
+import {
+  downloadElementAsPng,
+  sanitizeDownloadFilename,
+} from "@/lib/download-element-as-image";
 
 // 과제 데이터 타입 정의
 interface Assignment {
@@ -314,6 +320,8 @@ export default function EvaluationTab({
   const [deletingFieldId, setDeletingFieldId] = useState<string | null>(null);
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  const gridExportRef = useRef<HTMLDivElement>(null);
 
   const isFieldActionBusy =
     isReorderingFields ||
@@ -468,6 +476,7 @@ export default function EvaluationTab({
         let profilesQuery = supabase
           .from("profiles")
           .select("id, name, role")
+          .eq("approval_status", "approved")
           .order("created_at", { ascending: true });
 
         if (selectedGroup) {
@@ -1110,6 +1119,53 @@ export default function EvaluationTab({
     document.body.removeChild(link);
   };
 
+  /** 평가 그리드를 PNG로 저장 (CSV 버튼 옆) */
+  const handleDownloadImage = useCallback(async () => {
+    const element = gridExportRef.current;
+    if (!element || users.length === 0) return;
+
+    setIsDownloadingImage(true);
+
+    // sticky 헤더·이름 열은 캡처 시 레이아웃이 깨질 수 있어 잠시 해제
+    const stickySelectors =
+      ".evaluation-grid-sticky-corner, .evaluation-grid-sticky-header, .evaluation-grid-sticky-name";
+    const stickyNodes = element.querySelectorAll(stickySelectors);
+    const restoreStickyStyles: Array<() => void> = [];
+
+    stickyNodes.forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const previousPosition = node.style.position;
+      node.style.position = "static";
+      restoreStickyStyles.push(() => {
+        if (previousPosition) {
+          node.style.position = previousPosition;
+        } else {
+          node.style.removeProperty("position");
+        }
+      });
+    });
+
+    try {
+      const groupLabel = selectedGroup
+        ? sanitizeDownloadFilename(selectedGroup)
+        : "전체";
+      const dateLabel = new Date().toISOString().slice(0, 10);
+      await downloadElementAsPng(
+        element,
+        `${groupLabel}_과제평가_${dateLabel}.png`,
+      );
+    } catch {
+      window.alert("이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      for (let index = restoreStickyStyles.length - 1; index >= 0; index -= 1) {
+        restoreStickyStyles[index]();
+      }
+      setIsDownloadingImage(false);
+    }
+  }, [selectedGroup, users.length]);
+
+  const canExportGrid = users.length > 0 && sortedGridColumns.length > 0;
+
   // 그리드 열 템플릿 (이름 · 총합 · 날짜순 정렬된 점수 열 — 필드 박스 너비 통일)
   const scoreColumnWidths = sortedGridColumns
     .map(() => EVALUATION_FIELD_COLUMN_WIDTH)
@@ -1216,24 +1272,31 @@ export default function EvaluationTab({
             <button
               type="button"
               onClick={handleDownloadCSV}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors flex items-center gap-2"
+              disabled={!canExportGrid}
+              data-export-ignore
+              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
+              <Download className="size-4" aria-hidden />
               CSV 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDownloadImage()}
+              disabled={!canExportGrid || isDownloadingImage}
+              data-export-ignore
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDownloadingImage ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  저장 중...
+                </>
+              ) : (
+                <>
+                  <Download className="size-4" aria-hidden />
+                  이미지 다운로드
+                </>
+              )}
             </button>
             {isLoadingExtraFields ? (
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -1435,9 +1498,31 @@ export default function EvaluationTab({
         ) : null}
       </div>
 
-      {/* 평가 그리드 (1행·1열 고정 스크롤) */}
-      <div className="w-full bg-zinc-50 dark:bg-black rounded-lg p-2">
-        <div className="evaluation-grid-scroll rounded-lg">
+      {/* 평가 그리드 (1행·1열 고정 스크롤) — PNG 캡처 영역 */}
+      <div
+        ref={gridExportRef}
+        className="w-full bg-zinc-50 dark:bg-black rounded-lg p-2 sm:p-4"
+      >
+        <div className="mb-3 space-y-1 px-1">
+          <p className="text-base font-bold text-black dark:text-zinc-50">
+            과제 평가
+          </p>
+          {selectedGroup ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {selectedGroup}
+            </p>
+          ) : null}
+          {filterStartDate && filterEndDate ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              기간 {filterStartDate.replace(/-/g, ". ")} ~{" "}
+              {filterEndDate.replace(/-/g, ". ")}
+            </p>
+          ) : null}
+        </div>
+        <div
+          className="evaluation-grid-scroll rounded-lg"
+          data-export-expand
+        >
           <div className="inline-block min-w-full pt-2">
             <div
               className="inline-grid gap-2"

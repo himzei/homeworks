@@ -100,6 +100,41 @@ export function parseOfficerByStudentNameFromJson(
   return map;
 }
 
+/**
+ * 조 편성이 없을 때 team_number·조장 표시 제거 (반장·명예 배지는 유지)
+ * profiles에 남은 team_number가 자리배치도에 잘못 노출되는 것을 방지
+ */
+export function stripTeamBadgesFromOfficerMap(
+  officerByStudentName: Record<string, StudentOfficerInfo>,
+): Record<string, StudentOfficerInfo> {
+  const result: Record<string, StudentOfficerInfo> = {};
+
+  for (const [name, info] of Object.entries(officerByStudentName)) {
+    const honorBadgeLabels = info.honorBadgeLabels?.filter(Boolean) ?? [];
+    const next: StudentOfficerInfo = {
+      classOfficerRole: info.classOfficerRole,
+      teamNumber: null,
+      ...(honorBadgeLabels.length > 0 ? { honorBadgeLabels } : {}),
+    };
+
+    if (next.classOfficerRole || honorBadgeLabels.length > 0) {
+      result[name] = next;
+    }
+  }
+
+  return result;
+}
+
+/** 조 편성 적용 여부에 따라 반·조 배지 표시 */
+export function applyTeamBadgeVisibility(
+  officerByStudentName: Record<string, StudentOfficerInfo>,
+  showTeamBadges: boolean,
+): Record<string, StudentOfficerInfo> {
+  return showTeamBadges
+    ? officerByStudentName
+    : stripTeamBadgesFromOfficerMap(officerByStudentName);
+}
+
 /** 조별 조장 id (team_number → user id) */
 function buildTeamLeaderIdByTeam(
   students: ClassRoleStudent[],

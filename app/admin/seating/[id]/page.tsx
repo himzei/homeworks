@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Suspense } from "react";
-import { ArrowLeft, LayoutGrid, PencilLine } from "lucide-react";
+import { ArrowLeft, PencilLine } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -10,13 +9,16 @@ import {
   fetchSeatingStudents,
 } from "@/lib/fetch-group-students";
 import {
+  applyTeamBadgeVisibility,
   buildOfficerInfoByStudentName,
   fetchClassRoleStudents,
   fetchOfficersByStudentNames,
   mergeHonorBadgesIntoOfficerByStudentName,
 } from "@/lib/class-officers";
+import { isGroupTeamAssignmentActive } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import {
+  buildAvatarUrlByName,
   buildProfileIdByName,
   countAssignedSeats,
   getAssignedStudentNames,
@@ -25,7 +27,6 @@ import {
 } from "@/lib/seating";
 import { Button } from "@/app/_components/ui/button";
 
-import AdminSubNav from "../../_components/AdminSubNav";
 import SeatingChartDetailArticle from "../../_components/SeatingChartDetailArticle";
 
 export const dynamic = "force-dynamic";
@@ -122,17 +123,15 @@ export default async function AdminSeatingDetailPage({
   const editHref = `/admin/seating/${id}/edit${groupQuery}`;
   const createdAtLabel = dateFormatter.format(new Date(record.created_at));
 
-  // 이름 → 프로필 id (상세보기에서 이름 클릭 시 이동)
-  const profileIdByName = record.group_name
-    ? buildProfileIdByName(
-        await fetchSeatingStudents(supabase, record.group_name),
-      )
-    : buildProfileIdByName(
-        await fetchProfileIdsByNames(
-          supabase,
-          getAssignedStudentNames(seatAssignments),
-        ),
+  // 이름 → 프로필 id·이미지 (상세보기 링크·좌석 원)
+  const seatingStudents = record.group_name
+    ? await fetchSeatingStudents(supabase, record.group_name)
+    : await fetchProfileIdsByNames(
+        supabase,
+        getAssignedStudentNames(seatAssignments),
       );
+  const profileIdByName = buildProfileIdByName(seatingStudents);
+  const avatarUrlByName = buildAvatarUrlByName(seatingStudents);
 
   const roleStudents = record.group_name
     ? await fetchClassRoleStudents(supabase, record.group_name)
@@ -156,62 +155,51 @@ export default async function AdminSeatingDetailPage({
           getAssignedStudentNames(seatAssignments),
         ));
 
-  const officerByStudentName = mergeHonorBadgesIntoOfficerByStudentName(
-    baseOfficerByStudentName,
-    roleStudents,
-    honorLabelsByProfileId,
+  const showTeamBadges = record.group_name
+    ? await isGroupTeamAssignmentActive(supabase, record.group_name)
+    : false;
+
+  const officerByStudentName = applyTeamBadgeVisibility(
+    mergeHonorBadgesIntoOfficerByStudentName(
+      baseOfficerByStudentName,
+      roleStudents,
+      honorLabelsByProfileId,
+    ),
+    showTeamBadges,
   );
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50 flex items-center gap-2">
-                <LayoutGrid className="size-7 shrink-0" />
-                자리배치도
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                저장된 자리배치도를 확인합니다.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 shrink-0">
-              <Link href={editHref}>
-                <Button variant="outline">
-                  <PencilLine className="size-4" />
-                  수정
-                </Button>
-              </Link>
-              <Link href={listHref}>
-                <Button variant="outline">
-                  <ArrowLeft className="size-4" />
-                  목록
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
+    <>
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
+        <Link href={editHref}>
+          <Button variant="outline">
+            <PencilLine className="size-4" />
+            수정
+          </Button>
+        </Link>
+        <Link href={listHref}>
+          <Button variant="outline">
+            <ArrowLeft className="size-4" />
+            목록
+          </Button>
+        </Link>
+      </div>
 
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
-        <SeatingChartDetailArticle
-          title={record.title}
-          createdAtLabel={createdAtLabel}
-          createdAtIso={record.created_at}
-          groupName={record.group_name}
-          rowCount={record.row_count}
-          colCount={record.col_count}
-          aisleAfterColumns={record.aisle_after_columns ?? []}
-          seatAssignments={seatAssignments}
-          assignedCount={assignedCount}
-          totalSeats={totalSeats}
-          profileIdByName={profileIdByName}
-          officerByStudentName={officerByStudentName}
-        />
-      </main>
-    </div>
+      <SeatingChartDetailArticle
+        title={record.title}
+        createdAtLabel={createdAtLabel}
+        createdAtIso={record.created_at}
+        groupName={record.group_name}
+        rowCount={record.row_count}
+        colCount={record.col_count}
+        aisleAfterColumns={record.aisle_after_columns ?? []}
+        seatAssignments={seatAssignments}
+        assignedCount={assignedCount}
+        totalSeats={totalSeats}
+        profileIdByName={profileIdByName}
+        avatarUrlByName={avatarUrlByName}
+        officerByStudentName={officerByStudentName}
+      />
+    </>
   );
 }

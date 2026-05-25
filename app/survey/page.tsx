@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import SurveyTab from "@/app/_components/SurveyTab";
 import GroupSelector from "@/app/_components/GroupSelector";
 import { createClient } from "@/lib/supabase/server";
+import { requireApprovedMember } from "@/lib/auth/require-approved-member";
 import { fetchGroupOptions } from "@/lib/fetch-group-options";
 
 // 세션별로 다른 데이터를 보여주므로 캐싱 방지
@@ -19,29 +20,11 @@ export default async function SurveyPage({
   const adminSelectedGroup = (params?.group as string) || null;
 
   const supabase = await createClient();
-
-  // 현재 로그인한 사용자 정보
-  const {
-    data: { user: currentUser },
-  } = await supabase.auth.getUser();
-  const currentUserId = currentUser?.id || "";
-
-  // 비로그인 사용자는 홈으로 리다이렉트
-  if (!currentUserId) {
-    const { redirect } = await import("next/navigation");
-    redirect("/");
-  }
-
-  // 현재 사용자의 프로필(role, group_name) 조회
-  let isAdmin = false;
-  let userGroupName: string | null = null;
-  const { data: currentUserProfile } = await supabase
-    .from("profiles")
-    .select("role, group_name")
-    .eq("id", currentUserId)
-    .single();
-  isAdmin = currentUserProfile?.role === "admin";
-  userGroupName = currentUserProfile?.group_name?.trim() || null;
+  const { user: currentUser, profile: currentUserProfile } =
+    await requireApprovedMember(supabase);
+  const currentUserId = currentUser.id;
+  const isAdmin = currentUserProfile.role === "admin";
+  const userGroupName = currentUserProfile.group_name?.trim() || null;
 
   // 일반 사용자에게 group_name이 없으면 프로필 설정 유도
   if (!isAdmin && !userGroupName) {

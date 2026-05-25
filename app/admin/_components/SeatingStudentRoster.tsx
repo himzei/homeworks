@@ -88,7 +88,7 @@ export default function SeatingStudentRoster({
           모든 학생이 배치되었습니다.
         </p>
       ) : (
-        <ul className="flex flex-wrap gap-2 max-h-64 overflow-y-auto">
+        <ul className="flex flex-wrap gap-2 max-h-40 sm:max-h-48 overflow-y-auto">
           {unassigned.map((name) => (
             <li key={name}>
               <button

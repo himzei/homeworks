@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PROFILE_GROUP_OPTIONS } from "@/lib/constants";
+import { isApprovedMember } from "@/lib/profile-approval";
 
 /** useSearchParams를 사용하는 내부 컴포넌트 (Suspense boundary 필요) */
 function ProfilePageContent() {
@@ -271,9 +272,21 @@ function ProfilePageContent() {
 
       if (upsertError) throw upsertError;
 
-      // 저장 완료 인포팁 표시 후 홈(과제 대시보드)으로 이동
-      setSuccess("저장이 완료되었습니다.");
-      setTimeout(() => router.push("/home"), 1500);
+      const { data: savedProfile } = await supabase
+        .from("profiles")
+        .select("role, approval_status")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!isApprovedMember(savedProfile)) {
+        setSuccess(
+          "저장되었습니다. 관리자 승인 후 과제·교육일정 등을 이용할 수 있습니다.",
+        );
+        setTimeout(() => router.push("/pending-approval"), 1500);
+      } else {
+        setSuccess("저장이 완료되었습니다.");
+        setTimeout(() => router.push("/home"), 1500);
+      }
     } catch (err: any) {
       console.error("프로필 저장 실패:", err);
       setError(err.message || "프로필 저장 중 오류가 발생했습니다.");

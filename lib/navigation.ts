@@ -45,7 +45,7 @@ export const PUBLIC_NAV_ITEMS: HeaderNavItem[] = [
   { href: "/home", label: "과제 홈", guestOnly: true },
 ];
 
-/** 로그인 후 메뉴 (과제 → 커뮤니티 → 사용방법) */
+/** 로그인 후 메뉴 (과제 → 커뮤니티 → 교육일정 → 사용방법) */
 export const ASSIGNMENT_NAV_ITEM: HeaderNavItem = {
   label: "과제",
   authRequired: true,
@@ -72,81 +72,41 @@ export const COMMUNITY_NAV_ITEM: HeaderNavItem = {
   ],
 };
 
+/** 교육일정 (로그인 회원 전용) */
+export const EDUCATION_SCHEDULE_PATH = "/schedule";
+
+export const EDUCATION_SCHEDULE_NAV_ITEM: HeaderNavItem = {
+  href: EDUCATION_SCHEDULE_PATH,
+  label: "교육일정",
+  authRequired: true,
+};
+
 export const STUDENT_NAV_ITEMS: HeaderNavItem[] = [
   ASSIGNMENT_NAV_ITEM,
   COMMUNITY_NAV_ITEM,
+  EDUCATION_SCHEDULE_NAV_ITEM,
   USAGE_GUIDE_NAV_ITEM,
   BLOG_NAV_ITEM,
 ];
 
-/** 과제 섹션 서브메뉴 (히어로 하단 탭) */
+/** 과제 섹션 서브메뉴 */
 export const ASSIGNMENT_SUB_NAV_ITEMS = ASSIGNMENT_NAV_ITEM.children ?? [];
-
-/** 과제 섹션 페이지별 히어로 문구 */
-export const ASSIGNMENT_SECTION_PAGE_META: Record<
-  string,
-  { title: string; description: string }
-> = {
-  "/homework": {
-    title: "오늘의 과제",
-    description: "현재 진행 중인 과제를 확인하고 제출할 수 있습니다.",
-  },
-  "/progress": {
-    title: "진행과정",
-    description: "과제별 제출·평가 현황을 한눈에 확인할 수 있습니다.",
-  },
-};
 
 /** 과제 섹션 경로 여부 */
 export function isAssignmentSectionPath(pathname: string): boolean {
   return ASSIGNMENT_SUB_NAV_ITEMS.some((item) => item.href === pathname);
 }
 
-/** 커뮤니티 섹션 서브메뉴 (히어로 하단 탭) */
+/** 커뮤니티 섹션 서브메뉴 */
 export const COMMUNITY_SUB_NAV_ITEMS = COMMUNITY_NAV_ITEM.children ?? [];
-
-/** 커뮤니티 섹션 페이지별 히어로 문구 */
-export const COMMUNITY_SECTION_PAGE_META: Record<
-  string,
-  { title: string; description: string }
-> = {
-  "/survey": {
-    title: "설문조사",
-    description: "과정별 설문에 참여하고 응답 현황을 확인할 수 있습니다.",
-  },
-  "/ladder": {
-    title: "사다리게임",
-    description: "사다리게임을 만들고 목록에서 다시 열어볼 수 있습니다.",
-  },
-  "/vote": {
-    title: "투표",
-    description: "투표를 만들고 참여하며 결과를 확인할 수 있습니다.",
-  },
-};
 
 /** 커뮤니티 섹션 경로 여부 */
 export function isCommunitySectionPath(pathname: string): boolean {
   return COMMUNITY_SUB_NAV_ITEMS.some((item) => item.href === pathname);
 }
 
-/** 사용방법 섹션 서브메뉴 (히어로 하단 탭) */
+/** 사용방법 섹션 서브메뉴 */
 export const USAGE_GUIDE_SUB_NAV_ITEMS = USAGE_GUIDE_NAV_ITEM.children ?? [];
-
-/** 사용방법 섹션 페이지별 히어로 문구 */
-export const USAGE_GUIDE_SECTION_PAGE_META: Record<
-  string,
-  { title: string; description: string }
-> = {
-  [GIT_HOW_PATH]: {
-    title: "깃이란?",
-    description: "버전 관리의 기본 개념과 핵심 명령어를 단계별로 익힐 수 있습니다.",
-  },
-  [HOW_WORK_PATH]: {
-    title: "과제제출방법",
-    description:
-      "GitHub Gist에 과제를 작성하고 himzei에 제출하는 방법을 안내합니다.",
-  },
-};
 
 /** 사용방법 섹션 경로 여부 */
 export function isUsageGuideSectionPath(pathname: string): boolean {

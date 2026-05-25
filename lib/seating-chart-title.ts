@@ -1,4 +1,4 @@
-import { extractCourseShortLabel } from "@/lib/courses";
+import { extractCourseShortLabel, recordToHolidayOptions } from "@/lib/courses";
 import {
   buildScheduleDays,
   type HolidayExclusionOptions,
@@ -48,23 +48,14 @@ export function computeMainEducationWeekNumber(
 }
 
 /** DB 과정 행 → 제목 계산용 일정 */
-export function toCourseScheduleForTitle(record: {
-  main_education_start_date: string | null;
-  exclude_saturday: boolean;
-  exclude_sunday: boolean;
-  exclude_legal_holidays: boolean;
-  exclude_substitute_holidays: boolean;
-  custom_excluded_dates: string[] | null;
-}): CourseScheduleForTitle {
+export function toCourseScheduleForTitle(
+  record: Parameters<typeof recordToHolidayOptions>[0] & {
+    main_education_start_date: string | null;
+  },
+): CourseScheduleForTitle {
   return {
     mainEducationStartDate: record.main_education_start_date,
-    holidayOptions: {
-      excludeSaturday: record.exclude_saturday ?? true,
-      excludeSunday: record.exclude_sunday ?? true,
-      excludeLegalHolidays: record.exclude_legal_holidays ?? true,
-      excludeSubstituteHolidays: record.exclude_substitute_holidays ?? true,
-      customExcludedDates: record.custom_excluded_dates ?? [],
-    },
+    holidayOptions: recordToHolidayOptions(record),
   };
 }
 

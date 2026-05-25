@@ -13,6 +13,8 @@ import {
 
 import CourseSchedulePreview from "./CourseSchedulePreview";
 import CurriculumEditor from "./CurriculumEditor";
+import CustomHolidayEditor from "./CustomHolidayEditor";
+import EventScheduleEditor from "./EventScheduleEditor";
 
 type CourseFormProps = {
   /** 수정 모드일 때 과정 ID */
@@ -117,14 +119,23 @@ export default function CourseForm({
         ),
       });
 
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as {
+        error?: string;
+        id?: string;
+      };
 
       if (!response.ok) {
         setFormError(result.error ?? "저장 중 오류가 발생했습니다.");
         return;
       }
 
-      router.push(listPath);
+      // 저장 후 상세보기에서 캘린더·커리큘럼 확인
+      const detailId = isEditMode ? courseId : result.id;
+      if (detailId) {
+        router.push(`/admin/courses/${detailId}`);
+      } else {
+        router.push(listPath);
+      }
       router.refresh();
     } catch (error) {
       console.error("과정 저장 요청 오류:", error);
@@ -198,21 +209,23 @@ export default function CourseForm({
           />
         </div>
 
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            name="isLegacy"
-            checked={formData.isLegacy}
-            onChange={handleChange}
-            className="mt-1 size-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-          />
-          <span className="text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="font-medium">레거시 과정</span>
-            <span className="block text-zinc-500 dark:text-zinc-400 mt-0.5">
-              group_name이 없는 예전 과제·설문도 함께 표시 (13기 등)
+        {!isEditMode ? (
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="isLegacy"
+              checked={formData.isLegacy}
+              onChange={handleChange}
+              className="mt-1 size-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">
+              <span className="font-medium">레거시 과정</span>
+              <span className="block text-zinc-500 dark:text-zinc-400 mt-0.5">
+                group_name이 없는 예전 과제·설문도 함께 표시 (13기 등)
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        ) : null}
       </section>
 
       {/* 휴일 제외 */}
@@ -220,69 +233,28 @@ export default function CourseForm({
         <h2 className="text-lg font-semibold text-black dark:text-zinc-50 border-b border-zinc-200 dark:border-zinc-800 pb-2">
           휴일·제외일 설정
         </h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          아래 항목을 적용하면 사전교육·본교육 일정 미리보기에서 해당 날짜가
-          교육일에서 제외됩니다.
-        </p>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
-            <input
-              type="checkbox"
-              name="excludeSaturday"
-              checked={formData.excludeSaturday}
-              onChange={handleChange}
-              className="size-4 rounded border-zinc-300 text-blue-600"
-            />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">토요일 제외</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
-            <input
-              type="checkbox"
-              name="excludeSunday"
-              checked={formData.excludeSunday}
-              onChange={handleChange}
-              className="size-4 rounded border-zinc-300 text-blue-600"
-            />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">일요일 제외</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
-            <input
-              type="checkbox"
-              name="excludeLegalHolidays"
-              checked={formData.excludeLegalHolidays}
-              onChange={handleChange}
-              className="size-4 rounded border-zinc-300 text-blue-600"
-            />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">법정공휴일 제외</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2.5">
-            <input
-              type="checkbox"
-              name="excludeSubstituteHolidays"
-              checked={formData.excludeSubstituteHolidays}
-              onChange={handleChange}
-              className="size-4 rounded border-zinc-300 text-blue-600"
-            />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">대체공휴일 제외</span>
-          </label>
+        <div className="space-y-2">
+          <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            휴일 직접 입력
+          </span>
+          <CustomHolidayEditor
+            holidays={formData.customHolidays}
+            onChange={(customHolidays) =>
+              setFormData((prev) => ({ ...prev, customHolidays }))
+            }
+          />
         </div>
 
         <div className="space-y-2">
-          <label
-            htmlFor="customExcludedDatesInput"
-            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            추가 휴일 (선택)
-          </label>
-          <textarea
-            id="customExcludedDatesInput"
-            name="customExcludedDatesInput"
-            rows={4}
-            value={formData.customExcludedDatesInput}
-            onChange={handleChange}
-            placeholder={"한 줄에 하나씩 YYYY-MM-DD 형식\n예:\n2026-03-10\n2026-07-20"}
-            className={`${inputClassName} font-mono text-xs resize-y`}
+          <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            행사 일정
+          </span>
+          <EventScheduleEditor
+            schedules={formData.eventSchedules}
+            onChange={(eventSchedules) =>
+              setFormData((prev) => ({ ...prev, eventSchedules }))
+            }
           />
         </div>
       </section>

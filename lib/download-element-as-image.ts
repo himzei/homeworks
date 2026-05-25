@@ -106,3 +106,55 @@ export async function downloadElementAsPng(
     }
   }
 }
+
+/**
+ * 화면에 숨겨 둔 DOM 을 복제해 뷰포트에 올린 뒤 PNG 캡처.
+ * (far off-screen / z-index:-1 요소는 캡처가 비어 나오는 경우가 많음)
+ */
+export async function downloadClonedElementAsPng(
+  source: HTMLElement,
+  filename: string,
+): Promise<void> {
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.removeAttribute("aria-hidden");
+  clone.removeAttribute("id");
+  clone.className = "";
+
+  const captureWidth = Math.max(
+    source.scrollWidth,
+    source.offsetWidth,
+    source.firstElementChild instanceof HTMLElement
+      ? source.firstElementChild.scrollWidth
+      : 0,
+    960,
+  );
+
+  document.body.appendChild(clone);
+
+  const restoreCloneLayout = applyTempStyles(clone, {
+    position: "fixed",
+    left: "0",
+    top: "0",
+    zIndex: "2147483647",
+    width: `${captureWidth}px`,
+    margin: "0",
+    padding: "0",
+    opacity: "1",
+    visibility: "visible",
+    display: "block",
+    overflow: "visible",
+    pointerEvents: "none",
+    transform: "none",
+  });
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
+  try {
+    await downloadElementAsPng(clone, filename);
+  } finally {
+    restoreCloneLayout();
+    clone.remove();
+  }
+}

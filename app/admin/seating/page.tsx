@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { LayoutGrid, PencilLine } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { LEGACY_GROUPS } from "@/lib/constants";
@@ -9,9 +7,7 @@ import {
   toSeatingChartListItem,
   type SeatingChartRecord,
 } from "@/lib/seating";
-import { Button } from "@/app/_components/ui/button";
 
-import AdminSubNav from "../_components/AdminSubNav";
 import GroupTabsLoader from "../_components/GroupTabsLoader";
 import SeatingChartList from "../_components/SeatingChartList";
 
@@ -106,10 +102,6 @@ export default async function AdminSeatingPage({
     }
   }
 
-  const scopeDescription = filterGroup
-    ? `${filterGroup} · 해당 과정의 자리배치도를 표시합니다.`
-    : "모든 과정의 자리배치도를 표시합니다.";
-
   const groupQuery = filterGroup
     ? `?group=${encodeURIComponent(filterGroup)}`
     : "";
@@ -119,32 +111,7 @@ export default async function AdminSeatingPage({
     : "/admin/seating/new";
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50 flex items-center gap-2">
-                <LayoutGrid className="size-7 shrink-0" />
-                자리배치도
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                {scopeDescription}
-              </p>
-            </div>
-            <Link href={newChartHref}>
-              <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-                <PencilLine className="size-4" />
-                글쓰기
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
+    <>
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
             <GroupTabsLoader
@@ -159,7 +126,6 @@ export default async function AdminSeatingPage({
           newChartHref={newChartHref}
           groupQuery={groupQuery}
         />
-      </main>
-    </div>
+    </>
   );
 }

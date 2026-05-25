@@ -33,6 +33,11 @@ const ADMIN_NAV_ITEMS = [
     exact: false,
   },
   {
+    href: "/admin/members",
+    label: "회원 승인",
+    exact: false,
+  },
+  {
     href: "/admin/progress",
     label: "진행과정",
     exact: false,
@@ -73,8 +78,9 @@ export default function AdminSubNav() {
   return (
     <nav
       aria-label="관리자 페이지 내비게이션"
-      className="sticky top-0 z-40 -mx-4 sm:-mx-8 px-4 sm:px-8 flex gap-1 overflow-x-auto scrollbar-hide border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black mb-4 sm:mb-6"
+      className="sticky top-0 z-40 w-full shrink-0 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black"
     >
+      <div className="container mx-auto flex gap-1 overflow-x-auto scrollbar-hide px-4 sm:px-8">
       {ADMIN_NAV_ITEMS.map((item) => {
         const isActive = item.exact
           ? pathname === item.href
@@ -85,7 +91,7 @@ export default function AdminSubNav() {
             href={`${item.href}${preservedQuery}`}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "inline-flex items-center px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+              "inline-flex items-center px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
               isActive
                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                 : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-black dark:hover:text-zinc-50 hover:border-zinc-300 dark:hover:border-zinc-700",
@@ -95,6 +101,7 @@ export default function AdminSubNav() {
           </Link>
         );
       })}
+      </div>
     </nav>
   );
 }

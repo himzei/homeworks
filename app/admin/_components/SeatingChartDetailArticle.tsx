@@ -25,6 +25,7 @@ type SeatingChartDetailArticleProps = {
   assignedCount: number;
   totalSeats: number;
   profileIdByName?: Record<string, string>;
+  avatarUrlByName?: Record<string, string>;
   officerByStudentName?: Record<string, StudentOfficerInfo>;
 };
 
@@ -43,6 +44,7 @@ export default function SeatingChartDetailArticle({
   assignedCount,
   totalSeats,
   profileIdByName,
+  avatarUrlByName,
   officerByStudentName,
 }: SeatingChartDetailArticleProps) {
   const exportRef = useRef<HTMLDivElement>(null);
@@ -133,6 +135,7 @@ export default function SeatingChartDetailArticle({
             seatAssignments={seatAssignments}
             editable={false}
             profileIdByName={profileIdByName}
+            avatarUrlByName={avatarUrlByName}
             officerByStudentName={officerByStudentName}
           />
         </div>

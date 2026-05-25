@@ -56,32 +56,43 @@ export default function CourseList({ courses, newCourseHref }: CourseListProps) 
     router.refresh();
   };
 
+  const writeButton = (
+    <Button
+      asChild
+      className="bg-blue-500 hover:bg-blue-600 text-white shrink-0"
+    >
+      <Link href={newCourseHref}>
+        <PencilLine className="size-4" />
+        글쓰기
+      </Link>
+    </Button>
+  );
+
   if (courses.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center bg-white dark:bg-zinc-950">
-        <BookOpen className="mx-auto size-10 text-zinc-300 dark:text-zinc-600" />
-        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-          아직 등록된 과정이 없습니다.
-        </p>
-        <Button asChild className="mt-4">
-          <Link href={newCourseHref}>
-            <PencilLine className="size-4" />
-            첫 과정 등록
-          </Link>
-        </Button>
+      <div className="space-y-4">
+        <div className="flex justify-end">{writeButton}</div>
+        <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center bg-white dark:bg-zinc-950">
+          <BookOpen className="mx-auto size-10 text-zinc-300 dark:text-zinc-600" />
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+            아직 등록된 과정이 없습니다.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <div className="space-y-4">
+      <div className="flex justify-end">{writeButton}</div>
+      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
       {courses.map((course) => (
         <li
           key={course.id}
           className="flex items-start justify-between gap-4 px-4 py-3 sm:px-5 sm:py-4 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors"
         >
           <Link
-            href={`/admin/courses/${course.id}/edit`}
+            href={`/admin/courses/${course.id}`}
             className="flex-1 min-w-0 flex flex-col gap-1.5"
           >
             <div className="flex flex-wrap items-center gap-2">
@@ -153,6 +164,7 @@ export default function CourseList({ courses, newCourseHref }: CourseListProps) 
           </div>
         </li>
       ))}
-    </ul>
+      </ul>
+    </div>
   );
 }

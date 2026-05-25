@@ -7,8 +7,8 @@ import { LayoutGrid, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GROUP_OPTIONS } from "@/lib/constants";
 import type { GroupOption } from "@/lib/fetch-group-options";
-import { fetchSeatingStudentNames } from "@/lib/fetch-group-students";
-import { parseAisleColumnsInput } from "@/lib/seating";
+import { fetchSeatingStudents } from "@/lib/fetch-group-students";
+import { buildAvatarUrlByName, parseAisleColumnsInput } from "@/lib/seating";
 import {
   applyRosterDrop,
   applySeatDrop,
@@ -16,11 +16,13 @@ import {
 } from "@/lib/seating-drag";
 import { Button } from "@/app/_components/ui/button";
 import {
+  applyTeamBadgeVisibility,
   buildOfficerInfoByStudentName,
   mergeHonorBadgesIntoOfficerByStudentName,
   fetchClassRoleStudents,
   type StudentOfficerInfo,
 } from "@/lib/class-officers";
+import { isGroupTeamAssignmentActive } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import {
   buildSeatingChartDefaultTitle,
@@ -103,6 +105,9 @@ export default function SeatingChartForm({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingRoster, setIsLoadingRoster] = useState(false);
   const [studentRoster, setStudentRoster] = useState<string[]>([]);
+  const [avatarUrlByName, setAvatarUrlByName] = useState<
+    Record<string, string>
+  >({});
   const [officerByStudentName, setOfficerByStudentName] = useState<
     Record<string, StudentOfficerInfo>
   >(initialData?.officerByStudentName ?? {});
@@ -110,20 +115,29 @@ export default function SeatingChartForm({
   /** 선택 기수 학생 명단·반·조 불러오기 */
   const loadStudentRoster = useCallback(async (targetGroupName: string) => {
     const supabase = createClient();
-    const [names, roleStudents] = await Promise.all([
-      fetchSeatingStudentNames(supabase, targetGroupName),
+    const [students, roleStudents] = await Promise.all([
+      fetchSeatingStudents(supabase, targetGroupName),
       fetchClassRoleStudents(supabase, targetGroupName),
     ]);
+    const names = students.map((student) => student.name);
     setStudentRoster(names);
+    setAvatarUrlByName(buildAvatarUrlByName(students));
     const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
       supabase,
       roleStudents.map((s) => s.id),
     );
+    const showTeamBadges = await isGroupTeamAssignmentActive(
+      supabase,
+      targetGroupName,
+    );
     setOfficerByStudentName(
-      mergeHonorBadgesIntoOfficerByStudentName(
-        buildOfficerInfoByStudentName(roleStudents),
-        roleStudents,
-        honorLabelsByProfileId,
+      applyTeamBadgeVisibility(
+        mergeHonorBadgesIntoOfficerByStudentName(
+          buildOfficerInfoByStudentName(roleStudents),
+          roleStudents,
+          honorLabelsByProfileId,
+        ),
+        showTeamBadges,
       ),
     );
     return names;
@@ -282,10 +296,17 @@ export default function SeatingChartForm({
           supabase,
           roleStudents.map((s) => s.id),
         );
-        officersSnapshot = mergeHonorBadgesIntoOfficerByStudentName(
-          buildOfficerInfoByStudentName(roleStudents),
-          roleStudents,
-          honorLabelsByProfileId,
+        const showTeamBadges = await isGroupTeamAssignmentActive(
+          supabase,
+          trimmedGroup,
+        );
+        officersSnapshot = applyTeamBadgeVisibility(
+          mergeHonorBadgesIntoOfficerByStudentName(
+            buildOfficerInfoByStudentName(roleStudents),
+            roleStudents,
+            honorLabelsByProfileId,
+          ),
+          showTeamBadges,
         );
         setOfficerByStudentName(officersSnapshot);
       }
@@ -479,22 +500,22 @@ export default function SeatingChartForm({
             학생 배치
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            왼쪽 명단에서 이름을 드래그해 책상에 놓거나, 책상에 직접 입력할 수
+            위 명단에서 이름을 드래그해 책상에 놓거나, 책상에 직접 입력할 수
             있습니다. ({rowCount}행 × {colCount}열
             {aisleAfterColumns.length > 0
               ? `, 통로: ${aisleAfterColumns.join("·")}열 뒤`
               : ""}
             )
           </p>
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
+          <div className="flex flex-col gap-6">
             <SeatingStudentRoster
               roster={studentRoster}
               seatAssignments={seatAssignments}
               groupLabel={groupLabel}
               onDropFromDesk={handleRosterDrop}
-              className="w-full lg:w-72 shrink-0 lg:sticky lg:top-24"
+              className="w-full"
             />
-            <div className="flex-1 overflow-x-auto min-w-0">
+            <div className="w-full overflow-x-auto">
               <SeatingGrid
                 rowCount={rowCount}
                 colCount={colCount}
@@ -504,6 +525,7 @@ export default function SeatingChartForm({
                 dragDropEnabled={studentRoster.length > 0}
                 onSeatChange={handleSeatChange}
                 onSeatDrop={handleSeatDrop}
+                avatarUrlByName={avatarUrlByName}
                 officerByStudentName={officerByStudentName}
               />
             </div>

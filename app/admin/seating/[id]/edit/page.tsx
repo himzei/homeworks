@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Suspense } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { fetchGroupOptions } from "@/lib/fetch-group-options";
+import { applyTeamBadgeVisibility } from "@/lib/class-officers";
+import { isGroupTeamAssignmentActive } from "@/lib/class-role-snapshots";
 import {
   getOfficerSnapshotFromRecord,
   type SeatingChartRecord,
 } from "@/lib/seating";
 import { Button } from "@/app/_components/ui/button";
 
-import AdminSubNav from "../../../_components/AdminSubNav";
 import SeatingChartForm from "../../../_components/SeatingChartForm";
 
 export const dynamic = "force-dynamic";
@@ -73,8 +73,13 @@ export default async function AdminSeatingEditPage({
   }
 
   const record = chart as SeatingChartRecord;
-  const savedOfficerByStudentName =
-    getOfficerSnapshotFromRecord(record) ?? undefined;
+  const rawOfficerByStudentName = getOfficerSnapshotFromRecord(record);
+  const showTeamBadges = record.group_name
+    ? await isGroupTeamAssignmentActive(supabase, record.group_name)
+    : false;
+  const savedOfficerByStudentName = rawOfficerByStudentName
+    ? applyTeamBadgeVisibility(rawOfficerByStudentName, showTeamBadges)
+    : undefined;
   const groupOptions = await fetchGroupOptions(supabase);
 
   const listHref = filterGroup
@@ -86,48 +91,29 @@ export default async function AdminSeatingEditPage({
     : `/admin/seating/${id}`;
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50">
-                자리배치도 수정
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                {record.title}
-              </p>
-            </div>
-            <Link href={detailHref}>
-              <Button variant="outline">
-                <ArrowLeft className="size-4" />
-                상세보기
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
-        <div className="mt-6 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 sm:p-6">
-          <SeatingChartForm
-            initialData={{
-              id: record.id,
-              title: record.title,
-              groupName: record.group_name,
-              rowCount: record.row_count,
-              colCount: record.col_count,
-              aisleAfterColumns: record.aisle_after_columns ?? [],
-              seatAssignments: record.seat_assignments ?? {},
-              officerByStudentName: savedOfficerByStudentName,
-            }}
-            listHref={listHref}
-            groupOptions={groupOptions}
-          />
-        </div>
-      </main>
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 sm:p-6">
+      <div className="mb-4 flex justify-end">
+        <Link href={detailHref}>
+          <Button variant="outline">
+            <ArrowLeft className="size-4" />
+            상세보기
+          </Button>
+        </Link>
+      </div>
+      <SeatingChartForm
+        initialData={{
+          id: record.id,
+          title: record.title,
+          groupName: record.group_name,
+          rowCount: record.row_count,
+          colCount: record.col_count,
+          aisleAfterColumns: record.aisle_after_columns ?? [],
+          seatAssignments: record.seat_assignments ?? {},
+          officerByStudentName: savedOfficerByStudentName,
+        }}
+        listHref={listHref}
+        groupOptions={groupOptions}
+      />
     </div>
   );
 }

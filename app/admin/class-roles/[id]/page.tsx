@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Suspense } from "react";
 import { ArrowLeft, PencilLine } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -17,7 +16,6 @@ import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { extractCourseShortLabel } from "@/lib/courses";
 import { Button } from "@/app/_components/ui/button";
 
-import AdminSubNav from "../../_components/AdminSubNav";
 import ApplyClassRoleSnapshotButton from "../../_components/ApplyClassRoleSnapshotButton";
 import ClassRoleSnapshotDetailArticle, {
   type ClassRoleSnapshotTeam,
@@ -173,34 +171,29 @@ export default async function AdminClassRoleDetailPage({
   const createdAtLabel = dateFormatter.format(new Date(snapshot.createdAt));
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        <div className="mb-4 sm:mb-6 flex flex-wrap gap-2">
-          <Link href={listHref}>
-            <Button variant="outline">
-              <ArrowLeft className="size-4" />
-              목록
-            </Button>
-          </Link>
-          {!snapshot.isActive ? (
-            <ApplyClassRoleSnapshotButton
-              snapshotId={id}
-              title={snapshot.title}
-            />
-          ) : null}
-          <Link href={editHref}>
-            <Button className="bg-blue-500 hover:bg-blue-600 text-white">
-              <PencilLine className="size-4" />
-              수정
-            </Button>
-          </Link>
-        </div>
+    <>
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
+        <Link href={listHref}>
+          <Button variant="outline">
+            <ArrowLeft className="size-4" />
+            목록
+          </Button>
+        </Link>
+        {!snapshot.isActive ? (
+          <ApplyClassRoleSnapshotButton
+            snapshotId={id}
+            title={snapshot.title}
+          />
+        ) : null}
+        <Link href={editHref}>
+          <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+            <PencilLine className="size-4" />
+            수정
+          </Button>
+        </Link>
+      </div>
 
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
-        <ClassRoleSnapshotDetailArticle
+      <ClassRoleSnapshotDetailArticle
           title={snapshot.title}
           cohortLabel={cohortLabel}
           groupName={snapshot.groupName}
@@ -216,7 +209,6 @@ export default async function AdminClassRoleDetailPage({
           teamCount={snapshot.teamCount}
           teams={teams}
         />
-      </main>
-    </div>
+    </>
   );
 }

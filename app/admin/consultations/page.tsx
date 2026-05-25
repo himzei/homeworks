@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import ConsultationTab from "@/app/_components/ConsultationTab";
 
-import AdminSubNav from "../_components/AdminSubNav";
 import GroupTabsLoader from "../_components/GroupTabsLoader";
 
 // 동적 렌더링 강제 (세션/그룹별로 다른 데이터를 매 요청마다 새로 조회)
@@ -82,27 +81,7 @@ export default async function AdminConsultationsPage({
   }
 
   return (
-    <div className="min-h-full bg-zinc-50 font-sans dark:bg-black">
-      <main className="container mx-auto py-4 sm:py-8 px-4 sm:px-8">
-        {/* 페이지 헤더 */}
-        <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-zinc-50">
-            학생 상담 관리
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            학생을 선택해 상담일지를 작성하거나 기존 상담 내역을 확인합니다.{" "}
-            <span className="text-zinc-400 dark:text-zinc-500">
-              · 그룹 미지정 회원은 전체·기수 탭에서 함께 표시됩니다. 관리자
-              계정은 대시보드에서 확인하세요.
-            </span>
-          </p>
-        </div>
-
-        {/* 관리자 패널 내 페이지 전환 */}
-        <Suspense fallback={null}>
-          <AdminSubNav />
-        </Suspense>
-
+    <>
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
@@ -115,7 +94,6 @@ export default async function AdminConsultationsPage({
 
         {/* 학생 상담 본문 (기존 컴포넌트 재사용) */}
         <ConsultationTab selectedGroup={filterGroup} />
-      </main>
-    </div>
+    </>
   );
 }

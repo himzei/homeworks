@@ -63,6 +63,20 @@ export function buildProfileIdByName(
   return profileIdByName;
 }
 
+/** 이름 → 프로필 이미지 URL (동명이인은 먼저 조회된 학생 사용) */
+export function buildAvatarUrlByName(
+  students: Array<{ name: string; avatar_url: string | null }>,
+): Record<string, string> {
+  const avatarUrlByName: Record<string, string> = {};
+  for (const student of students) {
+    const trimmedName = student.name.trim();
+    const avatarUrl = student.avatar_url?.trim();
+    if (!trimmedName || !avatarUrl || avatarUrlByName[trimmedName]) continue;
+    avatarUrlByName[trimmedName] = avatarUrl;
+  }
+  return avatarUrlByName;
+}
+
 /** seat_assignments 에 등록된 이름 목록 (중복 제거) */
 export function getAssignedStudentNames(
   seatAssignments: Record<string, string>,

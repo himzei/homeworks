@@ -27,16 +27,16 @@ type HeaderNavProps = {
 /** 메뉴 버튼 공통 — 열림/포커스 시에도 박스 크기가 변하지 않도록 border·ring inset 고정 */
 const navButtonClassName = (isActive: boolean, className?: string) =>
   cn(
-    "inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap",
+    "inline-flex items-center justify-center px-3 py-2 text-base font-medium rounded-lg whitespace-nowrap",
     "border border-transparent outline-none",
     "transition-[color,background-color] duration-150",
     "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30",
     isActive
       ? "bg-white/15 text-white"
       : [
-          "text-brand-cream/70",
-          "hover:text-brand-cream hover:bg-white/10",
-          "data-[state=open]:text-brand-cream data-[state=open]:bg-white/10",
+          "text-white",
+          "hover:text-white hover:bg-white/10",
+          "data-[state=open]:text-white data-[state=open]:bg-white/10",
         ],
     className,
   );
@@ -107,7 +107,7 @@ function NavDropdown({
         >
           {item.label}
           <ChevronDown
-            className="size-4 shrink-0 opacity-70 transition-transform duration-200 group-data-[state=open]:rotate-180"
+            className="size-4 shrink-0 text-white/90 transition-transform duration-200 group-data-[state=open]:rotate-180"
             aria-hidden
           />
         </button>
@@ -164,10 +164,8 @@ function NavDropdownMobile({
     <div className="flex flex-col gap-1">
       <span
         className={cn(
-          "px-3 py-2 text-xs font-semibold uppercase tracking-wide",
-          isActive
-            ? "text-brand-cream"
-            : "text-brand-cream/50",
+          "px-3 py-2 text-sm font-semibold uppercase tracking-wide",
+          isActive ? "text-white" : "text-white/80",
         )}
       >
         {item.label}
@@ -282,7 +280,7 @@ export default function HeaderNav({
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-cream/80 border border-white/20 rounded-lg hover:bg-white/10 hover:text-brand-cream transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-2 text-base font-medium text-white border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
           aria-expanded={isMobileMenuOpen}
           aria-controls="header-mobile-menu"
         >

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { LEGACY_GROUPS } from "@/lib/constants";
+import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
 /**
  * 특정 기수(group_name)의 학생 이름 목록을 가입 순서대로 반환.
@@ -17,6 +18,7 @@ export async function fetchGroupStudentNames(
     .select("name, role")
     .eq("group_name", groupName)
     .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -30,10 +32,11 @@ export async function fetchGroupStudentNames(
     .filter((name): name is string => name.length > 0);
 }
 
-/** 자리배치도용 학생 (id + 이름) */
+/** 자리배치도용 학생 (id + 이름 + 프로필 이미지) */
 export type SeatingStudent = {
   id: string;
   name: string;
+  avatar_url: string | null;
 };
 
 /**
@@ -46,8 +49,9 @@ export async function fetchSeatingStudents(
 ): Promise<SeatingStudent[]> {
   let query = supabase
     .from("profiles")
-    .select("id, name, role")
+    .select("id, name, avatar_url, role")
     .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
     .order("name", { ascending: true });
 
   if (LEGACY_GROUPS.includes(groupName as (typeof LEGACY_GROUPS)[number])) {
@@ -68,7 +72,13 @@ export async function fetchSeatingStudents(
   return data.flatMap((profile) => {
     const name = (profile.name ?? "").trim();
     if (!name) return [];
-    return [{ id: profile.id, name }];
+    return [
+      {
+        id: profile.id,
+        name,
+        avatar_url: profile.avatar_url ?? null,
+      },
+    ];
   });
 }
 
@@ -94,8 +104,9 @@ export async function fetchProfileIdsByNames(
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name, role")
+    .select("id, name, avatar_url, role")
     .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
     .in("name", uniqueNames);
 
   if (error) {
@@ -107,6 +118,12 @@ export async function fetchProfileIdsByNames(
   return data.flatMap((profile) => {
     const name = (profile.name ?? "").trim();
     if (!name) return [];
-    return [{ id: profile.id, name }];
+    return [
+      {
+        id: profile.id,
+        name,
+        avatar_url: profile.avatar_url ?? null,
+      },
+    ];
   });
 }

@@ -3,6 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/app/_components/ui/avatar";
 import { buildSeatKey } from "@/lib/seating";
 import {
   DRAG_MIME,
@@ -29,6 +34,8 @@ type SeatingGridProps = {
   onSeatDrop?: (seatKey: string, payload: SeatingDragPayload) => void;
   /** 이름 클릭 시 프로필 이동용 (상세보기) */
   profileIdByName?: Record<string, string>;
+  /** 학생 이름 → 프로필 이미지 URL (좌석 위 원) */
+  avatarUrlByName?: Record<string, string>;
   /** 학생 이름 → 반·조 (책상 우측 상단 배지) */
   officerByStudentName?: Record<string, StudentOfficerInfo>;
   className?: string;
@@ -48,6 +55,7 @@ export default function SeatingGrid({
   onSeatChange,
   onSeatDrop,
   profileIdByName,
+  avatarUrlByName,
   officerByStudentName,
   className,
 }: SeatingGridProps) {
@@ -88,6 +96,7 @@ export default function SeatingGrid({
                     studentName={studentName}
                     officerInfo={officerInfo}
                     profileId={profileIdByName?.[trimmedStudentName]}
+                    avatarUrl={avatarUrlByName?.[trimmedStudentName]}
                     editable={editable}
                     dragDropEnabled={dragDropEnabled}
                     onNameChange={(name) => onSeatChange?.(seatKey, name)}
@@ -117,6 +126,7 @@ type DeskUnitProps = {
   studentName: string;
   officerInfo?: StudentOfficerInfo;
   profileId?: string;
+  avatarUrl?: string;
   editable: boolean;
   dragDropEnabled: boolean;
   onNameChange: (name: string) => void;
@@ -131,6 +141,7 @@ function DeskUnit({
   studentName,
   officerInfo,
   profileId,
+  avatarUrl,
   editable,
   dragDropEnabled,
   onNameChange,
@@ -200,10 +211,7 @@ function DeskUnit({
 
   return (
     <div className="flex flex-col items-center w-28 sm:w-32">
-      <div
-        className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-black bg-brand-footer shrink-0"
-        aria-hidden
-      />
+      <SeatAvatar studentName={trimmedName} avatarUrl={avatarUrl} />
 
       {editable ? (
         <div
@@ -279,5 +287,39 @@ function DeskUnit({
         </div>
       )}
     </div>
+  );
+}
+
+/** 좌석 위 원 — 배정된 학생 프로필 이미지 (없으면 이니셜) */
+function SeatAvatar({
+  studentName,
+  avatarUrl,
+}: {
+  studentName: string;
+  avatarUrl?: string;
+}) {
+  if (studentName.length === 0) {
+    return (
+      <div
+        className="size-8 sm:size-10 shrink-0 rounded-full border-2 border-black bg-brand-footer"
+        aria-hidden
+      />
+    );
+  }
+
+  const nameInitial = studentName.charAt(0);
+
+  return (
+    <Avatar
+      className="size-8 sm:size-10 shrink-0 border-2 border-black"
+      aria-label={`${studentName} 프로필`}
+    >
+      {avatarUrl ? (
+        <AvatarImage src={avatarUrl} alt="" className="object-cover" />
+      ) : null}
+      <AvatarFallback className="bg-brand-footer text-xs font-semibold text-white sm:text-sm">
+        {nameInitial}
+      </AvatarFallback>
+    </Avatar>
   );
 }

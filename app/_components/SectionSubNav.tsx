@@ -43,7 +43,7 @@ export default function SectionSubNav({
       aria-label="섹션 하위 메뉴"
       className={cn(
         // 스크롤 시 뷰포트 상단(top: 0)에 고정
-        "sticky top-0 z-40 border-t border-white/20 shadow-sm text-white",
+        "sticky top-0 z-40 border-b border-white/20 shadow-sm text-white",
         heroClassName ?? "bg-brand-section",
         className,
       )}
@@ -58,15 +58,15 @@ export default function SectionSubNav({
                 href={buildHref(item.href)}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center justify-center px-3 py-3.5 sm:py-4",
-                  "text-sm sm:text-base font-medium text-white/85 hover:text-white transition-colors",
+                  "relative flex items-center justify-center px-3 py-2 sm:py-2.5",
+                  "text-sm font-medium text-white/85 hover:text-white transition-colors",
                   isActive && "text-white",
                 )}
               >
                 {item.label}
                 {isActive ? (
                   <span
-                    className="absolute bottom-0 left-1/2 h-1 w-[calc(100%-0.5rem)] max-w-16 -translate-x-1/2 rounded-t-sm bg-white"
+                    className="absolute bottom-0 left-1/2 h-0.5 w-[calc(100%-0.5rem)] max-w-16 -translate-x-1/2 rounded-t-sm bg-white"
                     aria-hidden
                   />
                 ) : null}
