@@ -163,26 +163,12 @@ export default async function EducationSchedulePage() {
             key={section.courseName}
             className="space-y-4 border-t border-zinc-200 dark:border-zinc-800 pt-8 first:border-t-0 first:pt-0"
           >
-            <div>
-              {section.cohortLabel ? (
-                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                  {section.cohortLabel}
-                </span>
-              ) : null}
-              <h2
-                className={cn(
-                  "text-lg font-bold text-black dark:text-zinc-50 sm:text-xl",
-                  section.cohortLabel ? "mt-2" : null,
-                )}
-              >
-                {section.courseName}
-              </h2>
-            </div>
             <CourseCalendarSection
               days={section.mergedCalendar}
               downloadFilenameBase={section.courseName}
               periodSummary={section.periodSummary}
               hideTitle
+              headerTitle={section.courseName}
             />
           </section>
         ))}

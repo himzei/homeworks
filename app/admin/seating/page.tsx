@@ -72,7 +72,11 @@ export default async function AdminSeatingPage({
 
   const [chartsResult, profilesResult] = await Promise.all([
     buildChartsQuery(),
-    supabase.from("profiles").select("group_name").neq("role", "admin"),
+    supabase
+      .from("profiles")
+      .select("group_name")
+      .neq("role", "admin")
+      .eq("is_dormant", false),
   ]);
 
   if (chartsResult.error) {

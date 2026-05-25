@@ -21,8 +21,10 @@ type CourseCalendarSectionProps = {
   periodSummary?: string | null;
   /** PNG 파일명 접두 (과정명 등) */
   downloadFilenameBase?: string;
-  /** true면 상단 제목·기간 없이 다운로드 버튼만 표시 (교육일정 페이지 등) */
+  /** true면 기본 제목·기간 대신 headerTitle + 다운로드 버튼만 표시 */
   hideTitle?: boolean;
+  /** hideTitle일 때 왼쪽 제목 (배지 없이 버튼과 높이 맞춤) */
+  headerTitle?: string;
 };
 
 /**
@@ -34,6 +36,7 @@ export default function CourseCalendarSection({
   periodSummary,
   downloadFilenameBase = "교육일정",
   hideTitle = false,
+  headerTitle,
 }: CourseCalendarSectionProps) {
   const monthExportRef = useRef<HTMLDivElement>(null);
   const fullExportRef = useRef<HTMLDivElement>(null);
@@ -128,11 +131,20 @@ export default function CourseCalendarSection({
   return (
     <section className="space-y-4">
       {hideTitle ? (
-        downloadButtons ? (
-          <div className="flex justify-end">{downloadButtons}</div>
+        headerTitle || downloadButtons ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {headerTitle ? (
+              <h2 className="min-w-0 text-lg font-bold text-black dark:text-zinc-50 sm:text-xl">
+                {headerTitle}
+              </h2>
+            ) : (
+              <div className="min-w-0 flex-1" />
+            )}
+            {downloadButtons}
+          </div>
         ) : null
       ) : (
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-black dark:text-zinc-50">
               {title}

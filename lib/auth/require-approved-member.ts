@@ -12,6 +12,7 @@ export type MemberProfileRow = {
   approval_status: string | null;
   group_name: string | null;
   name: string | null;
+  is_dormant: boolean | null;
 };
 
 /**
@@ -33,7 +34,7 @@ export async function requireApprovedMember(
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, role, approval_status, group_name, name")
+    .select("id, role, approval_status, group_name, name, is_dormant")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -55,6 +56,10 @@ export async function requireApprovedMember(
 
   if (profile.approval_status === PROFILE_APPROVAL_STATUS.pending) {
     redirect("/pending-approval");
+  }
+
+  if (profile.is_dormant) {
+    redirect("/pending-approval?status=dormant");
   }
 
   if (!isApprovedMember(profile)) {

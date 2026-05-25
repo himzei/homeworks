@@ -134,6 +134,7 @@ export async function fetchProgressGridData(
     .select("id, name, role, group_name, class_officer_role, team_number")
     .neq("role", "admin")
     .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
+    .eq("is_dormant", false)
     .order("created_at", { ascending: true });
 
   if (filterGroup) {

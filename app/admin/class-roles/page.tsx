@@ -79,7 +79,11 @@ export default async function AdminClassRolesPage({
   const [snapshotsResult, profilesResult, students, honorBadgeSections] =
     await Promise.all([
       buildSnapshotsQuery(),
-      supabase.from("profiles").select("group_name").neq("role", "admin"),
+      supabase
+        .from("profiles")
+        .select("group_name")
+        .neq("role", "admin")
+        .eq("is_dormant", false),
       studentsPromise,
       honorBadgeSectionsPromise,
     ]);

@@ -12,7 +12,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin } from "@/lib/auth/SessionProvider";
 import {
-  downloadElementAsPng,
+  downloadClonedElementAsPng,
   sanitizeDownloadFilename,
 } from "@/lib/download-element-as-image";
 
@@ -477,6 +477,7 @@ export default function EvaluationTab({
           .from("profiles")
           .select("id, name, role")
           .eq("approval_status", "approved")
+          .eq("is_dormant", false)
           .order("created_at", { ascending: true });
 
         if (selectedGroup) {
@@ -1126,43 +1127,31 @@ export default function EvaluationTab({
 
     setIsDownloadingImage(true);
 
-    // sticky 헤더·이름 열은 캡처 시 레이아웃이 깨질 수 있어 잠시 해제
-    const stickySelectors =
-      ".evaluation-grid-sticky-corner, .evaluation-grid-sticky-header, .evaluation-grid-sticky-name";
-    const stickyNodes = element.querySelectorAll(stickySelectors);
-    const restoreStickyStyles: Array<() => void> = [];
-
-    stickyNodes.forEach((node) => {
-      if (!(node instanceof HTMLElement)) return;
-      const previousPosition = node.style.position;
-      node.style.position = "static";
-      restoreStickyStyles.push(() => {
-        if (previousPosition) {
-          node.style.position = previousPosition;
-        } else {
-          node.style.removeProperty("position");
-        }
-      });
-    });
-
     try {
       const groupLabel = selectedGroup
         ? sanitizeDownloadFilename(selectedGroup)
         : "전체";
       const dateLabel = new Date().toISOString().slice(0, 10);
-      await downloadElementAsPng(
+      const periodLabel =
+        filterStartDate && filterEndDate
+          ? `_${filterStartDate}_${filterEndDate}`
+          : "";
+      // 복제 후 전체 너비 캡처 — 가로 스크롤·필터된 열이 잘리지 않도록
+      await downloadClonedElementAsPng(
         element,
-        `${groupLabel}_과제평가_${dateLabel}.png`,
+        `${groupLabel}_과제평가${periodLabel}_${dateLabel}.png`,
       );
     } catch {
       window.alert("이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
-      for (let index = restoreStickyStyles.length - 1; index >= 0; index -= 1) {
-        restoreStickyStyles[index]();
-      }
       setIsDownloadingImage(false);
     }
-  }, [selectedGroup, users.length]);
+  }, [
+    selectedGroup,
+    users.length,
+    filterStartDate,
+    filterEndDate,
+  ]);
 
   const canExportGrid = users.length > 0 && sortedGridColumns.length > 0;
 
@@ -1522,6 +1511,7 @@ export default function EvaluationTab({
         <div
           className="evaluation-grid-scroll rounded-lg"
           data-export-expand
+          data-export-scroll-x
         >
           <div className="inline-block min-w-full pt-2">
             <div

@@ -25,6 +25,7 @@ export default async function PendingApprovalPage({
 }) {
   const params = await searchParams;
   const isRejected = params?.status === "rejected";
+  const isDormant = params?.status === "dormant";
 
   const supabase = await createClient();
   const {
@@ -37,7 +38,7 @@ export default async function PendingApprovalPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, approval_status, name")
+    .select("role, approval_status, name, is_dormant")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -49,10 +50,16 @@ export default async function PendingApprovalPage({
     redirect("/profile");
   }
 
-  const title = isRejected ? "가입이 거절되었습니다" : "관리자 승인 대기 중";
-  const description = isRejected
-    ? "관리자에 의해 가입이 거절되었습니다. 문의가 필요하면 운영자에게 연락해 주세요."
-    : "회원가입 정보가 접수되었습니다. 관리자가 승인하면 과제·교육일정 등 모든 기능을 이용할 수 있습니다.";
+  const title = isDormant
+    ? "탈퇴(휴면)) 처리되었습니다"
+    : isRejected
+      ? "가입이 거절되었습니다"
+      : "관리자 승인 대기 중";
+  const description = isDormant
+    ? "계정이 휴면 처리되어 서비스를 이용할 수 없습니다. 복구가 필요하면 운영자에게 문의해 주세요."
+    : isRejected
+      ? "관리자에 의해 가입이 거절되었습니다. 문의가 필요하면 운영자에게 연락해 주세요."
+      : "회원가입 정보가 접수되었습니다. 관리자가 승인하면 과제·교육일정 등 모든 기능을 이용할 수 있습니다.";
 
   return (
     <div className="flex min-h-full items-center justify-center bg-zinc-50 dark:bg-black px-4 py-12">
@@ -74,7 +81,7 @@ export default async function PendingApprovalPage({
           ) : null}
         </div>
 
-        {!isRejected ? (
+        {!isRejected && !isDormant ? (
           <ul className="text-sm text-zinc-600 dark:text-zinc-400 space-y-2 list-disc pl-5">
             <li>프로필 정보는 아래에서 수정할 수 있습니다.</li>
             <li>승인 완료 후 자동으로 서비스를 이용할 수 있습니다.</li>

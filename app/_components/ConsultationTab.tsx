@@ -78,6 +78,7 @@ export default function ConsultationTab({
             "id, name, group_name, role, phone, bio, avatar_url, github_url, university, major, created_at",
           )
           .neq("role", "admin")
+          .eq("is_dormant", false)
           .order("name", { ascending: true });
 
         if (selectedGroup) {

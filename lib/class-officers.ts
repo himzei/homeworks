@@ -325,6 +325,7 @@ export async function fetchClassRoleStudents(
     .from("profiles")
     .select("id, name, role, class_officer_role, team_number")
     .neq("role", "admin")
+    .eq("is_dormant", false)
     .order("name", { ascending: true });
 
   if (LEGACY_GROUPS.includes(groupName as (typeof LEGACY_GROUPS)[number])) {
@@ -389,6 +390,7 @@ export async function fetchOfficersByStudentNames(
     .from("profiles")
     .select("name, class_officer_role, team_number")
     .neq("role", "admin")
+    .eq("is_dormant", false)
     .in("name", uniqueNames);
 
   if (error) {

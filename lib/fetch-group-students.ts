@@ -19,6 +19,7 @@ export async function fetchGroupStudentNames(
     .eq("group_name", groupName)
     .neq("role", "admin")
     .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
+    .eq("is_dormant", false)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -52,6 +53,7 @@ export async function fetchSeatingStudents(
     .select("id, name, avatar_url, role")
     .neq("role", "admin")
     .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
+    .eq("is_dormant", false)
     .order("name", { ascending: true });
 
   if (LEGACY_GROUPS.includes(groupName as (typeof LEGACY_GROUPS)[number])) {
@@ -107,6 +109,7 @@ export async function fetchProfileIdsByNames(
     .select("id, name, avatar_url, role")
     .neq("role", "admin")
     .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
+    .eq("is_dormant", false)
     .in("name", uniqueNames);
 
   if (error) {

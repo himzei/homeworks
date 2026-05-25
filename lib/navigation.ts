@@ -113,17 +113,22 @@ export function isUsageGuideSectionPath(pathname: string): boolean {
   return USAGE_GUIDE_SUB_NAV_ITEMS.some((item) => item.href === pathname);
 }
 
-/** 헤더에 표시할 메뉴 목록 조합 */
-export function getHeaderNavItems(options: {
+/** 로그인 없이 메뉴 클릭 시 안내 문구 */
+export const LOGIN_REQUIRED_MESSAGE = "로그인이 필요한 서비스입니다.";
+
+/** 비로그인 사용자가 해당 메뉴를 눌렀을 때 로그인 안내가 필요한지 */
+export function isHeaderNavLoginRequired(
+  item: HeaderNavItem,
+  parentAuthRequired = false,
+): boolean {
+  return Boolean(item.authRequired || parentAuthRequired);
+}
+
+/** 헤더에 표시할 메뉴 목록 (로그인 여부와 무관하게 동일 메뉴 표시) */
+export function getHeaderNavItems(_options: {
   isLoggedIn: boolean;
 }): HeaderNavItem[] {
-  const { isLoggedIn } = options;
-
-  if (isLoggedIn) {
-    return STUDENT_NAV_ITEMS;
-  }
-
-  return [...PUBLIC_NAV_ITEMS, USAGE_GUIDE_NAV_ITEM, BLOG_NAV_ITEM];
+  return STUDENT_NAV_ITEMS;
 }
 
 /** 현재 경로·탭 기준 active 여부 */

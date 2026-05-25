@@ -293,3 +293,35 @@ export function buildSundayWeekLabelsByDate(
 
   return labelBySunday;
 }
+
+/** 과정 전체 교육일 기준 N일차 (교육일만 순번 부여) */
+export type CourseDayIndex = {
+  index: number;
+  total: number;
+};
+
+/** 날짜별 과정 전체 일차 맵 — 예: 1/200일차 */
+export function buildCourseDayIndexByDate(
+  days: EducationCalendarDay[],
+): Map<string, CourseDayIndex> {
+  const instructionalDates = days
+    .filter((day) => day.isInstructional)
+    .map((day) => day.date)
+    .sort();
+
+  const total = instructionalDates.length;
+  const map = new Map<string, CourseDayIndex>();
+
+  if (total === 0) return map;
+
+  instructionalDates.forEach((date, index) => {
+    map.set(date, { index: index + 1, total });
+  });
+
+  return map;
+}
+
+/** 표시용 — "1/200일차" */
+export function formatCourseDayLabel(label: CourseDayIndex): string {
+  return `${label.index}/${label.total}일차`;
+}

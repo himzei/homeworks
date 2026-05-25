@@ -74,7 +74,11 @@ export default async function AdminEvaluationPage({
 
   const [assignmentsResult, profilesResult] = await Promise.all([
     buildAssignmentsQuery(),
-    supabase.from("profiles").select("group_name"),
+    supabase
+      .from("profiles")
+      .select("group_name")
+      .neq("role", "admin")
+      .eq("is_dormant", false),
   ]);
 
   const assignments = assignmentsResult.data ?? [];

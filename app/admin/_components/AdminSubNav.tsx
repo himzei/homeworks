@@ -34,7 +34,7 @@ const ADMIN_NAV_ITEMS = [
   },
   {
     href: "/admin/members",
-    label: "회원 승인",
+    label: "회원 관리",
     exact: false,
   },
   {

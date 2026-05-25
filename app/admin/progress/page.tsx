@@ -56,7 +56,8 @@ export default async function AdminProgressPage({
   const { data: allProfiles } = await supabase
     .from("profiles")
     .select("group_name")
-    .neq("role", "admin");
+    .neq("role", "admin")
+    .eq("is_dormant", false);
 
   const profiles = allProfiles ?? [];
   const unsetGroupCount = profiles.filter(

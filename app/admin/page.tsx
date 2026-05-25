@@ -10,6 +10,7 @@ import {
   FileText,
   CheckCircle2,
   ListChecks,
+  UserPlus,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +30,10 @@ import DashboardSection from "./_components/DashboardSection";
 import AdminAccountCards, {
   type AdminAccountItem,
 } from "./_components/AdminAccountCards";
+import PendingMemberApprovalList, {
+  type PendingMemberItem,
+} from "./_components/PendingMemberApprovalList";
+import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
 // 동적 렌더링 강제 (세션별/그룹별 데이터를 매 요청마다 새로 조회)
 export const dynamic = "force-dynamic";
@@ -41,6 +46,11 @@ export const metadata = {
 };
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+const memberApprovalDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 /**
  * 관리자 전용 대시보드
@@ -106,7 +116,8 @@ export default async function AdminDashboardPage({
   const allProfilesQuery = supabase
     .from("profiles")
     .select("id, name, group_name")
-    .neq("role", "admin");
+    .neq("role", "admin")
+    .eq("is_dormant", false);
 
   const adminProfilesQuery = supabase
     .from("profiles")
@@ -123,6 +134,7 @@ export default async function AdminDashboardPage({
     homeworksResult,
     consultationsResult,
     surveysResult,
+    pendingMembersResult,
   ] = await Promise.all([
     buildAssignmentsQuery(),
     allProfilesQuery,
@@ -137,6 +149,12 @@ export default async function AdminDashboardPage({
     supabase
       .from("surveys")
       .select("id, title, start_date, end_date, group_name"),
+    supabase
+      .from("profiles")
+      .select("id, name, group_name, phone, created_at, approval_status")
+      .neq("role", "admin")
+      .eq("approval_status", PROFILE_APPROVAL_STATUS.pending)
+      .order("created_at", { ascending: false }),
   ]);
 
   const assignments = assignmentsResult.data ?? [];
@@ -145,6 +163,25 @@ export default async function AdminDashboardPage({
   const allHomeworks = homeworksResult.data ?? [];
   const allConsultations = consultationsResult.data ?? [];
   const allSurveys = surveysResult.data ?? [];
+  const allPendingMembers = pendingMembersResult.data ?? [];
+
+  if (pendingMembersResult.error) {
+    console.error("가입 검토 대기 회원 조회 오류:", pendingMembersResult.error);
+  }
+
+  const pendingMemberCount = allPendingMembers.length;
+  const pendingMembersForDashboard: PendingMemberItem[] = allPendingMembers
+    .slice(0, 5)
+    .map((row) => ({
+      id: row.id,
+      name: row.name?.trim() || "(이름 없음)",
+      groupName: row.group_name,
+      phone: row.phone,
+      createdAtLabel: memberApprovalDateFormatter.format(
+        new Date(row.created_at),
+      ),
+      approvalStatus: row.approval_status,
+    }));
 
   // 그룹별 학생 수 집계 (탭 배지 표시용)
   // - "all": 전체 학생 수
@@ -345,7 +382,7 @@ export default async function AdminDashboardPage({
         {/* 상단 KPI 카드 */}
         <section
           aria-label="핵심 지표"
-          className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4"
+          className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4"
         >
           <StatCard
             label="전체 학생"
@@ -362,7 +399,20 @@ export default async function AdminDashboardPage({
             accentClassName="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
           />
           <StatCard
-            label="검토 대기"
+            label="가입 검토 대기"
+            value={pendingMemberCount}
+            hint={
+              pendingMemberCount > 0
+                ? "신규 가입 승인이 필요합니다"
+                : "대기 중인 가입 없음"
+            }
+            icon={<UserPlus className="size-5" />}
+            accentClassName="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+            highlight={pendingMemberCount > 0}
+            href="/admin/members"
+          />
+          <StatCard
+            label="과제 검토 대기"
             value={pendingHomeworkCount}
             hint={pendingHomeworkCount > 0 ? "확인이 필요합니다" : "모두 처리됨"}
             icon={<AlertCircle className="size-5" />}
@@ -387,6 +437,22 @@ export default async function AdminDashboardPage({
             icon={<ClipboardCheck className="size-5" />}
             accentClassName="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
           />
+        </section>
+
+        {/* 가입 검토 대기 회원 (과정 필터와 무관 — 전체 신규 가입) */}
+        <section className="mt-6 sm:mt-8">
+          <DashboardSection
+            title="가입 검토 대기"
+            description={
+              pendingMemberCount > 0
+                ? `신규 가입 ${pendingMemberCount}명 · 최근 ${pendingMembersForDashboard.length}명 표시`
+                : "승인 대기 중인 신규 회원이 없습니다."
+            }
+            moreHref="/admin/members"
+            moreLabel="회원 관리 전체 보기"
+          >
+            <PendingMemberApprovalList members={pendingMembersForDashboard} />
+          </DashboardSection>
         </section>
 
         {/* 메인 그리드: 왼쪽(진행중 과제) + 오른쪽(검토대기 / 상담대기) */}
@@ -458,6 +524,11 @@ export default async function AdminDashboardPage({
                   href="/admin/consultations"
                   label="학생 상담 관리"
                   icon={<MessageSquare className="size-4" />}
+                />
+                <QuickActionLink
+                  href="/admin/members"
+                  label="회원 관리"
+                  icon={<UserPlus className="size-4" />}
                 />
                 <QuickActionLink
                   href="/admin/evaluation"

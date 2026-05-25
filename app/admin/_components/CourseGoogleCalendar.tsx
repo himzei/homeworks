@@ -30,7 +30,7 @@ export default function CourseGoogleCalendar({
   days,
   headerEnd,
 }: CourseGoogleCalendarProps) {
-  const { dayByDate, colorByKey, sundayWeekLabelsByDate } =
+  const { dayByDate, colorByKey, sundayWeekLabelsByDate, courseDayByDate } =
     useCourseCalendarDerivedData(days);
 
   const rangeBounds = useMemo(() => {
@@ -156,6 +156,7 @@ export default function CourseGoogleCalendar({
         dayByDate={dayByDate}
         colorByKey={colorByKey}
         sundayWeekLabelsByDate={sundayWeekLabelsByDate}
+        courseDayByDate={courseDayByDate}
         showMonthHeader={false}
       />
     </div>

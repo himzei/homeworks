@@ -46,7 +46,11 @@ export default async function AdminCoursesPage() {
       .select("*")
       .order("sort_order", { ascending: false })
       .order("created_at", { ascending: false }),
-    supabase.from("profiles").select("group_name").neq("role", "admin"),
+    supabase
+      .from("profiles")
+      .select("group_name")
+      .neq("role", "admin")
+      .eq("is_dormant", false),
   ]);
 
   if (coursesResult.error) {

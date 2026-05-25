@@ -8,11 +8,14 @@ import {
   type EducationCalendarDay,
 } from "@/lib/course-schedule";
 import {
+  buildCourseDayIndexByDate,
   buildCurriculumColorMap,
   buildMonthGridCells,
   buildSundayWeekLabelsByDate,
+  formatCourseDayLabel,
   formatMonthTitle,
   getTodayDateString,
+  type CourseDayIndex,
   WEEKDAY_LABELS,
 } from "@/lib/course-calendar-grid";
 import { cn } from "@/lib/utils";
@@ -181,7 +184,12 @@ export function useCourseCalendarDerivedData(days: EducationCalendarDay[]) {
     [days],
   );
 
-  return { dayByDate, colorByKey, sundayWeekLabelsByDate };
+  const courseDayByDate = useMemo(
+    () => buildCourseDayIndexByDate(days),
+    [days],
+  );
+
+  return { dayByDate, colorByKey, sundayWeekLabelsByDate, courseDayByDate };
 }
 
 type CourseCalendarMonthPanelProps = {
@@ -189,6 +197,7 @@ type CourseCalendarMonthPanelProps = {
   dayByDate: Map<string, EducationCalendarDay>;
   colorByKey: Map<string, string>;
   sundayWeekLabelsByDate: Map<string, string[]>;
+  courseDayByDate: Map<string, CourseDayIndex>;
   /** false면 월 제목 행 숨김 (상단 툴바와 함께 쓸 때) */
   showMonthHeader?: boolean;
 };
@@ -199,6 +208,7 @@ export default function CourseCalendarMonthPanel({
   dayByDate,
   colorByKey,
   sundayWeekLabelsByDate,
+  courseDayByDate,
   showMonthHeader = true,
 }: CourseCalendarMonthPanelProps) {
   const gridCells = useMemo(
@@ -243,31 +253,39 @@ export default function CourseCalendarMonthPanel({
           const sundayWeekLabels = isSunday
             ? sundayWeekLabelsByDate.get(cell.date)
             : undefined;
+          const courseDayLabel = inCourseRange
+            ? courseDayByDate.get(cell.date)
+            : undefined;
 
           return (
             <div
               key={cell.date}
               className={cn(
-                "min-h-[100px] border-b border-r border-[#dadce0] p-1 flex flex-col",
+                "relative min-h-[100px] border-b border-r border-[#dadce0] p-1 flex flex-col",
                 !cell.inCurrentMonth && "bg-[#f8f9fa]",
               )}
             >
-              <div className="flex justify-end mb-0.5">
+              {courseDayLabel ? (
                 <span
-                  className={cn(
-                    "inline-flex size-7 items-center justify-center text-xs tabular-nums",
-                    !cell.inCurrentMonth && "text-[#9aa0a6]",
-                    cell.inCurrentMonth &&
-                      !isToday &&
-                      (isWeekend ? "text-[#d50000]" : "text-[#3c4043]"),
-                    isToday &&
-                      "rounded-full bg-[#1a73e8] text-white font-medium",
-                  )}
+                  className="pointer-events-none absolute left-1/2 top-[4px] z-[1] flex h-4 max-w-[calc(100%-2.5rem)] -translate-x-1/2 items-center justify-center truncate px-0.5 text-center text-[10px] font-medium leading-none tabular-nums text-[#1a73e8]"
+                  title={formatCourseDayLabel(courseDayLabel)}
                 >
-                  {cell.dayNumber}
+                  {formatCourseDayLabel(courseDayLabel)}
                 </span>
-              </div>
-              <div className="flex flex-col gap-0.5 flex-1 min-h-0">
+              ) : null}
+              <span
+                className={cn(
+                  "absolute right-[4px] top-[4px] z-[2] inline-flex size-7 items-start justify-center pt-0.5 leading-none text-xs tabular-nums",
+                  !cell.inCurrentMonth && "text-[#9aa0a6]",
+                  cell.inCurrentMonth &&
+                    !isToday &&
+                    (isWeekend ? "text-[#d50000]" : "text-[#3c4043]"),
+                  isToday && "rounded-full bg-[#1a73e8] text-white font-medium",
+                )}
+              >
+                {cell.dayNumber}
+              </span>
+              <div className="flex flex-col gap-0.5 flex-1 min-h-0 pt-7">
                 {sundayWeekLabels?.map((label) => (
                   <div
                     key={label}

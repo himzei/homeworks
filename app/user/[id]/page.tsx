@@ -51,6 +51,11 @@ export default async function UserProfilePage({
     notFound();
   }
 
+  // 휴면(탈퇴) 회원은 모든 화면에서 숨김
+  if (profile.is_dormant) {
+    notFound();
+  }
+
   let presidentIsTeamLeader = false;
   if (
     profile.class_officer_role === CLASS_OFFICER_ROLE.CLASS_PRESIDENT &&

@@ -58,7 +58,9 @@ export default async function AdminSurveysPage({
   // 다른 admin 페이지와 동일한 정책으로 미지정 인원은 각 기수에 합산
   const { data: allProfiles } = await supabase
     .from("profiles")
-    .select("group_name");
+    .select("group_name")
+    .neq("role", "admin")
+    .eq("is_dormant", false);
 
   const profiles = allProfiles ?? [];
   const unsetGroupCount = profiles.filter((p) => !p.group_name).length;

@@ -140,7 +140,8 @@ async function fetchGroupStudentIds(
     .from("profiles")
     .select("id")
     .eq("group_name", groupName)
-    .neq("role", "admin");
+    .neq("role", "admin")
+    .eq("is_dormant", false);
 
   if (studentsError) {
     console.error("반·조 적용 학생 조회:", studentsError);

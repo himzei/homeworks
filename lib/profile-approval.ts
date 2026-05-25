@@ -11,11 +11,13 @@ export type ProfileApprovalStatus =
 export type ProfileWithApproval = {
   role?: string | null;
   approval_status?: string | null;
+  is_dormant?: boolean | null;
 };
 
-/** 관리자이거나 승인된 회원인지 */
+/** 관리자이거나 승인·활성 회원인지 (휴면 제외) */
 export function isApprovedMember(profile: ProfileWithApproval | null | undefined): boolean {
   if (!profile) return false;
+  if (profile.is_dormant) return false;
   if (profile.role === "admin") return true;
   return profile.approval_status === PROFILE_APPROVAL_STATUS.approved;
 }

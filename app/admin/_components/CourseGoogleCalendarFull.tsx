@@ -19,7 +19,7 @@ type CourseGoogleCalendarFullProps = {
 export default function CourseGoogleCalendarFull({
   days,
 }: CourseGoogleCalendarFullProps) {
-  const { dayByDate, colorByKey, sundayWeekLabelsByDate } =
+  const { dayByDate, colorByKey, sundayWeekLabelsByDate, courseDayByDate } =
     useCourseCalendarDerivedData(days);
 
   const monthsInRange = useMemo(() => {
@@ -39,6 +39,7 @@ export default function CourseGoogleCalendarFull({
             dayByDate={dayByDate}
             colorByKey={colorByKey}
             sundayWeekLabelsByDate={sundayWeekLabelsByDate}
+            courseDayByDate={courseDayByDate}
           />
         </div>
       ))}

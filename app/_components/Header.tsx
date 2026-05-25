@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth/SessionProvider";
 import AuthModal from "./AuthModal";
 import HeaderNav from "./HeaderNav";
+import { LOGIN_REQUIRED_MESSAGE } from "@/lib/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,12 +20,20 @@ import {
 /** useSearchParams 사용 — Suspense 경계 필요 */
 function HeaderNavWithSession({
   isLoggedIn,
+  onLoginRequired,
   display = "all",
 }: {
   isLoggedIn: boolean;
+  onLoginRequired?: () => void;
   display?: "all" | "desktop" | "mobile";
 }) {
-  return <HeaderNav isLoggedIn={isLoggedIn} display={display} />;
+  return (
+    <HeaderNav
+      isLoggedIn={isLoggedIn}
+      onLoginRequired={onLoginRequired}
+      display={display}
+    />
+  );
 }
 
 const navFallback = (
@@ -167,6 +176,11 @@ export default function Header() {
 
   const isLoggedIn = Boolean(user);
 
+  const handleLoginRequiredNav = () => {
+    window.alert(LOGIN_REQUIRED_MESSAGE);
+    setIsLoginModalOpen(true);
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
@@ -192,6 +206,9 @@ export default function Header() {
               <Suspense fallback={navFallback}>
                 <HeaderNavWithSession
                   isLoggedIn={isLoggedIn}
+                  onLoginRequired={
+                    isLoggedIn ? undefined : handleLoginRequiredNav
+                  }
                   display="desktop"
                 />
               </Suspense>
@@ -219,7 +236,13 @@ export default function Header() {
           {/* 모바일: 햄버거 메뉴 */}
           <div className="md:hidden mt-3 pt-3 border-t border-white/10">
             <Suspense fallback={navFallback}>
-              <HeaderNavWithSession isLoggedIn={isLoggedIn} display="mobile" />
+              <HeaderNavWithSession
+                isLoggedIn={isLoggedIn}
+                onLoginRequired={
+                  isLoggedIn ? undefined : handleLoginRequiredNav
+                }
+                display="mobile"
+              />
             </Suspense>
           </div>
         </div>

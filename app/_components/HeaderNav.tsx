@@ -9,6 +9,8 @@ import {
   getHeaderNavItems,
   isHeaderNavChildActive,
   isHeaderNavItemActive,
+  isHeaderNavLoginRequired,
+  LOGIN_REQUIRED_MESSAGE,
   type HeaderNavItem,
 } from "@/lib/navigation";
 import {
@@ -20,6 +22,8 @@ import {
 
 type HeaderNavProps = {
   isLoggedIn: boolean;
+  /** 로그인 필요 메뉴 클릭 시 (미지정 시 alert) */
+  onLoginRequired?: () => void;
   /** desktop: 가로 메뉴만, mobile: 햄버거만, all: 반응형 전체 */
   display?: "all" | "desktop" | "mobile";
 };
@@ -46,15 +50,44 @@ const navLinkClassName = navButtonClassName;
 function NavLink({
   item,
   isActive,
+  isLoggedIn,
+  parentAuthRequired = false,
   onNavigate,
+  onLoginRequired,
   className,
 }: {
   item: HeaderNavItem;
   isActive: boolean;
+  isLoggedIn: boolean;
+  parentAuthRequired?: boolean;
   onNavigate?: () => void;
+  onLoginRequired?: () => void;
   className?: string;
 }) {
   const linkClassName = navLinkClassName(isActive, className);
+  const requiresLogin =
+    !isLoggedIn && isHeaderNavLoginRequired(item, parentAuthRequired);
+
+  const handleLoginRequiredClick = () => {
+    onNavigate?.();
+    if (onLoginRequired) {
+      onLoginRequired();
+      return;
+    }
+    window.alert(LOGIN_REQUIRED_MESSAGE);
+  };
+
+  if (requiresLogin) {
+    return (
+      <button
+        type="button"
+        onClick={handleLoginRequiredClick}
+        className={linkClassName}
+      >
+        {item.label}
+      </button>
+    );
+  }
 
   if (item.external && item.href) {
     return (
@@ -89,13 +122,18 @@ function NavDropdown({
   item,
   pathname,
   currentTab,
+  isLoggedIn,
+  onLoginRequired,
 }: {
   item: HeaderNavItem;
   pathname: string;
   currentTab: string | null;
+  isLoggedIn: boolean;
+  onLoginRequired?: () => void;
 }) {
   const isActive = isHeaderNavItemActive(item, pathname, currentTab);
   const children = item.children ?? [];
+  const parentAuthRequired = Boolean(item.authRequired);
 
   return (
     <DropdownMenu>
@@ -125,6 +163,28 @@ function NavDropdown({
 
           if (!child.href) return null;
 
+          const childRequiresLogin =
+            !isLoggedIn &&
+            isHeaderNavLoginRequired(child, parentAuthRequired);
+
+          if (childRequiresLogin) {
+            return (
+              <DropdownMenuItem
+                key={child.href}
+                className="cursor-pointer"
+                onSelect={() => {
+                  if (onLoginRequired) {
+                    onLoginRequired();
+                    return;
+                  }
+                  window.alert(LOGIN_REQUIRED_MESSAGE);
+                }}
+              >
+                {child.label}
+              </DropdownMenuItem>
+            );
+          }
+
           return (
             <DropdownMenuItem key={child.href} asChild>
               <Link
@@ -150,12 +210,16 @@ function NavDropdownMobile({
   item,
   pathname,
   currentTab,
+  isLoggedIn,
   onNavigate,
+  onLoginRequired,
 }: {
   item: HeaderNavItem;
   pathname: string;
   currentTab: string | null;
+  isLoggedIn: boolean;
   onNavigate?: () => void;
+  onLoginRequired?: () => void;
 }) {
   const isActive = isHeaderNavItemActive(item, pathname, currentTab);
   const children = item.children ?? [];
@@ -175,7 +239,10 @@ function NavDropdownMobile({
           key={child.href ?? child.label}
           item={child}
           isActive={isHeaderNavChildActive(child, pathname, currentTab)}
+          isLoggedIn={isLoggedIn}
+          parentAuthRequired={Boolean(item.authRequired)}
           onNavigate={onNavigate}
+          onLoginRequired={onLoginRequired}
           className="w-full justify-start pl-6"
         />
       ))}
@@ -187,13 +254,17 @@ function NavEntry({
   item,
   pathname,
   currentTab,
+  isLoggedIn,
   onNavigate,
+  onLoginRequired,
   variant,
 }: {
   item: HeaderNavItem;
   pathname: string;
   currentTab: string | null;
+  isLoggedIn: boolean;
   onNavigate?: () => void;
+  onLoginRequired?: () => void;
   variant: "desktop" | "mobile";
 }) {
   const entryKey = item.href ?? item.label;
@@ -206,6 +277,8 @@ function NavEntry({
           item={item}
           pathname={pathname}
           currentTab={currentTab}
+          isLoggedIn={isLoggedIn}
+          onLoginRequired={onLoginRequired}
         />
       );
     }
@@ -216,7 +289,9 @@ function NavEntry({
         item={item}
         pathname={pathname}
         currentTab={currentTab}
+        isLoggedIn={isLoggedIn}
         onNavigate={onNavigate}
+        onLoginRequired={onLoginRequired}
       />
     );
   }
@@ -226,7 +301,9 @@ function NavEntry({
       key={entryKey}
       item={item}
       isActive={isHeaderNavItemActive(item, pathname, currentTab)}
+      isLoggedIn={isLoggedIn}
       onNavigate={onNavigate}
+      onLoginRequired={onLoginRequired}
       className={variant === "mobile" ? "w-full justify-start" : undefined}
     />
   );
@@ -235,6 +312,7 @@ function NavEntry({
 /** 프로젝트 라우트 기준 헤더 내비게이션 */
 export default function HeaderNav({
   isLoggedIn,
+  onLoginRequired,
   display = "all",
 }: HeaderNavProps) {
   const pathname = usePathname();
@@ -268,6 +346,8 @@ export default function HeaderNav({
             item={item}
             pathname={pathname}
             currentTab={currentTab}
+            isLoggedIn={isLoggedIn}
+            onLoginRequired={onLoginRequired}
             variant="desktop"
           />
         ))}
@@ -303,7 +383,12 @@ export default function HeaderNav({
                 item={item}
                 pathname={pathname}
                 currentTab={currentTab}
+                isLoggedIn={isLoggedIn}
                 onNavigate={closeMobileMenu}
+                onLoginRequired={() => {
+                  closeMobileMenu();
+                  onLoginRequired?.();
+                }}
                 variant="mobile"
               />
             ))}

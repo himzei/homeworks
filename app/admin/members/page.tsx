@@ -1,17 +1,26 @@
 import { redirect } from "next/navigation";
 
-import PendingMemberApprovalList, {
-  type PendingMemberItem,
-} from "@/app/admin/_components/PendingMemberApprovalList";
+import AdminMemberManagementList, {
+  type AdminMemberListItem,
+} from "@/app/admin/_components/AdminMemberManagementList";
+import AdminMembersFilters from "@/app/admin/_components/AdminMembersFilters";
+import AdminMembersPagination from "@/app/admin/_components/AdminMembersPagination";
+import {
+  buildMembersListQueryString,
+  buildMembersSearchPattern,
+  MEMBERS_UNSET_GROUP,
+  parseMembersGroupFilter,
+} from "@/lib/admin/members-list-query";
+import { fetchGroupOptions } from "@/lib/fetch-group-options";
+import { MEMBERS_LIST_PAGE_SIZE } from "@/lib/profile-members";
 import { createClient } from "@/lib/supabase/server";
-import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "회원 승인",
-  description: "신규 가입 회원의 승인·거절을 처리합니다.",
+  title: "회원 관리",
+  description: "전체 회원 조회 및 승인·탈퇴(휴면) 처리",
 };
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -19,11 +28,18 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeStyle: "short",
 });
 
+type AdminMembersPageProps = {
+  searchParams: Promise<{ page?: string; group?: string; q?: string }>;
+};
+
 /**
- * 관리자 — 가입 승인 대기 회원 관리
+ * 관리자 — 전체 회원 관리 (페이지당 15명, 기수·검색 필터)
  */
-export default async function AdminMembersApprovalPage() {
+export default async function AdminMembersPage({
+  searchParams,
+}: AdminMembersPageProps) {
   const supabase = await createClient();
+  const resolvedSearchParams = await searchParams;
 
   const {
     data: { user },
@@ -43,39 +59,138 @@ export default async function AdminMembersApprovalPage() {
     redirect("/home");
   }
 
-  const { data: pendingMembers, error } = await supabase
-    .from("profiles")
-    .select("id, name, group_name, phone, created_at, approval_status")
-    .neq("role", "admin")
-    .eq("approval_status", PROFILE_APPROVAL_STATUS.pending)
-    .order("created_at", { ascending: false });
+  const selectedGroup = parseMembersGroupFilter(resolvedSearchParams.group);
+  const searchQuery = (resolvedSearchParams.q ?? "").trim();
 
-  if (error) {
-    console.error("승인 대기 회원 조회 오류:", error);
+  const rawPage = Number.parseInt(resolvedSearchParams.page ?? "1", 10);
+  const currentPage =
+    Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  const rangeFrom = (currentPage - 1) * MEMBERS_LIST_PAGE_SIZE;
+  const rangeTo = rangeFrom + MEMBERS_LIST_PAGE_SIZE - 1;
+
+  const preservedQuery = buildMembersListQueryString({
+    group: selectedGroup,
+    q: searchQuery || null,
+    page: currentPage > 1 ? currentPage : undefined,
+  });
+
+  const [groupOptions, countsResult, membersResult] = await Promise.all([
+    fetchGroupOptions(supabase),
+    supabase
+      .from("profiles")
+      .select("group_name")
+      .neq("role", "admin"),
+    (async () => {
+      let query = supabase
+        .from("profiles")
+        .select(
+          "id, name, group_name, phone, created_at, approval_status, is_dormant",
+          { count: "exact" },
+        )
+        .neq("role", "admin")
+        .order("created_at", { ascending: false });
+
+      if (selectedGroup === MEMBERS_UNSET_GROUP) {
+        query = query.is("group_name", null);
+      } else if (selectedGroup) {
+        query = query.eq("group_name", selectedGroup);
+      }
+
+      const searchPattern = buildMembersSearchPattern(searchQuery);
+      if (searchPattern) {
+        query = query.or(
+          `name.ilike.${searchPattern},phone.ilike.${searchPattern}`,
+        );
+      }
+
+      return query.range(rangeFrom, rangeTo);
+    })(),
+  ]);
+
+  if (countsResult.error) {
+    console.error("회원 수 집계 오류:", countsResult.error);
+  }
+  if (membersResult.error) {
+    console.error("회원 목록 조회 오류:", membersResult.error);
   }
 
-  const members: PendingMemberItem[] = (pendingMembers ?? []).map((row) => ({
+  const allProfilesForCount = countsResult.data ?? [];
+  const memberCountsByGroup: Record<string, number> = {
+    all: allProfilesForCount.length,
+    [MEMBERS_UNSET_GROUP]: 0,
+  };
+  for (const profile of allProfilesForCount) {
+    if (!profile.group_name) {
+      memberCountsByGroup[MEMBERS_UNSET_GROUP] += 1;
+    } else {
+      memberCountsByGroup[profile.group_name] =
+        (memberCountsByGroup[profile.group_name] ?? 0) + 1;
+    }
+  }
+
+  const { data: allMembers, count } = membersResult;
+  const totalCount = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / MEMBERS_LIST_PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  if (safePage !== currentPage && totalCount > 0) {
+    redirect(
+      `/admin/members${buildMembersListQueryString({
+        group: selectedGroup,
+        q: searchQuery || null,
+        page: safePage > 1 ? safePage : undefined,
+      })}`,
+    );
+  }
+
+  const members: AdminMemberListItem[] = (allMembers ?? []).map((row) => ({
     id: row.id,
     name: row.name?.trim() || "(이름 없음)",
     groupName: row.group_name,
     phone: row.phone,
     createdAtLabel: dateFormatter.format(new Date(row.created_at)),
     approvalStatus: row.approval_status,
+    isDormant: row.is_dormant === true,
   }));
+
+  const hasFilters = Boolean(selectedGroup || searchQuery);
+  const emptyMessage = hasFilters
+    ? "조건에 맞는 회원이 없습니다."
+    : "등록된 회원이 없습니다.";
 
   return (
     <>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-black dark:text-zinc-50">
-          회원 가입 승인
+          회원 관리
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          신규 회원가입은 관리자 승인 후 서비스에 등록됩니다. 최신 신청순으로
-          표시됩니다.
+          전체 회원을 확인하고 가입 승인·탈퇴(휴면)를 처리합니다. 기수별 필터와
+          이름·연락처 검색을 사용할 수 있습니다. 페이지당{" "}
+          {MEMBERS_LIST_PAGE_SIZE}명씩 표시합니다.
+        </p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+          {hasFilters ? `검색 결과 ${totalCount}명` : `총 ${totalCount}명`}
+          {totalPages > 1
+            ? ` · ${safePage}/${totalPages} 페이지`
+            : null}
         </p>
       </div>
 
-      <PendingMemberApprovalList members={members} />
+      <AdminMembersFilters
+        selectedGroup={selectedGroup}
+        searchQuery={searchQuery}
+        groupOptions={groupOptions}
+        memberCountsByGroup={memberCountsByGroup}
+      />
+
+      <AdminMemberManagementList members={members} emptyMessage={emptyMessage} />
+
+      <AdminMembersPagination
+        currentPage={safePage}
+        totalPages={totalPages}
+        preservedQuery={preservedQuery}
+      />
     </>
   );
 }
