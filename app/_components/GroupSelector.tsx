@@ -2,7 +2,10 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { GROUP_OPTIONS } from "@/lib/constants";
-import type { GroupOption } from "@/lib/fetch-group-options";
+import {
+  sortGroupOptionsByCohortDesc,
+  type GroupOption,
+} from "@/lib/fetch-group-options";
 import { cn } from "@/lib/utils";
 
 /** "전체"를 나타내는 값 (URL에 표시하지 않음) */
@@ -28,9 +31,13 @@ export default function GroupSelector({
   className,
   selectClassName,
 }: GroupSelectorProps) {
-  const resolvedGroupOptions =
+  const resolvedGroupOptions = sortGroupOptionsByCohortDesc(
     groupOptions?.filter((opt) => opt.value) ??
-    GROUP_OPTIONS.filter((opt) => opt.value);
+      GROUP_OPTIONS.filter((opt) => opt.value).map((opt) => ({
+        value: opt.value,
+        label: opt.label,
+      })),
+  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

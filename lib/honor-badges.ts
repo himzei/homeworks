@@ -150,18 +150,26 @@ export async function fetchHonorBadgesForGroup(
   return sections.flatMap((s) => s.badges);
 }
 
+export type FetchHonorBadgeLabelsOptions = {
+  /** 단일 과정 — 해당 과정에 등록된 배지만 표시 */
+  groupName?: string | null;
+  /** profile_id → 과정명 (과정별로 다른 배지만 표시할 때) */
+  profileGroupNameById?: Record<string, string | null | undefined>;
+};
+
 /**
  * profile_id → 배지 라벨 목록 (표시용, sort_order 순)
  */
 export async function fetchHonorBadgeLabelsByProfileId(
   supabase: SupabaseClient,
   profileIds: string[],
+  options?: FetchHonorBadgeLabelsOptions,
 ): Promise<Record<string, string[]>> {
   if (profileIds.length === 0) return {};
 
   const { data, error } = await supabase
     .from("profile_honor_badges")
-    .select("profile_id, honor_badges(label, sort_order)")
+    .select("profile_id, honor_badges(label, sort_order, group_name)")
     .in("profile_id", profileIds);
 
   if (error) {
@@ -174,15 +182,26 @@ export async function fetchHonorBadgeLabelsByProfileId(
     Array<{ label: string; sortOrder: number }>
   >();
 
+  const filterGroupName = options?.groupName?.trim() || null;
+
   for (const row of data ?? []) {
     const profileId = row.profile_id as string;
     const badgeRaw = row.honor_badges as
-      | { label: string; sort_order: number }
-      | { label: string; sort_order: number }[]
+      | { label: string; sort_order: number; group_name: string }
+      | { label: string; sort_order: number; group_name: string }[]
       | null;
 
     const badge = Array.isArray(badgeRaw) ? badgeRaw[0] : badgeRaw;
     if (!badge?.label) continue;
+
+    const expectedGroupName =
+      options?.profileGroupNameById?.[profileId]?.trim() || filterGroupName;
+    if (
+      expectedGroupName &&
+      badge.group_name?.trim() !== expectedGroupName
+    ) {
+      continue;
+    }
 
     const list = entriesByProfile.get(profileId) ?? [];
     list.push({ label: badge.label, sortOrder: badge.sort_order ?? 0 });

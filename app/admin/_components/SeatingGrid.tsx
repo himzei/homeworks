@@ -64,7 +64,7 @@ export default function SeatingGrid({
   return (
     <div
       className={cn(
-        "inline-flex flex-col gap-6 p-7 sm:p-10 bg-zinc-100 dark:bg-zinc-900 rounded-xl border-2 border-black",
+        "inline-flex flex-col gap-1 p-7 sm:p-10 bg-zinc-100 dark:bg-zinc-900 rounded-xl border-2 border-black",
         className,
       )}
       role="grid"
@@ -75,7 +75,7 @@ export default function SeatingGrid({
         return (
           <div
             key={row}
-            className="flex items-end justify-center gap-0"
+            className="flex items-end justify-center gap-1"
             role="row"
           >
             {Array.from({ length: colCount }, (_, colIndex) => {
@@ -112,7 +112,7 @@ export default function SeatingGrid({
         );
       })}
 
-      <div className="w-full py-4 text-center text-base font-semibold text-zinc-600 dark:text-zinc-400 border-t-2 border-black">
+      <div className="w-full mt-6 pt-4 text-center text-base font-semibold text-zinc-600 dark:text-zinc-400 border-t-2 border-black">
         칠판
       </div>
     </div>
@@ -204,13 +204,13 @@ function DeskUnit({
   ) : null;
 
   const deskBoxClass =
-    "relative w-full h-16 sm:h-[4.5rem] mt-1.5 border-2 border-black rounded-sm bg-white overflow-hidden";
+    "relative w-full h-12 sm:h-14 mt-0 border border-black rounded-sm bg-white overflow-hidden";
 
   const nameTextClass =
     "truncate max-w-full min-w-0 leading-snug text-sm sm:text-base";
 
   return (
-    <div className="flex flex-col items-center w-28 sm:w-32">
+    <div className="flex flex-col items-center gap-0 w-28 sm:w-32">
       <SeatAvatar studentName={trimmedName} avatarUrl={avatarUrl} />
 
       {editable ? (
@@ -301,7 +301,7 @@ function SeatAvatar({
   if (studentName.length === 0) {
     return (
       <div
-        className="size-8 sm:size-10 shrink-0 rounded-full border-2 border-black bg-brand-footer"
+        className="size-8 sm:size-10 shrink-0 rounded-full border-0 bg-brand-footer"
         aria-hidden
       />
     );
@@ -311,7 +311,7 @@ function SeatAvatar({
 
   return (
     <Avatar
-      className="size-8 sm:size-10 shrink-0 border-2 border-black"
+      className="size-8 sm:size-10 shrink-0 border-0"
       aria-label={`${studentName} 프로필`}
     >
       {avatarUrl ? (

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import {
+  sortTrainingCourseRecordsByStartDateDesc,
   toTrainingCourseListItem,
   type TrainingCourseRecord,
 } from "@/lib/courses";
@@ -41,11 +42,7 @@ export default async function AdminCoursesPage() {
   }
 
   const [coursesResult, profilesResult] = await Promise.all([
-    supabase
-      .from("training_courses")
-      .select("*")
-      .order("sort_order", { ascending: false })
-      .order("created_at", { ascending: false }),
+    supabase.from("training_courses").select("*"),
     supabase
       .from("profiles")
       .select("group_name")
@@ -66,10 +63,14 @@ export default async function AdminCoursesPage() {
       (studentCountByCourseName[groupName] ?? 0) + 1;
   }
 
-  const courses = (coursesResult.data ?? []).map((record) =>
+  const sortedCourseRecords = sortTrainingCourseRecordsByStartDateDesc(
+    (coursesResult.data ?? []) as TrainingCourseRecord[],
+  );
+
+  const courses = sortedCourseRecords.map((record) =>
     toTrainingCourseListItem(
-      record as TrainingCourseRecord,
-      studentCountByCourseName[(record as TrainingCourseRecord).name] ?? 0,
+      record,
+      studentCountByCourseName[record.name] ?? 0,
     ),
   );
 

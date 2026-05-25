@@ -230,3 +230,48 @@ export async function isGroupTeamAssignmentActive(
     >,
   );
 }
+
+/**
+ * 여러 과정 중 적용 중인 조 편성이 실제로 있는 group_name 집합
+ */
+export async function getActiveTeamAssignmentGroupNames(
+  supabase: SupabaseClient,
+  groupNames: string[],
+): Promise<Set<string>> {
+  const trimmedGroupNames = [
+    ...new Set(
+      groupNames.map((name) => name?.trim()).filter((name): name is string => !!name),
+    ),
+  ];
+
+  if (trimmedGroupNames.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from("class_role_snapshots")
+    .select("group_name, team_leaders, team_members, team_count")
+    .eq("is_active", true)
+    .in("group_name", trimmedGroupNames);
+
+  if (error) {
+    console.error("과정별 조 편성 활성 조회 오류:", error);
+    return new Set();
+  }
+
+  const activeGroupNames = new Set<string>();
+  for (const row of data ?? []) {
+    const groupName = row.group_name?.trim();
+    if (!groupName) continue;
+    if (
+      recordHasTeamAssignments(
+        row as Pick<
+          ClassRoleSnapshotRecord,
+          "team_leaders" | "team_members" | "team_count"
+        >,
+      )
+    ) {
+      activeGroupNames.add(groupName);
+    }
+  }
+
+  return activeGroupNames;
+}

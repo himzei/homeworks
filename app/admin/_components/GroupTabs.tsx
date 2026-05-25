@@ -4,7 +4,10 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { GROUP_OPTIONS } from "@/lib/constants";
-import type { GroupOption } from "@/lib/fetch-group-options";
+import {
+  sortGroupOptionsByCohortDesc,
+  type GroupOption,
+} from "@/lib/fetch-group-options";
 
 interface GroupTabsProps {
   /** 현재 선택된 그룹 값 (없으면 "전체") */
@@ -32,10 +35,14 @@ export default function GroupTabs({
   // 라우팅 중 UI 응답성 유지를 위해 transition 사용
   const [isPending, startTransition] = useTransition();
 
-  // 빈 옵션 제외한 그룹 목록 (DB 연동 또는 constants 폴백)
-  const resolvedGroupOptions =
+  // 빈 옵션 제외 + 기수 내림차순 (전체 다음 16기 → 15기 → …)
+  const resolvedGroupOptions = sortGroupOptionsByCohortDesc(
     groupOptions?.filter((opt) => opt.value) ??
-    GROUP_OPTIONS.filter((opt) => opt.value);
+      GROUP_OPTIONS.filter((opt) => opt.value).map((opt) => ({
+        value: opt.value,
+        label: opt.label,
+      })),
+  );
   const isAllSelected = !selectedGroup || selectedGroup === "all";
 
   // 탭 클릭 → URL 업데이트

@@ -314,6 +314,41 @@ function resolveEducationCalendar(
   );
 }
 
+/** 목록 정렬용 과정 시작일 (사전교육 시작 → 본교육 시작) */
+export function getTrainingCourseStartDateForSort(
+  record: Pick<
+    TrainingCourseRecord,
+    "pre_education_start_date" | "main_education_start_date"
+  >,
+): string | null {
+  const preEducationStart = record.pre_education_start_date?.trim();
+  if (preEducationStart) return preEducationStart;
+
+  const mainEducationStart = record.main_education_start_date?.trim();
+  return mainEducationStart || null;
+}
+
+/** 과정 시작일 내림차순 (최신 기수·과정이 위) */
+export function sortTrainingCourseRecordsByStartDateDesc(
+  records: TrainingCourseRecord[],
+): TrainingCourseRecord[] {
+  return [...records].toSorted((recordA, recordB) => {
+    const startDateA = getTrainingCourseStartDateForSort(recordA);
+    const startDateB = getTrainingCourseStartDateForSort(recordB);
+
+    if (!startDateA && !startDateB) {
+      return recordB.created_at.localeCompare(recordA.created_at);
+    }
+    if (!startDateA) return 1;
+    if (!startDateB) return -1;
+
+    const byStartDate = startDateB.localeCompare(startDateA);
+    if (byStartDate !== 0) return byStartDate;
+
+    return recordB.created_at.localeCompare(recordA.created_at);
+  });
+}
+
 export function toTrainingCourseListItem(
   record: TrainingCourseRecord,
   studentCount = 0,

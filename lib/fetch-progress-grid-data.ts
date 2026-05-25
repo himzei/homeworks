@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
 import { CLASS_OFFICER_ROLE } from "@/lib/class-officers";
+import { getActiveTeamAssignmentGroupNames } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { parseSupabaseUtcTimestamp } from "@/lib/format-date";
@@ -83,6 +84,23 @@ export function belongsToCourseGroup(
   return normalizedGroupName === filterGroup;
 }
 
+/** 조 편성이 없을 때 조·조장 배지만 제거 (반장·명예 배지는 유지) */
+function stripTeamBadgesFromProgressUser(
+  user: ProgressGridUser,
+): ProgressGridUser {
+  const classOfficerRole =
+    user.classOfficerRole === CLASS_OFFICER_ROLE.CLASS_PRESIDENT
+      ? CLASS_OFFICER_ROLE.CLASS_PRESIDENT
+      : null;
+
+  return {
+    ...user,
+    classOfficerRole,
+    teamNumber: null,
+    isTeamLeader: false,
+  };
+}
+
 /**
  * 진행과정(ProgressGrid)에 필요한 과제·학생·제출 데이터를 조회한다.
  * - 일반 사용자: filterGroup에 해당하는 과정만
@@ -147,22 +165,27 @@ export async function fetchProgressGridData(
     console.error("진행과정 프로필 조회 오류:", profilesError);
   }
 
-  const usersMapped: ProgressGridUser[] = (profilesRaw ?? [])
-    .filter((profile) => {
-      if (!filterGroup) return true;
-      return belongsToCourseGroup(profile.group_name, filterGroup);
-    })
-    .map((profile) => ({
-      id: profile.id,
-      name: profile.name || profile.id,
-      section:
-        profile.id === currentUserId
-          ? ("your" as const)
-          : ("everyone" as const),
-      classOfficerRole: profile.class_officer_role ?? null,
-      teamNumber:
-        typeof profile.team_number === "number" ? profile.team_number : null,
-    }));
+  const filteredProfiles = (profilesRaw ?? []).filter((profile) => {
+    if (!filterGroup) return true;
+    return belongsToCourseGroup(profile.group_name, filterGroup);
+  });
+
+  const profileGroupNameById: Record<string, string | null> = {};
+  for (const profile of filteredProfiles) {
+    profileGroupNameById[profile.id] = profile.group_name?.trim() || null;
+  }
+
+  const usersMapped: ProgressGridUser[] = filteredProfiles.map((profile) => ({
+    id: profile.id,
+    name: profile.name || profile.id,
+    section:
+      profile.id === currentUserId
+        ? ("your" as const)
+        : ("everyone" as const),
+    classOfficerRole: profile.class_officer_role ?? null,
+    teamNumber:
+      typeof profile.team_number === "number" ? profile.team_number : null,
+  }));
 
   const teamsWithTeamLeader = new Set<number>();
   for (const user of usersMapped) {
@@ -185,9 +208,34 @@ export async function fetchProgressGridData(
     return { ...user, isTeamLeader: true };
   });
 
+  const groupNamesForTeamBadges = filterGroup
+    ? [filterGroup]
+    : [
+        ...new Set(
+          Object.values(profileGroupNameById).filter(
+            (name): name is string => !!name,
+          ),
+        ),
+      ];
+
+  const activeTeamAssignmentGroups = await getActiveTeamAssignmentGroupNames(
+    supabase,
+    groupNamesForTeamBadges,
+  );
+
+  users = users.map((user) => {
+    const userGroupName = profileGroupNameById[user.id];
+    const showTeamBadges =
+      !!userGroupName && activeTeamAssignmentGroups.has(userGroupName);
+    return showTeamBadges ? user : stripTeamBadgesFromProgressUser(user);
+  });
+
   const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
     supabase,
     users.map((u) => u.id),
+    filterGroup
+      ? { groupName: filterGroup }
+      : { profileGroupNameById: profileGroupNameById },
   );
 
   users = users.map((user) => ({

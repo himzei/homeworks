@@ -10,7 +10,10 @@ import {
   MEMBERS_UNSET_GROUP,
   buildMembersListQueryString,
 } from "@/lib/admin/members-list-query";
-import type { GroupOption } from "@/lib/fetch-group-options";
+import {
+  sortGroupOptionsByCohortDesc,
+  type GroupOption,
+} from "@/lib/fetch-group-options";
 
 type AdminMembersFiltersProps = {
   selectedGroup: string | null;
@@ -42,7 +45,9 @@ export default function AdminMembersFilters({
     setLocalSearch(searchQuery);
   }, [searchQuery]);
 
-  const courseOptions = groupOptions.filter((opt) => opt.value);
+  const courseOptions = sortGroupOptionsByCohortDesc(
+    groupOptions.filter((opt) => opt.value),
+  );
 
   const navigate = (next: { group?: string | null; q?: string }) => {
     const query = buildMembersListQueryString({

@@ -10,15 +10,44 @@ export type GroupOption = {
 
 const EMPTY_GROUP_OPTION: GroupOption = { value: "", label: "선택하세요" };
 
+/** 기수 번호 추출 — 정렬용 (예: "16기 교육생 - …" → 16) */
+export function parseCohortNumberFromGroupName(name: string): number | null {
+  const match = name.match(/(\d+)기/);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** admin 탭 등 — 기수 내림차순 (16기 → 15기 → 14기 …) */
+export function sortGroupOptionsByCohortDesc(
+  options: GroupOption[],
+): GroupOption[] {
+  return [...options].toSorted((optionA, optionB) => {
+    const labelA = optionA.label || optionA.value;
+    const labelB = optionB.label || optionB.value;
+    const cohortA = parseCohortNumberFromGroupName(labelA);
+    const cohortB = parseCohortNumberFromGroupName(labelB);
+
+    if (cohortA !== null && cohortB !== null && cohortB !== cohortA) {
+      return cohortB - cohortA;
+    }
+    if (cohortA !== null && cohortB === null) return -1;
+    if (cohortA === null && cohortB !== null) return 1;
+
+    return labelA.localeCompare(labelB, "ko");
+  });
+}
+
 /** DB 미적용·조회 실패 시 constants 기반 폴백 */
 function getStaticGroupOptions(): GroupOption[] {
-  return [
-    EMPTY_GROUP_OPTION,
-    ...GROUP_OPTIONS.filter((opt) => opt.value).map((opt) => ({
+  const courseOptions = sortGroupOptionsByCohortDesc(
+    GROUP_OPTIONS.filter((opt) => opt.value).map((opt) => ({
       value: opt.value,
       label: opt.label,
     })),
-  ];
+  );
+
+  return [EMPTY_GROUP_OPTION, ...courseOptions];
 }
 
 /**
@@ -46,10 +75,12 @@ export async function fetchGroupOptions(
 
   return [
     EMPTY_GROUP_OPTION,
-    ...data.map((row) => ({
-      value: row.name,
-      label: row.name,
-    })),
+    ...sortGroupOptionsByCohortDesc(
+      data.map((row) => ({
+        value: row.name,
+        label: row.name,
+      })),
+    ),
   ];
 }
 
@@ -75,12 +106,14 @@ export async function fetchProfileGroupOptions(
 
   return [
     EMPTY_GROUP_OPTION,
-    ...data
-      .filter((row) => !row.is_legacy)
-      .map((row) => ({
-        value: row.name,
-        label: row.name,
-      })),
+    ...sortGroupOptionsByCohortDesc(
+      data
+        .filter((row) => !row.is_legacy)
+        .map((row) => ({
+          value: row.name,
+          label: row.name,
+        })),
+    ),
   ];
 }
 

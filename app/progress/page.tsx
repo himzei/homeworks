@@ -80,7 +80,7 @@ export default async function ProgressPage({
           <Suspense
             fallback={<div className="text-center py-12">로딩 중...</div>}
           >
-            <div className="w-full overflow-auto max-h-[calc(100vh-220px)] rounded-lg">
+            <div className="w-full overflow-x-auto overflow-y-visible rounded-lg">
               <ProgressGrid
                 currentUserId={currentUserId}
                 assignments={assignments}
