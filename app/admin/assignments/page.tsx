@@ -1,10 +1,13 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { PencilLine } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { buildAdminAssignmentsListPath } from "@/lib/admin/admin-assignments-path";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import AssignmentList from "@/app/_components/AssignmentList";
+import { Button } from "@/app/_components/ui/button";
 
 import GroupTabsLoader from "../_components/GroupTabsLoader";
 
@@ -136,6 +139,11 @@ export default async function AdminAssignmentsPage({
     focusAssignmentId,
   });
 
+  // 선택한 기수 탭이 있으면 새 과제 작성 시 대상 과정 기본값으로 전달
+  const newAssignmentHref = filterGroup
+    ? `/admin/assignments/new?group=${encodeURIComponent(filterGroup)}`
+    : "/admin/assignments/new";
+
   return (
     <>
         {/* 기수(그룹) 필터 탭 */}
@@ -146,6 +154,19 @@ export default async function AdminAssignmentsPage({
               studentCountsByGroup={studentCountsByGroup}
             />
           </Suspense>
+        </div>
+
+        {/* 새 과제 등록 — 기존 /admin/assignments/new 페이지로 이동 */}
+        <div className="mb-4 flex justify-end">
+          <Button
+            asChild
+            className="shrink-0 bg-blue-500 text-white hover:bg-blue-600"
+          >
+            <Link href={newAssignmentHref}>
+              <PencilLine className="size-4" />
+              글쓰기
+            </Link>
+          </Button>
         </div>
 
         {/* 숙제 리스트 본문 (기존 컴포넌트 재사용) */}
