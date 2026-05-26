@@ -146,6 +146,16 @@
     @apply bg-background text-foreground;
   }
 
+  /* 클릭 가능한 링크(Next.js Link 포함)에 포인터 커서 */
+  a {
+    @apply cursor-pointer;
+  }
+
+  /* Link 안의 Button 등, 활성화된 버튼에도 포인터 커서 */
+  button:not(:disabled) {
+    @apply cursor-pointer;
+  }
+
   /* Radix 드롭다운 열릴 때 padding-right 보정으로 헤더가 밀리는 현상 방지 */
   body[data-scroll-locked] {
     padding-right: 0 !important;

@@ -27,6 +27,8 @@ type SeatingChartDetailArticleProps = {
   profileIdByName?: Record<string, string>;
   avatarUrlByName?: Record<string, string>;
   officerByStudentName?: Record<string, StudentOfficerInfo>;
+  /** false면 조·조장 배지만 숨김 (반장·명예 배지는 표시) */
+  showTeamBadges?: boolean;
 };
 
 /**
@@ -46,6 +48,7 @@ export default function SeatingChartDetailArticle({
   profileIdByName,
   avatarUrlByName,
   officerByStudentName,
+  showTeamBadges = true,
 }: SeatingChartDetailArticleProps) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -137,6 +140,7 @@ export default function SeatingChartDetailArticle({
             profileIdByName={profileIdByName}
             avatarUrlByName={avatarUrlByName}
             officerByStudentName={officerByStudentName}
+            showTeamBadges={showTeamBadges}
           />
         </div>
       </div>

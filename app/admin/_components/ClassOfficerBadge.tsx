@@ -51,7 +51,7 @@ function SingleBadge({
 }
 
 /**
- * 반장·조장·조 배지 (반장+조장이면 배지 2개)
+ * 반장·조장·조 배지 (반장은 조에 속하면 반장 + 조/조장 배지 추가)
  */
 export default function ClassOfficerBadge({
   classOfficerRole,
@@ -66,11 +66,16 @@ export default function ClassOfficerBadge({
 
   if (role === CLASS_OFFICER_ROLE.CLASS_PRESIDENT) {
     items.push({ label: "반장", variant: "president" });
-    if (showTeamBadges && isTeamLeader && teamNumber) {
-      items.push({
-        label: `${teamNumber}조 조장`,
-        variant: "teamLeader",
-      });
+    // 반장은 조 편성 비활성화 여부와 관계없이, 조에 속하면 조·조장 배지도 함께 표시
+    if (teamNumber) {
+      if (isTeamLeader) {
+        items.push({
+          label: `${teamNumber}조 조장`,
+          variant: "teamLeader",
+        });
+      } else {
+        items.push({ label: `${teamNumber}조`, variant: "member" });
+      }
     }
   } else if (showTeamBadges && role === CLASS_OFFICER_ROLE.TEAM_LEADER && teamNumber) {
     items.push({ label: `${teamNumber}조 조장`, variant: "teamLeader" });

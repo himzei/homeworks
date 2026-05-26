@@ -16,6 +16,10 @@ import {
   parseTeamLeadersFromJson,
   parseTeamMembersFromJson,
 } from "@/lib/apply-class-roles";
+import {
+  parseTeamProjectsFromJson,
+  type TeamProjectInfo,
+} from "@/lib/class-role-team-projects";
 
 /** DB 레코드 */
 export type ClassRoleSnapshotRecord = {
@@ -26,6 +30,7 @@ export type ClassRoleSnapshotRecord = {
   team_leaders: Record<string, string> | null;
   team_members: Record<string, string[]> | null;
   team_count: number;
+  team_projects: Record<string, unknown> | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
@@ -54,6 +59,7 @@ export type ClassRoleSnapshotDetail = {
   classPresidentId: string | null;
   teamLeaders: Record<number, string>;
   teamMembers: Record<number, string[]>;
+  teamProjects: Record<number, TeamProjectInfo>;
   createdAt: string;
   updatedAt: string;
 };
@@ -142,6 +148,7 @@ export function toClassRoleSnapshotDetail(
     classPresidentId: record.class_president_id,
     teamLeaders: teamState.teamLeaders,
     teamMembers: teamState.teamMembers,
+    teamProjects: parseTeamProjectsFromJson(record.team_projects ?? {}),
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };

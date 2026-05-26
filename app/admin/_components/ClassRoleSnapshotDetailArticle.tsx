@@ -1,13 +1,22 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { CheckCircle2, Crown, Download, Loader2 } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Crown,
+  Download,
+  Loader2,
+  Paperclip,
+} from "lucide-react";
 
 import { Button } from "@/app/_components/ui/button";
+import type { ClassOfficerRole } from "@/lib/class-officers";
 import {
-  CLASS_OFFICER_ROLE,
-  type ClassOfficerRole,
-} from "@/lib/class-officers";
+  teamProjectHasContent,
+  type TeamProjectInfo,
+} from "@/lib/class-role-team-projects";
 import {
   downloadElementAsPng,
   sanitizeDownloadFilename,
@@ -15,6 +24,245 @@ import {
 import { cn } from "@/lib/utils";
 
 import ClassOfficerBadge from "./ClassOfficerBadge";
+import TeamProjectEditDialog from "./TeamProjectEditDialog";
+
+const feedbackCardDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** h-32(8rem) — 이 높이를 넘으면 접기·펼치기 표시 */
+const TEAM_CARD_COLLAPSE_MAX_HEIGHT_PX = 128;
+
+type ClassRoleTeamCardProps = {
+  team: ClassRoleSnapshotTeam;
+  cohortLabel: string;
+  projectFilled: boolean;
+  isDownloadingAttachment: boolean;
+  onOpenEdit: () => void;
+  onDownloadAttachment: (
+    event: React.MouseEvent,
+    teamNumber: number,
+    fileName: string | null,
+  ) => void;
+};
+
+/** 조 편성 카드 — 내용이 h-32를 넘으면 기본 접힘, 펼치기로 전체 표시 */
+function ClassRoleTeamCard({
+  team,
+  cohortLabel,
+  projectFilled,
+  isDownloadingAttachment,
+  onOpenEdit,
+  onDownloadAttachment,
+}: ClassRoleTeamCardProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [needsCollapse, setNeedsCollapse] = useState(false);
+
+  const measureContentHeight = useCallback(() => {
+    const contentElement = contentRef.current;
+    if (!contentElement) {
+      return;
+    }
+    setNeedsCollapse(
+      contentElement.scrollHeight > TEAM_CARD_COLLAPSE_MAX_HEIGHT_PX,
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    measureContentHeight();
+    const contentElement = contentRef.current;
+    if (!contentElement) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(measureContentHeight);
+    resizeObserver.observe(contentElement);
+    return () => resizeObserver.disconnect();
+  }, [measureContentHeight, team]);
+
+  const isCollapsed = needsCollapse && !isExpanded;
+
+  return (
+    <li>
+      <div
+        className={cn(
+          "flex min-h-32 w-full flex-col rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm transition-colors",
+          "hover:border-blue-300 hover:bg-blue-50/40 dark:hover:border-blue-800 dark:hover:bg-blue-950/20",
+        )}
+      >
+        <button
+          type="button"
+          onClick={onOpenEdit}
+          className={cn(
+            "flex w-full flex-col px-3 pt-3 text-left space-y-2.5 cursor-pointer",
+            needsCollapse ? "pb-1" : "pb-3",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset rounded-lg",
+          )}
+        >
+          <div className="flex items-start justify-between gap-2 shrink-0">
+            <p className="font-bold text-zinc-900 dark:text-zinc-100">
+              {cohortLabel} {team.teamNumber}조
+            </p>
+            <span className="text-[10px] text-zinc-400 shrink-0">
+              {projectFilled ? "정보 입력됨" : "클릭하여 입력"}
+            </span>
+          </div>
+
+          <div className="relative min-h-0">
+            <div
+              ref={contentRef}
+              className={cn(
+                "space-y-2.5",
+                isCollapsed && "max-h-32 overflow-hidden",
+              )}
+            >
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-zinc-900 dark:text-zinc-100">
+                {team.leaderName ? (
+                  <span className="inline-flex items-center gap-1 shrink-0">
+                    <span className="font-bold text-violet-700 dark:text-violet-300">
+                      {team.leaderName}
+                    </span>
+                    <ClassOfficerBadge
+                      classOfficerRole={team.leaderRole}
+                      teamNumber={team.teamNumber}
+                      isTeamLeader={team.leaderIsTeamLeader}
+                      honorBadgeLabels={team.leaderHonorBadgeLabels}
+                      showTeamBadges={false}
+                    />
+                  </span>
+                ) : null}
+                {team.members.map((member) => (
+                  <span
+                    key={`${team.teamNumber}-${member.name}`}
+                    className="inline-flex items-center gap-1 shrink-0"
+                  >
+                    <span>{member.name}</span>
+                    <ClassOfficerBadge
+                      classOfficerRole={member.classOfficerRole}
+                      teamNumber={member.teamNumber}
+                      honorBadgeLabels={member.honorBadgeLabels}
+                      showTeamBadges={false}
+                    />
+                  </span>
+                ))}
+                {!team.leaderName && team.members.length === 0 ? (
+                  <span className="text-zinc-400">미지정</span>
+                ) : null}
+              </p>
+
+              {projectFilled && team.teamProject ? (
+                <div className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400 border-t border-zinc-100 dark:border-zinc-800 pt-2">
+                  {team.teamProject.topic.trim() ||
+                  team.teamProject.pptStoragePath ? (
+                    <div className="flex items-center gap-2 text-sm min-w-0">
+                      {team.teamProject.topic.trim() ? (
+                        <p className="min-w-0 flex-1 truncate font-medium text-zinc-800 dark:text-zinc-200">
+                          {team.teamProject.topic}
+                        </p>
+                      ) : (
+                        <span className="flex-1" aria-hidden />
+                      )}
+                      {team.teamProject.pptStoragePath ? (
+                        <button
+                          type="button"
+                          title={
+                            team.teamProject.pptFileName ?? "첨부파일 다운로드"
+                          }
+                          aria-label={`첨부파일 다운로드: ${team.teamProject.pptFileName ?? "파일"}`}
+                          disabled={isDownloadingAttachment}
+                          onClick={(event) =>
+                            onDownloadAttachment(
+                              event,
+                              team.teamNumber,
+                              team.teamProject?.pptFileName ?? null,
+                            )
+                          }
+                          className="shrink-0 cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400 disabled:opacity-50"
+                        >
+                          {isDownloadingAttachment ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Paperclip className="size-4" />
+                          )}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {team.teamProject.feedbackComments.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {team.teamProject.feedbackComments.map((comment) => (
+                        <li
+                          key={comment.id}
+                          className="rounded-md border border-zinc-100 bg-zinc-50/80 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900/40"
+                        >
+                          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[10px] text-zinc-400">
+                            <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                              {comment.authorName}
+                            </span>
+                            <time dateTime={comment.createdAt}>
+                              {feedbackCardDateFormatter.format(
+                                new Date(comment.createdAt),
+                              )}
+                            </time>
+                          </div>
+                          <p className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap break-words">
+                            {comment.content}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {team.teamProject.githubUrl.trim() ? (
+                    <p className="truncate">
+                      <span className="font-medium text-zinc-500">GitHub</span>{" "}
+                      {team.teamProject.githubUrl}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {isCollapsed ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent dark:from-zinc-950"
+                aria-hidden
+              />
+            ) : null}
+          </div>
+        </button>
+
+        {needsCollapse ? (
+          <button
+            type="button"
+            onClick={() => setIsExpanded((previous) => !previous)}
+            className={cn(
+              "flex w-full items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 cursor-pointer",
+              "hover:bg-blue-50/60 dark:hover:bg-blue-950/30 rounded-b-lg border-t border-zinc-100 dark:border-zinc-800",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset",
+            )}
+            aria-expanded={isExpanded}
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="size-3.5" aria-hidden />
+                접기
+              </>
+            ) : (
+              <>
+                <ChevronDown className="size-3.5" aria-hidden />
+                펼치기
+              </>
+            )}
+          </button>
+        ) : null}
+      </div>
+    </li>
+  );
+}
 
 /** 조원 한 명 (상세·이미지용) */
 export type ClassRoleSnapshotTeamMember = {
@@ -33,38 +281,123 @@ export type ClassRoleSnapshotTeam = {
   leaderIsTeamLeader?: boolean;
   leaderHonorBadgeLabels?: string[];
   members: ClassRoleSnapshotTeamMember[];
+  teamProject?: TeamProjectInfo | null;
 };
 
 type ClassRoleSnapshotDetailArticleProps = {
+  snapshotId: string;
   title: string;
   cohortLabel: string;
   groupName: string;
   createdAtLabel: string;
   createdAtIso: string;
   isActive: boolean;
-  presidentName: string | null;
-  presidentHonorBadgeLabels?: string[];
   teamCount: number;
   teams: ClassRoleSnapshotTeam[];
+  initialTeamProjects?: Record<number, TeamProjectInfo>;
 };
 
 /**
  * 조 편성 상세 본문 + PNG 다운로드
  */
 export default function ClassRoleSnapshotDetailArticle({
+  snapshotId,
   title,
   cohortLabel,
   groupName,
   createdAtLabel,
   createdAtIso,
   isActive,
-  presidentName,
-  presidentHonorBadgeLabels = [],
   teamCount,
   teams,
+  initialTeamProjects = {},
 }: ClassRoleSnapshotDetailArticleProps) {
   const exportRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [teamProjects, setTeamProjects] =
+    useState<Record<number, TeamProjectInfo>>(initialTeamProjects);
+  const [editingTeamNumber, setEditingTeamNumber] = useState<number | null>(
+    null,
+  );
+  const [downloadingTeamNumber, setDownloadingTeamNumber] = useState<
+    number | null
+  >(null);
+
+  const teamsWithProjects: ClassRoleSnapshotTeam[] = teams.map((team) => ({
+    ...team,
+    teamProject: teamProjects[team.teamNumber] ?? team.teamProject ?? null,
+  }));
+
+  // 조장·조원이 모두 비어 있는 조는 표시하지 않음
+  const visibleTeams = teamsWithProjects.filter(
+    (team) => team.leaderName !== null || team.members.length > 0,
+  );
+  const visibleTeamCount =
+    visibleTeams.length > 0
+      ? Math.max(...visibleTeams.map((team) => team.teamNumber))
+      : teamCount;
+
+  const editingTeam = editingTeamNumber
+    ? visibleTeams.find((team) => team.teamNumber === editingTeamNumber)
+    : null;
+
+  const handleTeamProjectSaved = useCallback(
+    (teamNumber: number, project: TeamProjectInfo) => {
+      setTeamProjects((previous) => ({ ...previous, [teamNumber]: project }));
+    },
+    [],
+  );
+
+  const handleDownloadAttachment = useCallback(
+    async (
+      event: React.MouseEvent,
+      teamNumber: number,
+      fileName: string | null,
+    ) => {
+      event.stopPropagation();
+      event.preventDefault();
+
+      setDownloadingTeamNumber(teamNumber);
+      try {
+        const response = await fetch(
+          `/api/admin/class-role-snapshots/${snapshotId}/team-project?teamNumber=${teamNumber}`,
+        );
+        const payload = (await response.json()) as {
+          signedUrl?: string;
+          fileName?: string;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.signedUrl) {
+          window.alert(payload.error ?? "첨부파일을 불러오지 못했습니다.");
+          return;
+        }
+
+        const downloadName = payload.fileName ?? fileName ?? "attachment";
+        const fileResponse = await fetch(payload.signedUrl);
+        if (!fileResponse.ok) {
+          window.alert("첨부파일 다운로드에 실패했습니다.");
+          return;
+        }
+
+        const blob = await fileResponse.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = downloadName;
+        link.rel = "noopener noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      } catch {
+        window.alert("첨부파일 다운로드 중 오류가 발생했습니다.");
+      } finally {
+        setDownloadingTeamNumber(null);
+      }
+    },
+    [snapshotId],
+  );
 
   const handleDownloadImage = useCallback(async () => {
     const element = exportRef.current;
@@ -113,11 +446,11 @@ export default function ClassRoleSnapshotDetailArticle({
             </p>
             {groupName !== cohortLabel ? (
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {groupName} · {teamCount}조
+                {groupName} · {visibleTeamCount}조
               </p>
             ) : (
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {teamCount}조
+                {visibleTeamCount}조
               </p>
             )}
           </div>
@@ -160,100 +493,62 @@ export default function ClassRoleSnapshotDetailArticle({
           </p>
         </div>
 
-        <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3">
-          <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 mb-2">
-            <Crown
-              className="size-4 text-amber-600 dark:text-amber-400"
-              aria-hidden
-            />
-            반장
-          </h3>
-          {presidentName ? (
-            <p className="text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              {presidentName}
-              <ClassOfficerBadge
-                classOfficerRole={CLASS_OFFICER_ROLE.CLASS_PRESIDENT}
-                teamNumber={null}
-                honorBadgeLabels={presidentHonorBadgeLabels}
-                showTeamBadges={false}
-              />
-            </p>
-          ) : (
-            <p className="text-sm text-zinc-500">미지정</p>
-          )}
-        </section>
-
         <section>
           <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">
-            조 편성 ({teamCount}조)
+            조 편성 ({visibleTeamCount}조)
           </h3>
           <ul
             className={cn(
-              "grid gap-3",
-              teamCount >= 4
+              "grid items-start gap-3",
+              visibleTeamCount >= 4
                 ? "sm:grid-cols-2 xl:grid-cols-3"
-                : teamCount >= 2
+                : visibleTeamCount >= 2
                   ? "sm:grid-cols-2"
                   : "grid-cols-1",
             )}
           >
-            {teams.map((team) => (
-              <li
-                key={team.teamNumber}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-3 space-y-2.5 text-sm"
-              >
-                <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                  {cohortLabel} {team.teamNumber}조
-                </p>
-                <div>
-                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    조장
-                  </span>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-zinc-900 dark:text-zinc-100">
-                    {team.leaderName ?? (
-                      <span className="text-zinc-400">미지정</span>
-                    )}
-                    {team.leaderName ? (
-                      <ClassOfficerBadge
-                        classOfficerRole={team.leaderRole}
-                        teamNumber={team.teamNumber}
-                        isTeamLeader={team.leaderIsTeamLeader}
-                        honorBadgeLabels={team.leaderHonorBadgeLabels}
-                        showTeamBadges={false}
-                      />
-                    ) : null}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    조원
-                  </span>
-                  {team.members.length === 0 ? (
-                    <p className="mt-0.5 text-zinc-400">없음</p>
-                  ) : (
-                    <ul className="mt-1 flex flex-wrap gap-1.5">
-                      {team.members.map((member) => (
-                        <li
-                          key={`${team.teamNumber}-${member.name}`}
-                          className="inline-flex items-center gap-1 rounded-md bg-zinc-50 dark:bg-zinc-900 px-2 py-1"
-                        >
-                          <span>{member.name}</span>
-                          <ClassOfficerBadge
-                            classOfficerRole={member.classOfficerRole}
-                            teamNumber={member.teamNumber}
-                            honorBadgeLabels={member.honorBadgeLabels}
-                            showTeamBadges={false}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </li>
-            ))}
+            {visibleTeams.map((team) => {
+              const projectFilled = teamProjectHasContent(
+                team.teamProject ?? {
+                  topic: "",
+                  feedbackComments: [],
+                  githubUrl: "",
+                  pptStoragePath: null,
+                  pptFileName: null,
+                },
+              );
+
+              return (
+                <ClassRoleTeamCard
+                  key={team.teamNumber}
+                  team={team}
+                  cohortLabel={cohortLabel}
+                  projectFilled={projectFilled}
+                  isDownloadingAttachment={
+                    downloadingTeamNumber === team.teamNumber
+                  }
+                  onOpenEdit={() => setEditingTeamNumber(team.teamNumber)}
+                  onDownloadAttachment={(event, teamNumber, fileName) =>
+                    void handleDownloadAttachment(event, teamNumber, fileName)
+                  }
+                />
+              );
+            })}
           </ul>
         </section>
       </div>
+
+      {editingTeam ? (
+        <TeamProjectEditDialog
+          isOpen={editingTeamNumber !== null}
+          snapshotId={snapshotId}
+          teamNumber={editingTeam.teamNumber}
+          teamLabel={`${cohortLabel} ${editingTeam.teamNumber}조`}
+          initialProject={editingTeam.teamProject ?? null}
+          onClose={() => setEditingTeamNumber(null)}
+          onSaved={handleTeamProjectSaved}
+        />
+      ) : null}
     </article>
   );
 }

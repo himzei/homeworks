@@ -8,9 +8,11 @@ import {
   fetchProfileIdsByNames,
   fetchSeatingStudents,
 } from "@/lib/fetch-group-students";
+import { fetchClassPresidentIdForGroup } from "@/lib/apply-class-roles";
 import {
   applyTeamBadgeVisibility,
   buildOfficerInfoByStudentName,
+  ensureClassPresidentInOfficerByStudentName,
   fetchClassRoleStudents,
   fetchOfficersByStudentNames,
   mergeHonorBadgesIntoOfficerByStudentName,
@@ -159,11 +161,19 @@ export default async function AdminSeatingDetailPage({
     ? await isGroupTeamAssignmentActive(supabase, record.group_name)
     : false;
 
+  const classPresidentId = record.group_name
+    ? await fetchClassPresidentIdForGroup(supabase, record.group_name)
+    : null;
+
   const officerByStudentName = applyTeamBadgeVisibility(
-    mergeHonorBadgesIntoOfficerByStudentName(
-      baseOfficerByStudentName,
+    ensureClassPresidentInOfficerByStudentName(
+      mergeHonorBadgesIntoOfficerByStudentName(
+        baseOfficerByStudentName,
+        roleStudents,
+        honorLabelsByProfileId,
+      ),
       roleStudents,
-      honorLabelsByProfileId,
+      classPresidentId,
     ),
     showTeamBadges,
   );
@@ -199,6 +209,7 @@ export default async function AdminSeatingDetailPage({
         profileIdByName={profileIdByName}
         avatarUrlByName={avatarUrlByName}
         officerByStudentName={officerByStudentName}
+        showTeamBadges={showTeamBadges}
       />
     </>
   );

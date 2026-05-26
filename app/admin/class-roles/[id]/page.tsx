@@ -110,10 +110,6 @@ export default async function AdminClassRoleDetailPage({
     students.map((s) => s.id),
   );
 
-  const president = snapshot.classPresidentId
-    ? studentById.get(snapshot.classPresidentId)
-    : null;
-
   const cohortLabel = extractCourseShortLabel(snapshot.groupName);
 
   const teams: ClassRoleSnapshotTeam[] = Array.from(
@@ -154,6 +150,7 @@ export default async function AdminClassRoleDetailPage({
           ? (honorBadgeLabelsByProfileId[leaderId] ?? [])
           : [],
         members,
+        teamProject: snapshot.teamProjects[teamNumber] ?? null,
       };
     },
   );
@@ -194,20 +191,16 @@ export default async function AdminClassRoleDetailPage({
       </div>
 
       <ClassRoleSnapshotDetailArticle
+          snapshotId={id}
           title={snapshot.title}
           cohortLabel={cohortLabel}
           groupName={snapshot.groupName}
           createdAtLabel={createdAtLabel}
           createdAtIso={snapshot.createdAt}
           isActive={snapshot.isActive}
-          presidentName={president?.name ?? null}
-          presidentHonorBadgeLabels={
-            snapshot.classPresidentId
-              ? (honorBadgeLabelsByProfileId[snapshot.classPresidentId] ?? [])
-              : []
-          }
           teamCount={snapshot.teamCount}
           teams={teams}
+          initialTeamProjects={snapshot.teamProjects}
         />
     </>
   );

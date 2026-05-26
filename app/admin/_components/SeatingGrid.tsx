@@ -38,6 +38,8 @@ type SeatingGridProps = {
   avatarUrlByName?: Record<string, string>;
   /** 학생 이름 → 반·조 (책상 우측 상단 배지) */
   officerByStudentName?: Record<string, StudentOfficerInfo>;
+  /** false면 조·조장 배지만 숨김 (반장·명예 배지는 표시) */
+  showTeamBadges?: boolean;
   className?: string;
 };
 
@@ -57,6 +59,7 @@ export default function SeatingGrid({
   profileIdByName,
   avatarUrlByName,
   officerByStudentName,
+  showTeamBadges = true,
   className,
 }: SeatingGridProps) {
   const aisleSet = new Set(aisleAfterColumns);
@@ -101,6 +104,7 @@ export default function SeatingGrid({
                     dragDropEnabled={dragDropEnabled}
                     onNameChange={(name) => onSeatChange?.(seatKey, name)}
                     onDrop={(payload) => onSeatDrop?.(seatKey, payload)}
+                    showTeamBadges={showTeamBadges}
                   />
                   {aisleSet.has(col) ? (
                     <div className="w-16 sm:w-24 shrink-0" aria-hidden />
@@ -131,6 +135,7 @@ type DeskUnitProps = {
   dragDropEnabled: boolean;
   onNameChange: (name: string) => void;
   onDrop: (payload: SeatingDragPayload) => void;
+  showTeamBadges: boolean;
 };
 
 /** 좌석 원 + 책상(이름 입력·드롭) */
@@ -146,6 +151,7 @@ function DeskUnit({
   dragDropEnabled,
   onNameChange,
   onDrop,
+  showTeamBadges,
 }: DeskUnitProps) {
   const seatLabel = `${row}행 ${col}열`;
   const [isDragOver, setIsDragOver] = useState(false);
@@ -189,25 +195,67 @@ function DeskUnit({
     event.dataTransfer.effectAllowed = "move";
   };
 
-  /** 이름 바로 위에 겹침 — 레이아웃에는 영향 없음 */
-  const officerBadge = officerInfo ? (
-    <div className="absolute bottom-full left-1/2 z-10 mb-0 -translate-x-1/2 whitespace-nowrap pointer-events-none">
-      <ClassOfficerBadge
-        classOfficerRole={officerInfo.classOfficerRole}
-        teamNumber={officerInfo.teamNumber}
-        isTeamLeader={officerInfo.isTeamLeader}
-        honorBadgeLabels={officerInfo.honorBadgeLabels}
-        showTeamBadges
-        className="text-[10px] sm:text-xs px-1.5 py-0.5 font-medium leading-tight"
-      />
-    </div>
-  ) : null;
-
   const deskBoxClass =
-    "relative w-full h-12 sm:h-14 mt-0 border border-black rounded-sm bg-white overflow-hidden";
+    "relative flex w-full h-12 sm:h-14 mt-0 items-center justify-center border border-zinc-400 dark:border-zinc-500 rounded-sm bg-white dark:bg-zinc-950 px-1.5";
 
   const nameTextClass =
-    "truncate max-w-full min-w-0 leading-snug text-sm sm:text-base";
+    "truncate max-w-full min-w-0 leading-snug text-sm sm:text-base text-center";
+
+  /** 배지 + 이름을 한 덩어리로 책상 중앙에 배치 */
+  const deskLabelGroup = (
+    <div className="flex max-w-full min-w-0 flex-col items-center gap-0.5">
+      {officerInfo ? (
+        <ClassOfficerBadge
+          classOfficerRole={officerInfo.classOfficerRole}
+          teamNumber={officerInfo.teamNumber}
+          isTeamLeader={officerInfo.isTeamLeader}
+          honorBadgeLabels={officerInfo.honorBadgeLabels}
+          showTeamBadges={showTeamBadges}
+          className="shrink-0 text-[9px] sm:text-[11px] px-1.5 py-0.5 font-medium leading-tight"
+        />
+      ) : null}
+      {editable ? (
+        <input
+          type="text"
+          value={studentName}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="이름"
+          aria-label={`${seatLabel} 학생 이름`}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+          className={cn(
+            "w-full min-w-0 border-0 bg-transparent font-semibold pointer-events-auto",
+            nameTextClass,
+            "text-black dark:text-zinc-100 placeholder:text-zinc-500 placeholder:font-normal",
+            "focus:outline-none",
+          )}
+          maxLength={20}
+        />
+      ) : trimmedName && profileId ? (
+        <Link
+          href={`/user/${profileId}`}
+          className={cn(
+            nameTextClass,
+            "block font-semibold text-blue-600 dark:text-blue-400 hover:underline",
+          )}
+        >
+          {trimmedName}
+        </Link>
+      ) : (
+        <span
+          className={cn(
+            nameTextClass,
+            "block",
+            trimmedName
+              ? "font-semibold text-black dark:text-zinc-100"
+              : "font-medium text-zinc-500",
+          )}
+        >
+          {trimmedName || "—"}
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col items-center gap-0 w-28 sm:w-32">
@@ -227,63 +275,14 @@ function DeskUnit({
             isDragOver && "ring-2 ring-blue-500 ring-offset-1 border-blue-500",
           )}
         >
-          {/* 배지: 이름 세로 중앙선 바로 위 (입력 텍스트 위치와 동일) */}
-          {officerInfo ? (
-            <div
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
-              aria-hidden
-            >
-              <div className="relative h-0 w-0">{officerBadge}</div>
-            </div>
-          ) : null}
-          <input
-            type="text"
-            value={studentName}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="이름"
-            aria-label={`${seatLabel} 학생 이름`}
-            draggable={false}
-            onDragStart={(e) => e.preventDefault()}
-            className={cn(
-              "absolute inset-0 w-full h-full border-0 bg-transparent text-center font-semibold pointer-events-auto",
-              nameTextClass,
-              "text-black placeholder:text-zinc-500 placeholder:font-normal",
-              "focus:outline-none",
-            )}
-            maxLength={20}
-          />
+          {deskLabelGroup}
         </div>
       ) : (
         <div
           className={cn(deskBoxClass, !trimmedName && "text-zinc-500")}
           title={trimmedName || "빈 좌석"}
         >
-          <div className="absolute inset-0 flex items-center justify-center px-1.5">
-            <div className="relative max-w-full min-w-0">
-              {officerBadge}
-              {trimmedName && profileId ? (
-                <Link
-                  href={`/user/${profileId}`}
-                  className={cn(
-                    nameTextClass,
-                    "block font-semibold text-blue-600 dark:text-blue-400 hover:underline",
-                  )}
-                >
-                  {trimmedName}
-                </Link>
-              ) : (
-                <span
-                  className={cn(
-                    nameTextClass,
-                    "block",
-                    trimmedName ? "font-semibold text-black" : "font-medium",
-                  )}
-                >
-                  {trimmedName || "—"}
-                </span>
-              )}
-            </div>
-          </div>
+          {deskLabelGroup}
         </div>
       )}
     </div>

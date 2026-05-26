@@ -68,20 +68,26 @@ export function parseOfficerByStudentNameFromJson(
     }
     const entry = value as {
       classOfficerRole?: unknown;
+      class_officer_role?: unknown;
       teamNumber?: unknown;
+      team_number?: unknown;
       isTeamLeader?: unknown;
+      is_team_leader?: unknown;
       honorBadgeLabels?: unknown;
+      honor_badge_labels?: unknown;
     };
-    const rawRole = entry.classOfficerRole;
+    const rawRole = entry.classOfficerRole ?? entry.class_officer_role;
     const classOfficerRole =
       rawRole === CLASS_OFFICER_ROLE.CLASS_PRESIDENT ||
       rawRole === CLASS_OFFICER_ROLE.TEAM_LEADER
         ? rawRole
         : null;
+    const rawTeamNumber = entry.teamNumber ?? entry.team_number;
     const teamNumber =
-      typeof entry.teamNumber === "number" ? entry.teamNumber : null;
-    const honorBadgeLabels = Array.isArray(entry.honorBadgeLabels)
-      ? entry.honorBadgeLabels
+      typeof rawTeamNumber === "number" ? rawTeamNumber : null;
+    const rawHonorLabels = entry.honorBadgeLabels ?? entry.honor_badge_labels;
+    const honorBadgeLabels = Array.isArray(rawHonorLabels)
+      ? rawHonorLabels
           .filter((label): label is string => typeof label === "string")
           .map((label) => label.trim())
           .filter(Boolean)
@@ -93,7 +99,9 @@ export function parseOfficerByStudentNameFromJson(
     map[key] = {
       classOfficerRole,
       teamNumber,
-      ...(entry.isTeamLeader === true ? { isTeamLeader: true } : {}),
+      ...(entry.isTeamLeader === true || entry.is_team_leader === true
+        ? { isTeamLeader: true }
+        : {}),
       ...(honorBadgeLabels.length > 0 ? { honorBadgeLabels } : {}),
     };
   }
@@ -111,9 +119,16 @@ export function stripTeamBadgesFromOfficerMap(
 
   for (const [name, info] of Object.entries(officerByStudentName)) {
     const honorBadgeLabels = info.honorBadgeLabels?.filter(Boolean) ?? [];
+    const isClassPresident =
+      info.classOfficerRole === CLASS_OFFICER_ROLE.CLASS_PRESIDENT;
     const next: StudentOfficerInfo = {
-      classOfficerRole: info.classOfficerRole,
-      teamNumber: null,
+      classOfficerRole: isClassPresident
+        ? CLASS_OFFICER_ROLE.CLASS_PRESIDENT
+        : null,
+      teamNumber: isClassPresident ? info.teamNumber : null,
+      ...(isClassPresident && info.isTeamLeader
+        ? { isTeamLeader: true }
+        : {}),
       ...(honorBadgeLabels.length > 0 ? { honorBadgeLabels } : {}),
     };
 
@@ -212,6 +227,52 @@ export function mergeHonorBadgesIntoOfficerByStudentName(
   }
 
   return result;
+}
+
+/**
+ * 반장 배지가 항상 보이도록 classOfficerRole 보강
+ * (스냅샷에 조 번호만 있거나 역할이 빠진 경우 대비)
+ */
+export function ensureClassPresidentInOfficerByStudentName(
+  officerByStudentName: Record<string, StudentOfficerInfo>,
+  students: ClassRoleStudent[],
+  classPresidentId?: string | null,
+): Record<string, StudentOfficerInfo> {
+  const presidentStudent =
+    students.find(
+      (student) =>
+        student.classOfficerRole === CLASS_OFFICER_ROLE.CLASS_PRESIDENT,
+    ) ??
+    (classPresidentId
+      ? students.find((student) => student.id === classPresidentId)
+      : undefined);
+
+  if (!presidentStudent) {
+    return officerByStudentName;
+  }
+
+  const presidentName = presidentStudent.name.trim();
+  if (!presidentName) {
+    return officerByStudentName;
+  }
+
+  const teamLeaderIdByTeam = buildTeamLeaderIdByTeam(students);
+  const existing = officerByStudentName[presidentName];
+  const isTeamLeader =
+    existing?.isTeamLeader === true ||
+    isPresidentAsTeamLeader(presidentStudent, teamLeaderIdByTeam);
+
+  return {
+    ...officerByStudentName,
+    [presidentName]: {
+      classOfficerRole: CLASS_OFFICER_ROLE.CLASS_PRESIDENT,
+      teamNumber: existing?.teamNumber ?? presidentStudent.teamNumber ?? null,
+      ...(isTeamLeader ? { isTeamLeader: true } : {}),
+      ...(existing?.honorBadgeLabels?.length
+        ? { honorBadgeLabels: existing.honorBadgeLabels }
+        : {}),
+    },
+  };
 }
 
 export function getClassOfficerLabel(

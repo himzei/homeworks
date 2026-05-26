@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
+import {
+  parseTeamLeadersFromJson,
+  parseTeamMembersFromJson,
+} from "@/lib/apply-class-roles";
 import { CLASS_OFFICER_ROLE } from "@/lib/class-officers";
 import { getActiveTeamAssignmentGroupNames } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
@@ -84,20 +88,136 @@ export function belongsToCourseGroup(
   return normalizedGroupName === filterGroup;
 }
 
-/** 조 편성이 없을 때 조·조장 배지만 제거 (반장·명예 배지는 유지) */
+type ActiveClassRoleSnapshotRow = {
+  class_president_id: string | null;
+  team_leaders: Record<string, string | null> | null;
+  team_members: Record<string, string[] | null> | null;
+  team_count: number | null;
+};
+
+/** 스냅샷 1건 기준 반장 역할·조 정보 보강 (조가 없어도 반장 배지는 표시) */
+function applyPresidentFromSnapshotRow(
+  users: ProgressGridUser[],
+  snapshot: ActiveClassRoleSnapshotRow,
+): ProgressGridUser[] {
+  const presidentId = snapshot.class_president_id;
+  if (!presidentId) {
+    return users;
+  }
+
+  const teamCount =
+    typeof snapshot.team_count === "number" && snapshot.team_count > 0
+      ? snapshot.team_count
+      : 20;
+  const teamLeaders = parseTeamLeadersFromJson(
+    snapshot.team_leaders,
+    teamCount,
+  );
+  const teamMembers = parseTeamMembersFromJson(
+    snapshot.team_members,
+    teamCount,
+  );
+
+  let presidentTeamNumber: number | null = null;
+  let presidentIsTeamLeader = false;
+
+  for (const [teamNumber, leaderId] of teamLeaders.entries()) {
+    if (leaderId === presidentId) {
+      presidentTeamNumber = teamNumber;
+      presidentIsTeamLeader = true;
+      break;
+    }
+  }
+
+  if (presidentTeamNumber === null) {
+    for (const [teamNumber, memberIds] of teamMembers.entries()) {
+      if (memberIds.includes(presidentId)) {
+        presidentTeamNumber = teamNumber;
+        break;
+      }
+    }
+  }
+
+  return users.map((user) => {
+    if (user.id !== presidentId) {
+      return user;
+    }
+
+    return {
+      ...user,
+      classOfficerRole: CLASS_OFFICER_ROLE.CLASS_PRESIDENT,
+      teamNumber: user.teamNumber ?? presidentTeamNumber,
+      isTeamLeader: user.isTeamLeader ?? presidentIsTeamLeader,
+    };
+  });
+}
+
+/** 특정 과정 활성 조 편성 글에서 반장 정보 보강 */
+async function enrichPresidentFromActiveSnapshotForGroup(
+  supabase: SupabaseClient,
+  users: ProgressGridUser[],
+  groupName: string,
+): Promise<ProgressGridUser[]> {
+  const { data, error } = await supabase
+    .from("class_role_snapshots")
+    .select("class_president_id, team_leaders, team_members, team_count")
+    .eq("group_name", groupName)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error || !data) {
+    return users;
+  }
+
+  return applyPresidentFromSnapshotRow(
+    users,
+    data as ActiveClassRoleSnapshotRow,
+  );
+}
+
+/** 전체 보기: 과정별 활성 조 편성에서 반장 정보 보강 (admin/progress · 전체 탭) */
+async function enrichAllPresidentsFromActiveSnapshots(
+  supabase: SupabaseClient,
+  users: ProgressGridUser[],
+): Promise<ProgressGridUser[]> {
+  const { data: snapshots, error } = await supabase
+    .from("class_role_snapshots")
+    .select(
+      "group_name, class_president_id, team_leaders, team_members, team_count",
+    )
+    .eq("is_active", true);
+
+  if (error || !snapshots?.length) {
+    return users;
+  }
+
+  let result = users;
+  for (const snapshot of snapshots) {
+    if (!snapshot.class_president_id) {
+      continue;
+    }
+    result = applyPresidentFromSnapshotRow(
+      result,
+      snapshot as ActiveClassRoleSnapshotRow,
+    );
+  }
+  return result;
+}
+
+/** 조 편성이 없을 때 조·조장 배지만 제거 (반장·명예 배지는 유지, 반장의 조 정보는 유지) */
 function stripTeamBadgesFromProgressUser(
   user: ProgressGridUser,
 ): ProgressGridUser {
-  const classOfficerRole =
-    user.classOfficerRole === CLASS_OFFICER_ROLE.CLASS_PRESIDENT
-      ? CLASS_OFFICER_ROLE.CLASS_PRESIDENT
-      : null;
+  const isClassPresident =
+    user.classOfficerRole === CLASS_OFFICER_ROLE.CLASS_PRESIDENT;
 
   return {
     ...user,
-    classOfficerRole,
-    teamNumber: null,
-    isTeamLeader: false,
+    classOfficerRole: isClassPresident
+      ? CLASS_OFFICER_ROLE.CLASS_PRESIDENT
+      : null,
+    teamNumber: isClassPresident ? user.teamNumber : null,
+    isTeamLeader: isClassPresident ? user.isTeamLeader : false,
   };
 }
 
@@ -207,6 +327,14 @@ export async function fetchProgressGridData(
     }
     return { ...user, isTeamLeader: true };
   });
+
+  users = filterGroup
+    ? await enrichPresidentFromActiveSnapshotForGroup(
+        supabase,
+        users,
+        filterGroup,
+      )
+    : await enrichAllPresidentsFromActiveSnapshots(supabase, users);
 
   const groupNamesForTeamBadges = filterGroup
     ? [filterGroup]

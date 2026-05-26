@@ -20,8 +20,10 @@ import {
   buildOfficerInfoByStudentName,
   mergeHonorBadgesIntoOfficerByStudentName,
   fetchClassRoleStudents,
+  ensureClassPresidentInOfficerByStudentName,
   type StudentOfficerInfo,
 } from "@/lib/class-officers";
+import { fetchClassPresidentIdForGroup } from "@/lib/apply-class-roles";
 import { isGroupTeamAssignmentActive } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import {
@@ -111,6 +113,7 @@ export default function SeatingChartForm({
   const [officerByStudentName, setOfficerByStudentName] = useState<
     Record<string, StudentOfficerInfo>
   >(initialData?.officerByStudentName ?? {});
+  const [showTeamBadges, setShowTeamBadges] = useState(true);
 
   /** 선택 기수 학생 명단·반·조 불러오기 */
   const loadStudentRoster = useCallback(async (targetGroupName: string) => {
@@ -126,18 +129,27 @@ export default function SeatingChartForm({
       supabase,
       roleStudents.map((s) => s.id),
     );
-    const showTeamBadges = await isGroupTeamAssignmentActive(
+    const teamBadgesVisible = await isGroupTeamAssignmentActive(
+      supabase,
+      targetGroupName,
+    );
+    setShowTeamBadges(teamBadgesVisible);
+    const classPresidentId = await fetchClassPresidentIdForGroup(
       supabase,
       targetGroupName,
     );
     setOfficerByStudentName(
       applyTeamBadgeVisibility(
-        mergeHonorBadgesIntoOfficerByStudentName(
-          buildOfficerInfoByStudentName(roleStudents),
+        ensureClassPresidentInOfficerByStudentName(
+          mergeHonorBadgesIntoOfficerByStudentName(
+            buildOfficerInfoByStudentName(roleStudents),
+            roleStudents,
+            honorLabelsByProfileId,
+          ),
           roleStudents,
-          honorLabelsByProfileId,
+          classPresidentId,
         ),
-        showTeamBadges,
+        teamBadgesVisible,
       ),
     );
     return names;
@@ -300,11 +312,19 @@ export default function SeatingChartForm({
           supabase,
           trimmedGroup,
         );
+        const classPresidentId = await fetchClassPresidentIdForGroup(
+          supabase,
+          trimmedGroup,
+        );
         officersSnapshot = applyTeamBadgeVisibility(
-          mergeHonorBadgesIntoOfficerByStudentName(
-            buildOfficerInfoByStudentName(roleStudents),
+          ensureClassPresidentInOfficerByStudentName(
+            mergeHonorBadgesIntoOfficerByStudentName(
+              buildOfficerInfoByStudentName(roleStudents),
+              roleStudents,
+              honorLabelsByProfileId,
+            ),
             roleStudents,
-            honorLabelsByProfileId,
+            classPresidentId,
           ),
           showTeamBadges,
         );
@@ -527,6 +547,7 @@ export default function SeatingChartForm({
                 onSeatDrop={handleSeatDrop}
                 avatarUrlByName={avatarUrlByName}
                 officerByStudentName={officerByStudentName}
+                showTeamBadges={showTeamBadges}
               />
             </div>
           </div>
