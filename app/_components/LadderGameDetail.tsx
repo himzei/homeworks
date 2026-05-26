@@ -21,7 +21,7 @@ import {
   MAX_PARTICIPANTS,
   MIN_PARTICIPANTS,
   deleteLadderGame,
-  getLadderGame,
+  fetchLadderGame,
   isLadderGamePlayed,
   markLadderGameAsPlayed,
   reshuffleLadderGame,
@@ -64,7 +64,7 @@ function isLadderEmpty(game: LadderGameRecord): boolean {
 
 /**
  * 사다리게임 상세(게시글) 화면.
- * - localStorage 단건 조회
+ * - DB 단건 조회 (모든 회원이 동일한 데이터 조회)
  * - 수정 모드: 위쪽(참가자) / 아래쪽(결과 항목)을 인라인 input 으로 편집
  * - 비어있는 새 사다리는 자동으로 수정 모드 진입
  * - 가로줄 재추첨 / 삭제 지원
@@ -73,7 +73,8 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
   const router = useRouter();
   const { user, profile } = useSession();
   const [game, setGame] = useState<LadderGameRecord | null>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<EditingDraft | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -91,17 +92,37 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
   }, [profile, user?.email]);
 
   useEffect(() => {
-    const loaded = getLadderGame(gameId);
-    setGame(loaded);
-    setIsHydrated(true);
+    let cancelled = false;
 
-    // 새로 생성된(빈) 사다리는 즉시 편집 모드로 진입
-    if (loaded && isLadderEmpty(loaded)) {
-      setEditingDraft({
-        participantNames: [...loaded.participantNames],
-        resultItems: [...loaded.resultItems],
-      });
+    async function loadGame() {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const loaded = await fetchLadderGame(gameId);
+        if (cancelled) return;
+        setGame(loaded);
+
+        // 새로 생성된(빈) 사다리는 즉시 편집 모드로 진입
+        if (loaded && isLadderEmpty(loaded)) {
+          setEditingDraft({
+            participantNames: [...loaded.participantNames],
+            resultItems: [...loaded.resultItems],
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setLoadError("사다리를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setGame(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     }
+
+    void loadGame();
+    return () => {
+      cancelled = true;
+    };
   }, [gameId]);
 
   const handleStartEdit = useCallback(() => {
@@ -113,19 +134,23 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
     setEditError(null);
   }, [game]);
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = useCallback(async () => {
     if (!game) return;
     // 빈 사다리에서 취소 시 → 작성 취소로 간주, 삭제 + 목록 이동
     if (isLadderEmpty(game)) {
-      deleteLadderGame(game.id);
-      router.push("/ladder");
+      try {
+        await deleteLadderGame(game.id);
+        router.push("/ladder");
+      } catch {
+        window.alert("삭제에 실패했습니다. 다시 시도해 주세요.");
+      }
       return;
     }
     setEditingDraft(null);
     setEditError(null);
   }, [game, router]);
 
-  const handleSaveEdit = useCallback(() => {
+  const handleSaveEdit = useCallback(async () => {
     if (!editingDraft || !game) return;
     const trimmedNames = editingDraft.participantNames.map((name) =>
       name.trim(),
@@ -138,17 +163,21 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
       return;
     }
 
-    const updated = updateLadderGame(game.id, {
-      participantNames: trimmedNames,
-      resultItems: trimmedResults,
-    });
-    if (!updated) {
-      setEditError("저장에 실패했습니다.");
-      return;
+    try {
+      const updated = await updateLadderGame(game.id, {
+        participantNames: trimmedNames,
+        resultItems: trimmedResults,
+      });
+      if (!updated) {
+        setEditError("저장에 실패했습니다. 이미 게임이 시작되었을 수 있습니다.");
+        return;
+      }
+      setGame(updated);
+      setEditingDraft(null);
+      setEditError(null);
+    } catch {
+      setEditError("저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
     }
-    setGame(updated);
-    setEditingDraft(null);
-    setEditError(null);
   }, [editingDraft, game]);
 
   const handleParticipantNameChange = useCallback(
@@ -179,7 +208,7 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
 
   /** 일반 모드에서 빈 위쪽 칸 클릭 → 로그인 사용자 이름 자동 입력 */
   const handleEmptyParticipantClick = useCallback(
-    (index: number) => {
+    async (index: number) => {
       if (!game) return;
 
       if (!currentUserName) {
@@ -200,46 +229,60 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
       const nextNames = [...game.participantNames];
       nextNames[index] = currentUserName;
 
-      const updated = updateLadderGame(game.id, {
-        participantNames: nextNames,
-      });
-      if (updated) {
-        setGame({ ...updated });
+      try {
+        const updated = await updateLadderGame(game.id, {
+          participantNames: nextNames,
+        });
+        if (updated) {
+          setGame({ ...updated });
+        }
+      } catch {
+        window.alert("이름 저장에 실패했습니다. 다시 시도해 주세요.");
       }
     },
     [game, currentUserName],
   );
 
-  const handleReshuffle = useCallback(() => {
+  const handleReshuffle = useCallback(async () => {
     if (!game) return;
-    // 이미 게임이 시작된 사다리는 결과 고정 → 안전망으로 한 번 더 차단
     if (isLadderGamePlayed(game)) return;
-    const updated = reshuffleLadderGame(game.id);
-    if (updated) {
-      // 새 객체로 setState 해야 자식 useMemo 가 무효화됨
-      setGame({ ...updated });
+    try {
+      const updated = await reshuffleLadderGame(game.id);
+      if (updated) {
+        setGame({ ...updated });
+      }
+    } catch {
+      window.alert("사다리 다시 섞기에 실패했습니다.");
     }
   }, [game]);
 
   /** 위쪽 참가자 칸 순서 무작위 섞기 (게임 시작 전만) */
-  const handleShuffleParticipants = useCallback(() => {
+  const handleShuffleParticipants = useCallback(async () => {
     if (!game || isLadderGamePlayed(game)) return;
-    const updated = updateLadderGame(game.id, {
-      participantNames: shuffleStringArray(game.participantNames),
-    });
-    if (updated) {
-      setGame({ ...updated });
+    try {
+      const updated = await updateLadderGame(game.id, {
+        participantNames: shuffleStringArray(game.participantNames),
+      });
+      if (updated) {
+        setGame({ ...updated });
+      }
+    } catch {
+      window.alert("참가자 섞기에 실패했습니다.");
     }
   }, [game]);
 
   /** 아래쪽 결과 칸 순서 무작위 섞기 (게임 시작 전만) */
-  const handleShuffleResults = useCallback(() => {
+  const handleShuffleResults = useCallback(async () => {
     if (!game || isLadderGamePlayed(game)) return;
-    const updated = updateLadderGame(game.id, {
-      resultItems: shuffleStringArray(game.resultItems),
-    });
-    if (updated) {
-      setGame({ ...updated });
+    try {
+      const updated = await updateLadderGame(game.id, {
+        resultItems: shuffleStringArray(game.resultItems),
+      });
+      if (updated) {
+        setGame({ ...updated });
+      }
+    } catch {
+      window.alert("결과 섞기에 실패했습니다.");
     }
   }, [game]);
 
@@ -248,21 +291,29 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
    * - playedAt 을 영구 저장 → 새로고침 후에도 결과 고정 유지
    * - 이미 표시된 사다리면 멱등 (markLadderGameAsPlayed 내부에서 가드)
    */
-  const handleGameStart = useCallback(() => {
+  const handleGameStart = useCallback(async () => {
     if (!game) return;
     if (isLadderGamePlayed(game)) return;
-    const updated = markLadderGameAsPlayed(game.id);
-    if (updated) {
-      setGame({ ...updated });
+    try {
+      const updated = await markLadderGameAsPlayed(game.id);
+      if (updated) {
+        setGame({ ...updated });
+      }
+    } catch {
+      window.alert("게임 시작 저장에 실패했습니다.");
     }
   }, [game]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!game) return;
     if (!window.confirm(`"${game.title}" 사다리를 삭제할까요?`)) return;
-    deleteLadderGame(game.id);
-    deleteVotesForLadderGame(game.id);
-    router.push("/ladder");
+    try {
+      await deleteLadderGame(game.id);
+      deleteVotesForLadderGame(game.id);
+      router.push("/ladder");
+    } catch {
+      window.alert("삭제에 실패했습니다. 다시 시도해 주세요.");
+    }
   }, [game, router]);
 
   // 편집 중에는 드래프트 값을 사다리 보드에 반영해 미리보기
@@ -276,9 +327,25 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
     };
   }, [game, editingDraft]);
 
-  if (!isHydrated) {
+  if (isLoading) {
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">불러오는 중...</p>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {loadError}
+        </p>
+        <Button asChild variant="outline">
+          <Link href="/ladder">
+            <ArrowLeft className="size-4" aria-hidden />
+            게시판으로
+          </Link>
+        </Button>
+      </div>
     );
   }
 
@@ -289,7 +356,7 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
           존재하지 않는 사다리입니다
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          이미 삭제되었거나, 다른 브라우저에서 만든 사다리일 수 있습니다.
+          이미 삭제되었거나 주소가 잘못되었을 수 있습니다.
         </p>
         <Button asChild variant="outline">
           <Link href="/ladder">

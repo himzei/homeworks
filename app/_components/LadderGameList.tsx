@@ -21,24 +21,42 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
 
 /**
  * 사다리게임 게시판 목록.
- * - localStorage 에서 목록을 읽어 클라이언트에서 렌더
+ * - DB에서 목록을 불러 모든 회원이 동일하게 조회
  * - 글쓰기 버튼은 /ladder/new 로 이동
  */
 export default function LadderGameList() {
-  // 첫 렌더에선 비어 있고 mount 후 채워짐 → SSR/Hydration 불일치 방지
   const [games, setGames] = useState<LadderGameRecord[]>([]);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const reloadGames = useCallback(async () => {
+    try {
+      const list = await listLadderGames();
+      setGames(list);
+      setLoadError(null);
+    } catch {
+      setLoadError("목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setGames(listLadderGames());
-    setIsHydrated(true);
-  }, []);
+    void reloadGames();
+  }, [reloadGames]);
 
-  const handleDelete = useCallback((id: string, title: string) => {
-    if (!window.confirm(`"${title}" 사다리를 삭제할까요?`)) return;
-    deleteLadderGame(id);
-    setGames(listLadderGames());
-  }, []);
+  const handleDelete = useCallback(
+    async (id: string, title: string) => {
+      if (!window.confirm(`"${title}" 사다리를 삭제할까요?`)) return;
+      try {
+        await deleteLadderGame(id);
+        await reloadGames();
+      } catch {
+        window.alert("삭제에 실패했습니다. 다시 시도해 주세요.");
+      }
+    },
+    [reloadGames],
+  );
 
   return (
     <section className="space-y-6">
@@ -48,7 +66,8 @@ export default function LadderGameList() {
             사다리게임 게시판
           </h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            글쓰기 버튼으로 사다리를 만들고, 목록에서 다시 열어볼 수 있습니다.
+            회원 모두가 사다리를 만들고 함께 참여할 수 있습니다. 목록은 모든
+            회원에게 동일하게 보입니다.
           </p>
         </div>
         <Button asChild>
@@ -59,7 +78,13 @@ export default function LadderGameList() {
         </Button>
       </header>
 
-      {!isHydrated ? (
+      {loadError ? (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {loadError}
+        </p>
+      ) : null}
+
+      {isLoading ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           불러오는 중...
         </p>

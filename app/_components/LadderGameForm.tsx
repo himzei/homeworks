@@ -247,7 +247,7 @@ export default function LadderGameForm() {
   }, []);
 
   const handleSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
+    async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (isSubmitting) return;
 
@@ -275,7 +275,7 @@ export default function LadderGameForm() {
           participantCount,
         );
 
-        const created = createLadderGame({
+        const created = await createLadderGame({
           title: title.trim(),
           participantCount,
           participantNames: initialNames,

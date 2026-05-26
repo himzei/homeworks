@@ -1,7 +1,7 @@
 /**
- * 사다리게임 도메인 로직 + localStorage 저장소.
- * - 게시판 형태(목록·상세·작성)에서 공통으로 사용
- * - 서버에 저장하지 않고 브라우저 localStorage에 보관
+ * 사다리게임 도메인 로직 + DB(Supabase) API 클라이언트.
+ * - /ladder 게시판에서 승인된 모든 회원이 동일한 데이터를 조회·편집
+ * - API: /api/ladder-games ...
  */
 
 import { GROUP_OPTIONS } from "@/lib/constants";
@@ -59,6 +59,8 @@ export type LadderGameRecord = {
   /** 2~4 칸을 건너뛰는 대각선 가로줄 (구버전 레코드 호환: 없을 수 있음) */
   diagonalRungs?: DiagonalRung[];
   rowCount: number;
+  authorUserId?: string;
+  authorName?: string;
   createdAt: number;
   /**
    * 최초로 "게임 시작"을 누른 시점 (ms epoch).
@@ -97,7 +99,30 @@ const REQUIRED_LONG_DIAGONALS: ReadonlyArray<{
   { span: 10, count: 1 },
 ];
 
-const STORAGE_KEY = "ladder-games:v1";
+type ApiError = string | { kind?: string; index?: number };
+
+async function requestJson<T>(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  const text = await response.text();
+  const json = text ? (JSON.parse(text) as unknown) : null;
+
+  if (!response.ok) {
+    const error = (json as { error?: ApiError })?.error;
+    throw error ?? "unknown";
+  }
+
+  return json as T;
+}
 
 /**
  * 한 행 안의 column 점유 범위 관리.
@@ -305,41 +330,34 @@ export function traceLadderPath(
 }
 
 // =====================
-// localStorage 저장소
+// DB API 클라이언트
 // =====================
 
-/** SSR 가드 - 브라우저에서만 호출 */
-function readAll(): LadderGameRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as LadderGameRecord[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    // 저장된 데이터가 깨진 경우 빈 배열로 복구
-    return [];
-  }
-}
-
-function writeAll(records: LadderGameRecord[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // 쿼터 초과·시크릿 모드 등은 조용히 무시
-  }
-}
-
 /** 최근에 만든 순으로 정렬된 목록 반환 */
-export function listLadderGames(): LadderGameRecord[] {
-  const records = readAll();
-  return [...records].sort((a, b) => b.createdAt - a.createdAt);
+export async function listLadderGames(): Promise<LadderGameRecord[]> {
+  const data = await requestJson<{ games: LadderGameRecord[] }>(
+    "/api/ladder-games",
+    { method: "GET" },
+  );
+  return data.games;
 }
 
-export function getLadderGame(id: string): LadderGameRecord | null {
-  return readAll().find((record) => record.id === id) ?? null;
+export async function fetchLadderGame(id: string): Promise<LadderGameRecord | null> {
+  try {
+    const data = await requestJson<{ game: LadderGameRecord }>(
+      `/api/ladder-games/${id}`,
+      { method: "GET" },
+    );
+    return data.game;
+  } catch (error) {
+    if (error === "not_found") return null;
+    throw error;
+  }
+}
+
+/** @deprecated fetchLadderGame 사용 권장 */
+export async function getLadderGame(id: string): Promise<LadderGameRecord | null> {
+  return fetchLadderGame(id);
 }
 
 export type CreateLadderGameInput = {
@@ -351,29 +369,17 @@ export type CreateLadderGameInput = {
 };
 
 /** 새 사다리게임 생성 (사다리 가로줄 + 대각선 가로줄도 함께 생성) */
-export function createLadderGame(
+export async function createLadderGame(
   input: CreateLadderGameInput,
-): LadderGameRecord {
-  const participantCount = input.participantCount;
-  const emptyArray = Array.from({ length: participantCount }, () => "");
-  const { rungs, diagonalRungs } = buildLadder(participantCount);
-
-  const record: LadderGameRecord = {
-    id: createLadderId(),
-    title: input.title.trim() || "이름 없는 사다리",
-    participantCount,
-    participantNames: input.participantNames ?? emptyArray,
-    resultItems: input.resultItems ?? emptyArray,
-    rungs,
-    diagonalRungs,
-    rowCount: LADDER_ROW_COUNT,
-    createdAt: Date.now(),
-  };
-
-  const records = readAll();
-  records.push(record);
-  writeAll(records);
-  return record;
+): Promise<LadderGameRecord> {
+  const data = await requestJson<{ game: LadderGameRecord }>(
+    "/api/ladder-games",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.game;
 }
 
 export type UpdateLadderGameInput = Partial<
@@ -385,66 +391,61 @@ export type UpdateLadderGameInput = Partial<
  * - participantCount(인원수)는 생성 시 결정되며 여기선 변경 불가
  * - 길이가 다른 배열이 들어오면 무시(방어)
  */
-export function updateLadderGame(
+export async function updateLadderGame(
   id: string,
   patch: UpdateLadderGameInput,
-): LadderGameRecord | null {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return null;
-
-  if (patch.title !== undefined) {
-    target.title = patch.title.trim() || "이름 없는 사다리";
+): Promise<LadderGameRecord | null> {
+  try {
+    const data = await requestJson<{ game: LadderGameRecord }>(
+      `/api/ladder-games/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    );
+    return data.game;
+  } catch (error) {
+    if (error === "not_found" || error === "already_played") return null;
+    throw error;
   }
-  if (
-    patch.participantNames &&
-    patch.participantNames.length === target.participantCount
-  ) {
-    target.participantNames = patch.participantNames;
-  }
-  if (
-    patch.resultItems &&
-    patch.resultItems.length === target.participantCount
-  ) {
-    target.resultItems = patch.resultItems;
-  }
-
-  writeAll(records);
-  return target;
 }
 
 /**
  * 기존 사다리의 가로줄만 다시 섞기 (재추첨).
  * - 이미 게임이 시작된(`playedAt` 존재) 사다리는 결과 고정이므로 변경 거부
  */
-export function reshuffleLadderGame(id: string): LadderGameRecord | null {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return null;
-  if (target.playedAt) return target; // 이미 게임 완료된 사다리는 그대로 반환
-
-  const { rungs, diagonalRungs } = buildLadder(target.participantCount);
-  target.rungs = rungs;
-  target.diagonalRungs = diagonalRungs;
-  writeAll(records);
-  return target;
+export async function reshuffleLadderGame(
+  id: string,
+): Promise<LadderGameRecord | null> {
+  try {
+    const data = await requestJson<{ game: LadderGameRecord }>(
+      `/api/ladder-games/${id}/reshuffle`,
+      { method: "POST" },
+    );
+    return data.game;
+  } catch (error) {
+    if (error === "not_found" || error === "already_played") return null;
+    throw error;
+  }
 }
 
 /**
  * 사다리를 "게임 시작됨" 상태로 표시 (결과 고정).
  * - 이미 표시된 경우 그대로 반환 (멱등)
  */
-export function markLadderGameAsPlayed(
+export async function markLadderGameAsPlayed(
   id: string,
-): LadderGameRecord | null {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return null;
-  if (target.playedAt) return target;
-
-  target.playedAt = Date.now();
-  writeAll(records);
-  return target;
+): Promise<LadderGameRecord | null> {
+  try {
+    const data = await requestJson<{ game: LadderGameRecord }>(
+      `/api/ladder-games/${id}/play`,
+      { method: "POST" },
+    );
+    return data.game;
+  } catch (error) {
+    if (error === "not_found") return null;
+    throw error;
+  }
 }
 
 /** 사다리가 이미 게임 시작되어 결과가 고정되었는지 */
@@ -452,16 +453,16 @@ export function isLadderGamePlayed(game: LadderGameRecord): boolean {
   return Boolean(game.playedAt);
 }
 
-export function deleteLadderGame(id: string): void {
-  const records = readAll().filter((record) => record.id !== id);
-  writeAll(records);
-}
-
-function createLadderId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+export async function deleteLadderGame(id: string): Promise<boolean> {
+  try {
+    await requestJson<{ ok: true }>(`/api/ladder-games/${id}`, {
+      method: "DELETE",
+    });
+    return true;
+  } catch (error) {
+    if (error === "not_found") return false;
+    throw error;
   }
-  return `ladder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 // =====================
