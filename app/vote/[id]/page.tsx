@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import VoteDetail from "@/app/_components/VoteDetail";
+import { createClient } from "@/lib/supabase/server";
+import { requireApprovedMember } from "@/lib/auth/require-approved-member";
 
 export const metadata: Metadata = {
   title: "투표",
@@ -10,6 +12,9 @@ type VoteDetailPageProps = {
 };
 
 export default async function VoteDetailPage({ params }: VoteDetailPageProps) {
+  const supabase = await createClient();
+  await requireApprovedMember(supabase);
+
   const { id } = await params;
 
   return (

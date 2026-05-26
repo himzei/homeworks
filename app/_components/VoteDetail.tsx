@@ -31,7 +31,7 @@ import {
   deleteLadderVote,
   describeVoteError,
   endLadderVote,
-  getLadderVote,
+  fetchLadderVote,
   startLadderVote,
   type LadderVoteRecord,
 } from "@/lib/ladder-votes";
@@ -76,13 +76,22 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
     return "";
   }, [profile, user?.email]);
 
-  const reloadVote = useCallback(() => {
-    setVote(getLadderVote(voteId));
+  const reloadVote = useCallback(async () => {
+    const data = await fetchLadderVote(voteId);
+    setVote(data);
   }, [voteId]);
 
   useEffect(() => {
-    reloadVote();
-    setIsHydrated(true);
+    let isActive = true;
+    (async () => {
+      await reloadVote();
+      if (!isActive) return;
+      setIsHydrated(true);
+    })();
+
+    return () => {
+      isActive = false;
+    };
   }, [reloadVote]);
 
   const myBallot = useMemo(() => {
@@ -143,22 +152,30 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
     if (endCountdown === null) return;
 
     if (endCountdown <= 0) {
-      if (!vote || !currentUserId) {
-        setEndCountdown(null);
-        return;
-      }
+      let isActive = true;
+      (async () => {
+        if (!vote || !currentUserId) {
+          setEndCountdown(null);
+          return;
+        }
 
-      const result = endLadderVote(vote.id, currentUserId);
-      if ("error" in result) {
-        setFormError(describeVoteError(result.error));
-        setEndCountdown(null);
-        return;
-      }
+        const result = await endLadderVote(vote.id, currentUserId);
+        if (!isActive) return;
+        if ("error" in result) {
+          setFormError(describeVoteError(result.error));
+          setEndCountdown(null);
+          return;
+        }
 
-      reloadVote();
-      setEndCountdown(null);
-      setShowFireworks(true);
-      return;
+        await reloadVote();
+        if (!isActive) return;
+        setEndCountdown(null);
+        setShowFireworks(true);
+      })();
+
+      return () => {
+        isActive = false;
+      };
     }
 
     const timerId = window.setTimeout(() => {
@@ -168,21 +185,21 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
     return () => window.clearTimeout(timerId);
   }, [endCountdown, vote, currentUserId, reloadVote]);
 
-  const handleStartVote = useCallback(() => {
+  const handleStartVote = useCallback(async () => {
     if (!vote || !currentUserId) return;
-    const result = startLadderVote(vote.id, currentUserId);
+    const result = await startLadderVote(vote.id, currentUserId);
     if ("error" in result) {
       setFormError(describeVoteError(result.error));
       return;
     }
-    reloadVote();
+    await reloadVote();
     setFormError(null);
   }, [vote, currentUserId, reloadVote]);
 
-  const handleAddActiveOption = useCallback(() => {
+  const handleAddActiveOption = useCallback(async () => {
     if (!vote || !currentUserId) return;
 
-    const result = addLadderVoteOption(
+    const result = await addLadderVoteOption(
       vote.id,
       currentUserId,
       newActiveOptionLabel,
@@ -192,12 +209,12 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
       return;
     }
 
-    reloadVote();
+    await reloadVote();
     setNewActiveOptionLabel("");
     setFormError(null);
   }, [vote, currentUserId, newActiveOptionLabel, reloadVote]);
 
-  const handleCastBallot = useCallback(() => {
+  const handleCastBallot = useCallback(async () => {
     if (!vote || !currentUserId) {
       setFormError("로그인한 사용자만 투표할 수 있습니다.");
       return;
@@ -207,7 +224,7 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
       return;
     }
 
-    const result = castLadderVoteBallot(
+    const result = await castLadderVoteBallot(
       vote.id,
       currentUserId,
       currentUserName,
@@ -217,7 +234,7 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
       setFormError(describeVoteError(result.error));
       return;
     }
-    reloadVote();
+    await reloadVote();
     setFormError(null);
   }, [
     vote,
@@ -227,11 +244,11 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
     reloadVote,
   ]);
 
-  const handleDeleteVote = useCallback(() => {
+  const handleDeleteVote = useCallback(async () => {
     if (!vote || !currentUserId) return;
     if (!window.confirm(`"${vote.title}" 투표를 삭제할까요?`)) return;
 
-    const result = deleteLadderVote(vote.id, currentUserId);
+    const result = await deleteLadderVote(vote.id, currentUserId);
     if ("error" in result) {
       setFormError(describeVoteError(result.error));
       return;

@@ -54,13 +54,13 @@ export default function VoteForm() {
     });
   }, []);
 
-  const handleCreateVote = useCallback(() => {
+  const handleCreateVote = useCallback(async () => {
     if (!currentUserId) {
       setFormError("로그인한 사용자만 투표를 만들 수 있습니다.");
       return;
     }
 
-    const result = createLadderVote({
+    const result = await createLadderVote({
       title: draftTitle,
       description: draftDescription,
       isAnonymous: draftIsAnonymous,

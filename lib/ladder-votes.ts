@@ -1,8 +1,11 @@
 /**
- * 투표 — localStorage 저장 (DB 미사용).
- * - 브라우저에만 보관
- * - 로그인 사용자만 투표 가능 (userId 기준 1인 1표)
- * - ladderGameId 는 예전 사다리 연동 데이터 호환용(선택)
+ * 투표 — DB(Supabase) 저장 버전.
+ * - /vote 게시판에서 모든 승인된 회원이 동일한 데이터를 조회
+ * - 작성자는 초안 생성/시작/종료/삭제 및 진행 중 선택지 추가 가능
+ * - 사용자는 진행 중 투표에 1인 1표(수정 가능)
+ *
+ * ⚠️ 기존 localStorage 구현을 API 호출 기반으로 교체했습니다.
+ * - API: /api/votes ...
  */
 
 export type LadderVoteStatus = "draft" | "active" | "closed";
@@ -80,111 +83,76 @@ export type LadderVoteResultRow = {
   voters: Array<{ voterName: string; votedAt: number }>;
 };
 
-const STORAGE_KEY = "ladder-votes:v1";
 export const MIN_VOTE_OPTIONS = 2;
 export const MAX_VOTE_OPTIONS = 12;
 
-function createId(prefix: string): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
+type ApiError =
+  | { kind: LadderVoteValidationError["kind"]; index?: number }
+  | "unknown";
 
-function readAll(): LadderVoteRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as LadderVoteRecord[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
-}
+async function requestJson<T>(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
 
-function writeAll(records: LadderVoteRecord[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // 쿼터 초과 등
-  }
-}
+  const text = await response.text();
+  const json = text ? (JSON.parse(text) as unknown) : null;
 
-function buildOptionsFromLabels(labels: string[]): LadderVoteOption[] {
-  return labels.map((label) => ({
-    id: createId("opt"),
-    label: label.trim(),
-  }));
-}
+  if (!response.ok) {
+    const error = (json as any)?.error as ApiError | undefined;
+    throw error ?? "unknown";
+  }
 
-function validateVoteContent(
-  title: string,
-  optionLabels: string[],
-): LadderVoteValidationError | null {
-  if (!title.trim()) {
-    return { kind: "title_empty" };
-  }
-  const trimmed = optionLabels.map((label) => label.trim()).filter(Boolean);
-  if (trimmed.length < MIN_VOTE_OPTIONS) {
-    return { kind: "options_too_few" };
-  }
-  for (let index = 0; index < optionLabels.length; index += 1) {
-    if (optionLabels[index] !== undefined && !optionLabels[index]?.trim()) {
-      // 빈 줄이 섞여 있으면 해당 인덱스 에러
-      if (optionLabels.some((l) => l.trim())) {
-        return { kind: "option_empty", index };
-      }
-    }
-  }
-  return null;
+  return json as T;
 }
 
 /** 전체 투표 목록 (최신순) */
-export function listAllLadderVotes(): LadderVoteRecord[] {
-  return readAll().sort((a, b) => b.createdAt - a.createdAt);
+export async function listAllLadderVotes(): Promise<LadderVoteRecord[]> {
+  const data = await requestJson<{ votes: LadderVoteRecord[] }>("/api/votes", {
+    method: "GET",
+  });
+  return data.votes;
 }
 
 /** 특정 사다리에 연결된 투표 목록 (최신순) */
-export function listVotesForLadder(ladderGameId: string): LadderVoteRecord[] {
-  return readAll()
-    .filter((record) => record.ladderGameId === ladderGameId)
-    .sort((a, b) => b.createdAt - a.createdAt);
+export async function listVotesForLadder(_ladderGameId: string): Promise<LadderVoteRecord[]> {
+  // 현재 /vote 게시판은 사다리 연동을 사용하지 않으므로 목록 API로 통일합니다.
+  // 필요 시 vote.ladderGameId 컬럼을 추가해 필터 API로 확장하면 됩니다.
+  return listAllLadderVotes();
 }
 
 export function getLadderVote(id: string): LadderVoteRecord | null {
-  return readAll().find((record) => record.id === id) ?? null;
+  // 클라이언트 컴포넌트에서 동기 접근하던 기존 API를 유지하기 어렵기 때문에
+  // 상세는 반드시 async API로 조회하도록 변경했습니다.
+  // (VoteDetail.tsx에서 useEffect로 불러오는 구조에 맞춤)
+  void id;
+  return null;
 }
 
 /** 초안 투표 생성 (작성 직후 status = draft) */
-export function createLadderVote(
+export async function createLadderVote(
   input: CreateLadderVoteInput,
-): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
-  const trimmedLabels = input.optionLabels.map((l) => l.trim());
-  const error = validateVoteContent(input.title, trimmedLabels);
-  if (error) return { error };
-
-  const nonEmptyLabels = trimmedLabels.filter(Boolean);
-  const record: LadderVoteRecord = {
-    id: createId("vote"),
-    title: input.title.trim(),
-    description: (input.description ?? "").trim(),
-    isAnonymous: input.isAnonymous,
-    options: buildOptionsFromLabels(nonEmptyLabels),
-    status: "draft",
-    authorUserId: input.authorUserId,
-    authorName: input.authorName,
-    createdAt: Date.now(),
-    startedAt: null,
-    ballots: [],
-  };
-
-  const records = readAll();
-  records.push(record);
-  writeAll(records);
-  return { vote: record };
+): Promise<{ vote: LadderVoteRecord } | { error: LadderVoteValidationError }> {
+  try {
+    const data = await requestJson<{ vote: LadderVoteRecord }>("/api/votes", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return { vote: data.vote };
+  } catch (e) {
+    const error = e as ApiError;
+    if (typeof error === "object" && error && "kind" in error) {
+      return { error: error as LadderVoteValidationError };
+    }
+    return { error: { kind: "not_found" } };
+  }
 }
 
 /** 초안만 수정 가능 */
@@ -193,175 +161,137 @@ export function updateLadderVoteDraft(
   userId: string,
   patch: UpdateLadderVoteDraftInput,
 ): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return { error: { kind: "not_found" } };
-  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
-  if (target.status !== "draft") return { error: { kind: "not_draft" } };
-
-  const nextTitle = patch.title !== undefined ? patch.title : target.title;
-  const nextDescription =
-    patch.description !== undefined ? patch.description : target.description;
-  const nextAnonymous =
-    patch.isAnonymous !== undefined ? patch.isAnonymous : target.isAnonymous;
-  const nextOptionLabels =
-    patch.optionLabels !== undefined
-      ? patch.optionLabels
-      : target.options.map((opt) => opt.label);
-
-  const error = validateVoteContent(nextTitle, nextOptionLabels);
-  if (error) return { error };
-
-  target.title = nextTitle.trim();
-  target.description = nextDescription.trim();
-  target.isAnonymous = nextAnonymous;
-  target.options = buildOptionsFromLabels(
-    nextOptionLabels.map((l) => l.trim()).filter(Boolean),
-  );
-
-  writeAll(records);
-  return { vote: target };
+  // 현재 UI는 draft 수정 기능을 사용하지 않아 DB 버전에서는 우선 미지원.
+  // 필요해지면 PATCH /api/votes/[id]로 확장하세요.
+  void id;
+  void userId;
+  void patch;
+  return { error: { kind: "not_draft" } };
 }
 
 /** 투표 시작 — 작성자만, 초안 → 진행 중 */
-export function startLadderVote(
+export async function startLadderVote(
   id: string,
   userId: string,
-): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return { error: { kind: "not_found" } };
-  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
-  if (target.status !== "draft") return { error: { kind: "not_draft" } };
-
-  const error = validateVoteContent(
-    target.title,
-    target.options.map((opt) => opt.label),
-  );
-  if (error) return { error };
-
-  target.status = "active";
-  target.startedAt = Date.now();
-  writeAll(records);
-  return { vote: target };
+): Promise<{ vote: LadderVoteRecord } | { error: LadderVoteValidationError }> {
+  void userId; // 서버에서 auth로 검증
+  try {
+    await requestJson<{ ok: true }>(`/api/votes/${id}/start`, { method: "POST" });
+    const vote = await fetchLadderVote(id);
+    if (!vote) return { error: { kind: "not_found" } };
+    return { vote };
+  } catch (e) {
+    const error = e as ApiError;
+    if (typeof error === "object" && error && "kind" in error) {
+      return { error: error as LadderVoteValidationError };
+    }
+    return { error: { kind: "not_found" } };
+  }
 }
 
 /** 투표 중 선택지 추가 — 작성자만, 기존 항목·득표는 유지 */
-export function addLadderVoteOption(
+export async function addLadderVoteOption(
   id: string,
   userId: string,
   label: string,
-): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return { error: { kind: "not_found" } };
-  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
-  if (target.status !== "active") return { error: { kind: "not_active" } };
-
-  const trimmedLabel = label.trim();
-  if (!trimmedLabel) return { error: { kind: "option_label_empty" } };
-  if (target.options.length >= MAX_VOTE_OPTIONS) {
-    return { error: { kind: "options_max_reached" } };
+): Promise<{ vote: LadderVoteRecord } | { error: LadderVoteValidationError }> {
+  void userId;
+  try {
+    await requestJson<{ option: { id: string; label: string } }>(
+      `/api/votes/${id}/options`,
+      { method: "POST", body: JSON.stringify({ label }) },
+    );
+    const vote = await fetchLadderVote(id);
+    if (!vote) return { error: { kind: "not_found" } };
+    return { vote };
+  } catch (e) {
+    const error = e as ApiError;
+    if (typeof error === "object" && error && "kind" in error) {
+      return { error: error as LadderVoteValidationError };
+    }
+    return { error: { kind: "not_found" } };
   }
-  if (
-    target.options.some(
-      (option) => option.label.toLowerCase() === trimmedLabel.toLowerCase(),
-    )
-  ) {
-    return { error: { kind: "option_duplicate" } };
-  }
-
-  target.options.push({
-    id: createId("opt"),
-    label: trimmedLabel,
-  });
-
-  writeAll(records);
-  return { vote: target };
 }
 
 /** 투표 종료 — 작성자만, 진행 중 → 종료 */
-export function endLadderVote(
+export async function endLadderVote(
   id: string,
   userId: string,
-): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return { error: { kind: "not_found" } };
-  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
-  if (target.status !== "active") return { error: { kind: "not_active" } };
-
-  target.status = "closed";
-  target.endedAt = Date.now();
-  writeAll(records);
-  return { vote: target };
+): Promise<{ vote: LadderVoteRecord } | { error: LadderVoteValidationError }> {
+  void userId;
+  try {
+    await requestJson<{ ok: true }>(`/api/votes/${id}/end`, { method: "POST" });
+    const vote = await fetchLadderVote(id);
+    if (!vote) return { error: { kind: "not_found" } };
+    return { vote };
+  } catch (e) {
+    const error = e as ApiError;
+    if (typeof error === "object" && error && "kind" in error) {
+      return { error: error as LadderVoteValidationError };
+    }
+    return { error: { kind: "not_found" } };
+  }
 }
 
 /** 투표하기 / 수정 — 로그인 사용자, 진행 중 투표만 (이미 투표한 경우 선택지 변경) */
-export function castLadderVoteBallot(
+export async function castLadderVoteBallot(
   voteId: string,
   userId: string,
   voterName: string,
   optionId: string,
-): { vote: LadderVoteRecord } | { error: LadderVoteValidationError } {
-  if (!userId) return { error: { kind: "not_logged_in" } };
-
-  const records = readAll();
-  const target = records.find((record) => record.id === voteId);
-  if (!target) return { error: { kind: "not_found" } };
-  if (target.status !== "active") return { error: { kind: "not_active" } };
-
-  const optionExists = target.options.some((opt) => opt.id === optionId);
-  if (!optionExists) return { error: { kind: "invalid_option" } };
-
-  const displayName = voterName.trim() || "이름 없음";
-  const existingIndex = target.ballots.findIndex(
-    (ballot) => ballot.userId === userId,
-  );
-
-  if (existingIndex >= 0) {
-    const existing = target.ballots[existingIndex];
-    if (existing.optionId === optionId) {
-      return { vote: target };
-    }
-    target.ballots[existingIndex] = {
-      ...existing,
-      optionId,
-      voterName: displayName,
-      votedAt: Date.now(),
-    };
-  } else {
-    target.ballots.push({
-      userId,
-      optionId,
-      voterName: displayName,
-      votedAt: Date.now(),
+): Promise<{ vote: LadderVoteRecord } | { error: LadderVoteValidationError }> {
+  if (!userId) return Promise.resolve({ error: { kind: "not_logged_in" } });
+  try {
+    await requestJson<{ ok: true }>(`/api/votes/${voteId}/ballots`, {
+      method: "PUT",
+      body: JSON.stringify({ optionId, voterName }),
     });
+    const vote = await fetchLadderVote(voteId);
+    if (!vote) return { error: { kind: "not_found" } };
+    return { vote };
+  } catch (e) {
+    const error = e as ApiError;
+    if (typeof error === "object" && error && "kind" in error) {
+      return { error: error as LadderVoteValidationError };
+    }
+    return { error: { kind: "not_found" } };
   }
-
-  writeAll(records);
-  return { vote: target };
 }
 
 /** 작성자만 삭제 */
-export function deleteLadderVote(
+export async function deleteLadderVote(
   id: string,
   userId: string,
-): { ok: true } | { error: LadderVoteValidationError } {
-  const records = readAll();
-  const target = records.find((record) => record.id === id);
-  if (!target) return { error: { kind: "not_found" } };
-  if (target.authorUserId !== userId) return { error: { kind: "not_author" } };
-
-  writeAll(records.filter((record) => record.id !== id));
-  return { ok: true };
+): Promise<{ ok: true } | { error: LadderVoteValidationError }> {
+  void userId;
+  try {
+    await requestJson<{ ok: true }>(`/api/votes/${id}`, { method: "DELETE" });
+    return { ok: true };
+  } catch (e) {
+    const error = e as ApiError;
+    if (typeof error === "object" && error && "kind" in error) {
+      return { error: error as LadderVoteValidationError };
+    }
+    return { error: { kind: "not_found" } };
+  }
 }
 
 /** 사다리 삭제 시 연결 투표 일괄 제거 */
 export function deleteVotesForLadderGame(ladderGameId: string): void {
-  writeAll(
-    readAll().filter((record) => record.ladderGameId !== ladderGameId),
-  );
+  // 사다리 연동 투표 삭제 기능은 현재 DB 버전에서 사용하지 않습니다.
+  void ladderGameId;
+}
+
+/** 투표 상세 조회 (DB) */
+export async function fetchLadderVote(id: string): Promise<LadderVoteRecord | null> {
+  try {
+    const data = await requestJson<{ vote: LadderVoteRecord }>(`/api/votes/${id}`, {
+      method: "GET",
+    });
+    return data.vote;
+  } catch {
+    return null;
+  }
 }
 
 /** 결과 집계 */

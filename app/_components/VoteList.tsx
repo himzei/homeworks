@@ -31,22 +31,36 @@ export default function VoteList() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    setVotes(listAllLadderVotes());
-    setIsHydrated(true);
+    let isActive = true;
+    (async () => {
+      try {
+        const list = await listAllLadderVotes();
+        if (!isActive) return;
+        setVotes(list);
+      } finally {
+        if (!isActive) return;
+        setIsHydrated(true);
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const handleDelete = useCallback(
-    (vote: LadderVoteRecord) => {
+    async (vote: LadderVoteRecord) => {
       if (!currentUserId) return;
       if (!window.confirm(`"${vote.title}" 투표를 삭제할까요?`)) return;
 
-      const result = deleteLadderVote(vote.id, currentUserId);
+      const result = await deleteLadderVote(vote.id, currentUserId);
       if ("error" in result) {
         window.alert(describeVoteError(result.error));
         return;
       }
 
-      setVotes(listAllLadderVotes());
+      const list = await listAllLadderVotes();
+      setVotes(list);
     },
     [currentUserId],
   );
