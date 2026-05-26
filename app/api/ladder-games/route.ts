@@ -9,6 +9,7 @@ import {
   buildLadder,
   type CreateLadderGameInput,
 } from "@/lib/ladder";
+import { fetchAuthorCourseNameByUserId } from "@/lib/fetch-author-course-names";
 import { ladderRowToRecord, type LadderGameRow } from "@/lib/ladder-db";
 
 function parseCreateBody(body: unknown): CreateLadderGameInput | null {
@@ -47,7 +48,23 @@ export async function GET() {
     return NextResponse.json({ error: "unknown" }, { status: 500 });
   }
 
-  const games = (data as LadderGameRow[]).map(ladderRowToRecord);
+  const rows = data as LadderGameRow[];
+  const courseNameByUserId = await fetchAuthorCourseNameByUserId(
+    supabase,
+    rows.map((row) => row.author_user_id),
+  );
+
+  const games = rows.map((row) => {
+    const record = ladderRowToRecord(row);
+    const authorCourseName =
+      (row.author_user_id
+        ? courseNameByUserId.get(row.author_user_id)
+        : null) ?? undefined;
+    return authorCourseName
+      ? { ...record, authorCourseName }
+      : record;
+  });
+
   return NextResponse.json({ games });
 }
 

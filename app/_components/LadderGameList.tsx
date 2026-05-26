@@ -8,6 +8,7 @@ import {
   listLadderGames,
   type LadderGameRecord,
 } from "@/lib/ladder";
+import { formatPostAuthorLabel } from "@/lib/format-post-author";
 import { PencilLine, Trash2, Users } from "lucide-react";
 
 /** 작성일 표시용 포매터 (Hydration 안정성을 위해 모듈 스코프) */
@@ -114,6 +115,12 @@ export default function LadderGameList() {
                   {game.title}
                 </span>
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>
+                    {formatPostAuthorLabel(
+                      game.authorCourseName,
+                      game.authorName,
+                    )}
+                  </span>
                   <span className="inline-flex items-center gap-1">
                     <Users className="size-3.5" aria-hidden />
                     {game.participantCount}명

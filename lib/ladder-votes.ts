@@ -37,6 +37,8 @@ export type LadderVoteRecord = {
   status: LadderVoteStatus;
   authorUserId: string;
   authorName: string;
+  /** 작성 당시 과정명 (profiles.group_name) */
+  authorCourseName?: string;
   createdAt: number;
   startedAt: number | null;
   /** 투표 종료 시각 (status === closed) */

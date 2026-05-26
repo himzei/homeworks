@@ -16,6 +16,7 @@ import {
   voteDateFormatter,
   voteStatusBadgeClass,
 } from "@/app/_components/vote-shared";
+import { formatPostAuthorLabel } from "@/lib/format-post-author";
 
 /**
  * 투표 게시판 목록.
@@ -122,7 +123,12 @@ export default function VoteList() {
                     </span>
                   </span>
                   <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>{vote.authorName}</span>
+                    <span>
+                      {formatPostAuthorLabel(
+                        vote.authorCourseName,
+                        vote.authorName,
+                      )}
+                    </span>
                     <span>
                       {voteDateFormatter.format(new Date(vote.createdAt))}
                     </span>

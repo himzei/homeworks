@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
+import { fetchAuthorCourseNameByUserId } from "@/lib/fetch-author-course-names";
 import {
   MAX_VOTE_OPTIONS,
   MIN_VOTE_OPTIONS,
@@ -29,7 +30,11 @@ function toEpochMs(value: string | null): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function voteRowToRecord(row: VoteListRow, ballotsCount: number): LadderVoteRecord {
+function voteRowToRecord(
+  row: VoteListRow,
+  ballotsCount: number,
+  authorCourseName?: string,
+): LadderVoteRecord {
   return {
     id: row.id,
     title: row.title,
@@ -39,6 +44,7 @@ function voteRowToRecord(row: VoteListRow, ballotsCount: number): LadderVoteReco
     status: row.status,
     authorUserId: row.author_user_id,
     authorName: row.author_name,
+    authorCourseName,
     createdAt: toEpochMs(row.created_at) ?? Date.now(),
     startedAt: toEpochMs(row.started_at),
     endedAt: toEpochMs(row.ended_at),
@@ -126,9 +132,21 @@ export async function GET() {
     countByVoteId.set(voteId, (countByVoteId.get(voteId) ?? 0) + 1);
   }
 
-  const records = (votes as VoteListRow[]).map((row) =>
-    voteRowToRecord(row, countByVoteId.get(row.id) ?? 0),
+  const voteRows = votes as VoteListRow[];
+  const courseNameByUserId = await fetchAuthorCourseNameByUserId(
+    supabase,
+    voteRows.map((row) => row.author_user_id),
   );
+
+  const records = voteRows.map((row) => {
+    const authorCourseName =
+      courseNameByUserId.get(row.author_user_id) ?? undefined;
+    return voteRowToRecord(
+      row,
+      countByVoteId.get(row.id) ?? 0,
+      authorCourseName,
+    );
+  });
 
   return NextResponse.json({ votes: records });
 }

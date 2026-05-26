@@ -61,6 +61,8 @@ export type LadderGameRecord = {
   rowCount: number;
   authorUserId?: string;
   authorName?: string;
+  /** 작성 당시 과정명 (profiles.group_name) */
+  authorCourseName?: string;
   createdAt: number;
   /**
    * 최초로 "게임 시작"을 누른 시점 (ms epoch).
