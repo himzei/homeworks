@@ -81,6 +81,16 @@ function getMutationErrorMessage(
   return error.message || error.details || error.hint || fallback;
 }
 
+/** 포스트잇 상단에 붙는 테이프 장식 (노트 밖에 두어 잘림 방지) */
+function StickyNoteTape() {
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 top-0 z-10 h-5 w-19 -translate-x-1/2 -translate-y-1/2 rounded-[3px] border border-black/10 bg-white/70 shadow-[0_1px_3px_rgba(0,0,0,0.12)]"
+      aria-hidden
+    />
+  );
+}
+
 function validatePostContent(content: string): string | null {
   const trimmed = content.trim();
   if (!trimmed) return "내용을 입력해 주세요.";
@@ -308,7 +318,7 @@ export default function CompanyInquiryStickyBoard({
         <section
           ref={boardCaptureRef}
           aria-label="포스트잇 게시판"
-          className="rounded-2xl border border-white/10 bg-[#0f172a] p-4 sm:p-6"
+          className="overflow-visible rounded-2xl border border-white/10 bg-[#0f172a] p-4 sm:p-6"
         >
           <p className="mb-4 text-sm font-medium text-white/80">
             기업(문의) 포스트잇 · {postCountLabel}
@@ -319,7 +329,7 @@ export default function CompanyInquiryStickyBoard({
               아직 붙은 포스트잇이 없습니다. 첫 문의를 남겨보세요.
             </div>
           ) : (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 overflow-visible pt-2 [column-fill:_balance]">
               {posts.map((post) => (
                 <StickyNote
                   key={post.id}
@@ -471,23 +481,21 @@ function StickyNote({
   };
 
   return (
-    <article
-      className={[
-        "mb-4 break-inside-avoid rounded-[18px] border border-black/10 shadow-[0_10px_22px_rgba(0,0,0,0.18)]",
-        "p-4 sm:p-5",
-        "relative",
-        colorClass,
-      ].join(" ")}
+    <div
+      className="mb-4 break-inside-avoid overflow-visible pt-3"
       style={{
         transform: `rotate(${post.rotate_deg}deg)`,
       }}
     >
-      {/* 상단 테이프 느낌 */}
-      <div
-        className="absolute -top-2 left-1/2 h-4 w-20 -translate-x-1/2 rounded-md bg-white/60 border border-black/10 shadow-sm"
-        aria-hidden
-      />
-
+      <div className="relative">
+        <StickyNoteTape />
+        <article
+          className={[
+            "overflow-visible rounded-[18px] border border-black/10 shadow-[0_10px_22px_rgba(0,0,0,0.18)]",
+            "p-4 sm:p-5",
+            colorClass,
+          ].join(" ")}
+        >
       <header className="flex items-start justify-between gap-3">
         <div className="text-sm font-semibold">{authorLabel}</div>
         {createdLabel ? (
@@ -595,7 +603,9 @@ function StickyNote({
       {actionError ? (
         <p className="mt-2 text-xs text-red-700">{actionError}</p>
       ) : null}
-    </article>
+        </article>
+      </div>
+    </div>
   );
 }
 
