@@ -555,7 +555,7 @@ export default function VoteDetail({ voteId }: VoteDetailProps) {
                     />
                   </div>
                   {!vote.isAnonymous && row.voters.length > 0 ? (
-                    <ul className="text-xs text-zinc-500 dark:text-zinc-400 pl-1">
+                    <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400 pl-1">
                       {row.voters.map((voter, voterIndex) => (
                         <li key={`${row.optionId}-${voterIndex}`}>
                           {voter.voterName}
