@@ -3,6 +3,7 @@
 import { Download, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
+import { isAbortError } from "@/lib/errors/is-abort-error";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/app/_components/ui/button";
 import {
@@ -175,8 +176,9 @@ export default function CompanyInquiryStickyBoard({
       // 최신 글이 맨 위에 보이도록
       setPosts((prev) => [data, ...prev]);
       setContent("");
-    } catch (e) {
-      console.error("기업(문의) 게시글 등록 예외:", e);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      console.error("기업(문의) 게시글 등록 예외:", error);
       setErrorMessage("게시글 등록 중 예기치 않은 오류가 발생했습니다.");
     } finally {
       setIsSubmitting(false);
@@ -428,8 +430,9 @@ function StickyNote({
 
       onUpdated(data);
       setIsEditing(false);
-    } catch (e) {
-      console.error("기업(문의) 게시글 수정 예외:", e);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      console.error("기업(문의) 게시글 수정 예외:", error);
       setActionError("수정 중 예기치 않은 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
@@ -458,8 +461,9 @@ function StickyNote({
       }
 
       onDeleted(post.id);
-    } catch (e) {
-      console.error("기업(문의) 게시글 삭제 예외:", e);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      console.error("기업(문의) 게시글 삭제 예외:", error);
       setActionError("삭제 중 예기치 않은 오류가 발생했습니다.");
     } finally {
       setIsDeleting(false);

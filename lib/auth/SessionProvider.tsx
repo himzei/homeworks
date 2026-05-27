@@ -3,6 +3,7 @@
 /* eslint-disable no-console -- 인증 디버깅용 에러 로깅 필요 */
 import { createContext, useContext, useEffect, useState, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { isAbortError } from "@/lib/errors/is-abort-error";
 import type { User } from "@supabase/supabase-js";
 
 // 세션 컨텍스트 타입 정의
@@ -142,7 +143,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               setIsCheckingAdmin(false);
             }
           } catch (profileErr) {
-            console.error("프로필 조회 중 오류:", profileErr instanceof Error ? profileErr.message : profileErr);
+            if (!isAbortError(profileErr)) {
+              console.error(
+                "프로필 조회 중 오류:",
+                profileErr instanceof Error ? profileErr.message : profileErr,
+              );
+            }
             if (isMountedRef.current) {
               setProfile(null);
               profileRef.current = null;
@@ -162,7 +168,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             setIsCheckingAdmin(false);
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        // 빠른 페이지 이동 시 Supabase 요청이 취소되는 경우 — 무시
+        if (isAbortError(error)) {
+          if (isMountedRef.current) {
+            setIsLoading(false);
+            setIsCheckingAdmin(false);
+          }
+          return;
+        }
+
         console.error("세션 로드 실패:", error);
         if (isMountedRef.current) {
           setUser(null);
@@ -229,7 +244,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               setIsCheckingAdmin(false);
             }
           } catch (profileErr) {
-            console.error("프로필 조회 중 오류:", profileErr instanceof Error ? profileErr.message : profileErr);
+            if (!isAbortError(profileErr)) {
+              console.error(
+                "프로필 조회 중 오류:",
+                profileErr instanceof Error ? profileErr.message : profileErr,
+              );
+            }
             if (isMountedRef.current) {
               setProfile(null);
               profileRef.current = null;
@@ -334,7 +354,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                   setIsCheckingAdmin(false);
                 }
               } catch (profileErr) {
-                console.error("프로필 조회 중 오류:", profileErr instanceof Error ? profileErr.message : profileErr);
+                if (!isAbortError(profileErr)) {
+                  console.error(
+                    "프로필 조회 중 오류:",
+                    profileErr instanceof Error ? profileErr.message : profileErr,
+                  );
+                }
                 if (isMountedRef.current) {
                   setProfile(null);
                   profileRef.current = null;
@@ -352,7 +377,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch (err) {
-          console.error("세션 확인 중 오류:", err);
+          if (!isAbortError(err)) {
+            console.error("세션 확인 중 오류:", err);
+          }
           if (isMountedRef.current) {
             setIsCheckingAdmin(false);
           }

@@ -1,5 +1,7 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+import { isAbortError } from '@/lib/errors/is-abort-error'
+
 // 전역 리스너가 이미 등록되었는지 확인하는 플래그
 let isGlobalListenerRegistered = false
 let globalSupabaseInstance: ReturnType<typeof createBrowserClient> | null = null
@@ -19,6 +21,13 @@ export function createClient() {
     // 전역 unhandledrejection 에러 핸들러 (Promise rejection 처리)
     window.addEventListener('unhandledrejection', (event) => {
       const error = event.reason
+
+      // 페이지 이동·탭 전환으로 취소된 요청 — 정상 동작이므로 오버레이에 노출하지 않음
+      if (isAbortError(error)) {
+        event.preventDefault()
+        return
+      }
+
       const errorMessage = error?.message || String(error || '')
       
       // refresh token 에러 감지
@@ -42,6 +51,11 @@ export function createClient() {
 
     // 전역 에러 핸들러 (일반 에러 처리)
     window.addEventListener('error', (event) => {
+      if (isAbortError(event.error)) {
+        event.preventDefault()
+        return
+      }
+
       const errorMessage = event.message || String(event.error || '')
       
       // refresh token 에러 감지

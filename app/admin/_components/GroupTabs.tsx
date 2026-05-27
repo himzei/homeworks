@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { GROUP_OPTIONS } from "@/lib/constants";
 import {
@@ -34,6 +34,17 @@ export default function GroupTabs({
   const searchParams = useSearchParams();
   // 라우팅 중 UI 응답성 유지를 위해 transition 사용
   const [isPending, startTransition] = useTransition();
+  const replaceDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    return () => {
+      if (replaceDebounceTimerRef.current) {
+        clearTimeout(replaceDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // 빈 옵션 제외 + 기수 내림차순 (전체 다음 16기 → 15기 → …)
   const resolvedGroupOptions = sortGroupOptionsByCohortDesc(
@@ -56,9 +67,17 @@ export default function GroupTabs({
     const newUrl = params.toString()
       ? `${pathname}?${params.toString()}`
       : pathname;
-    startTransition(() => {
-      router.replace(newUrl);
-    });
+
+    // 연속 탭 클릭 시 이전 RSC 요청이 중단되며 AbortError가 날 수 있어 디바운스
+    if (replaceDebounceTimerRef.current) {
+      clearTimeout(replaceDebounceTimerRef.current);
+    }
+    replaceDebounceTimerRef.current = setTimeout(() => {
+      replaceDebounceTimerRef.current = null;
+      startTransition(() => {
+        router.replace(newUrl);
+      });
+    }, 200);
   };
 
   return (
