@@ -9,6 +9,12 @@ import {
   AvatarFallback,
 } from "@/app/_components/ui/avatar";
 import { Button } from "@/app/_components/ui/button";
+import StudentEvaluationScoresSummary from "@/app/_components/StudentEvaluationScoresSummary";
+import { isAbortError } from "@/lib/errors/is-abort-error";
+import {
+  fetchStudentEvaluationSummary,
+  type StudentEvaluationSummary,
+} from "@/lib/evaluation/fetch-student-evaluation-summary";
 
 // 학생 프로필 타입 정의
 interface StudentProfile {
@@ -78,6 +84,15 @@ export default function StudentConsultationModal({
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  // 성적 요약 (시험·프로젝트·과제)
+  const [evaluationSummary, setEvaluationSummary] =
+    useState<StudentEvaluationSummary | null>(null);
+  const [isLoadingEvaluationSummary, setIsLoadingEvaluationSummary] =
+    useState<boolean>(false);
+  const [evaluationSummaryError, setEvaluationSummaryError] = useState<
+    string | null
+  >(null);
+
   // 학생이 변경되면 상담일지 목록 불러오기
   useEffect(() => {
     // 관리자 권한 확인 중이면 대기
@@ -91,14 +106,41 @@ export default function StudentConsultationModal({
 
     if (isOpen && student) {
       fetchConsultationLogs();
+      fetchEvaluationSummary();
     } else {
       // 모달이 닫히면 폼 초기화
       resetForm();
       resetEditForm();
       setLogs([]);
+      setEvaluationSummary(null);
+      setEvaluationSummaryError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, student, isAdmin, isCheckingAdmin]);
+
+  // 평가 그리드와 동일 기준의 시험·프로젝트·과제 점수
+  const fetchEvaluationSummary = async () => {
+    if (!student || !isAdmin) return;
+
+    setIsLoadingEvaluationSummary(true);
+    setEvaluationSummaryError(null);
+
+    try {
+      const summary = await fetchStudentEvaluationSummary(
+        supabase,
+        student.id,
+        student.group_name,
+      );
+      setEvaluationSummary(summary);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      console.error("성적 요약 조회 실패:", error);
+      setEvaluationSummary(null);
+      setEvaluationSummaryError("성적 정보를 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingEvaluationSummary(false);
+    }
+  };
 
   // 상담일지 목록 가져오기
   const fetchConsultationLogs = async () => {
@@ -144,6 +186,7 @@ export default function StudentConsultationModal({
 
       setLogs(data || []);
     } catch (err) {
+      if (isAbortError(err)) return;
       console.error("상담일지 가져오기 중 오류:", err);
       setError("상담일지를 불러오는 중 예기치 않은 오류가 발생했습니다.");
     } finally {
@@ -245,6 +288,7 @@ export default function StudentConsultationModal({
       await fetchConsultationLogs();
       resetEditForm();
     } catch (err) {
+      if (isAbortError(err)) return;
       console.error("상담일지 수정 중 오류:", err);
       setError("상담일지 수정 중 예기치 않은 오류가 발생했습니다.");
     } finally {
@@ -298,6 +342,7 @@ export default function StudentConsultationModal({
       // 성공 시 목록 새로고침
       await fetchConsultationLogs();
     } catch (err) {
+      if (isAbortError(err)) return;
       console.error("상담일지 삭제 중 오류:", err);
       setError("상담일지 삭제 중 예기치 않은 오류가 발생했습니다.");
     } finally {
@@ -367,6 +412,7 @@ export default function StudentConsultationModal({
       await fetchConsultationLogs();
       resetForm();
     } catch (err) {
+      if (isAbortError(err)) return;
       console.error("상담일지 작성 중 오류:", err);
       setError("상담일지 작성 중 예기치 않은 오류가 발생했습니다.");
     } finally {
@@ -487,6 +533,17 @@ export default function StudentConsultationModal({
               </div>
             )}
           </div>
+
+          {/* 시험·프로젝트·과제 점수 */}
+          {isAdmin ? (
+            <div className="mt-4">
+              <StudentEvaluationScoresSummary
+                summary={evaluationSummary}
+                isLoading={isLoadingEvaluationSummary || isCheckingAdmin}
+                loadError={evaluationSummaryError}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* 본문 영역 (스크롤 가능) */}

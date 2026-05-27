@@ -2,6 +2,14 @@
 export function isAbortError(error: unknown): boolean {
   if (!error) return false;
 
+  if (typeof error === "string") {
+    return (
+      error.includes("signal is aborted") ||
+      error.includes("aborted without reason") ||
+      error.includes("AbortError")
+    );
+  }
+
   if (error instanceof DOMException && error.name === "AbortError") {
     return true;
   }
@@ -9,6 +17,7 @@ export function isAbortError(error: unknown): boolean {
   if (error instanceof Error) {
     if (error.name === "AbortError") return true;
     if (error.message.includes("signal is aborted")) return true;
+    if (error.message.includes("aborted without reason")) return true;
   }
 
   if (typeof error === "object" && error !== null) {
@@ -17,6 +26,7 @@ export function isAbortError(error: unknown): boolean {
     // DOM ABORT_ERR
     if (record.code === 20) return true;
     if (record.message?.includes("signal is aborted")) return true;
+    if (record.message?.includes("aborted without reason")) return true;
   }
 
   return false;

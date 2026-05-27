@@ -11,10 +11,16 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin } from "@/lib/auth/SessionProvider";
+import { isAbortError } from "@/lib/errors/is-abort-error";
 import {
   downloadClonedElementAsPng,
   sanitizeDownloadFilename,
 } from "@/lib/download-element-as-image";
+import {
+  EVALUATION_SCORES,
+  evaluationStatusToScore,
+  type EvaluationStatus,
+} from "@/lib/evaluation/scoring";
 
 // 과제 데이터 타입 정의
 interface Assignment {
@@ -41,18 +47,6 @@ interface ExtraEvaluationField {
   field_date: string | null;
   created_at: string;
 }
-
-// 평가 상태 타입 정의
-type EvaluationStatus = "미제출" | "검토중" | "수정필요" | "승인" | "모범답안";
-
-// 평가 점수 매핑 (DB status ↔ 화면 점수)
-const EVALUATION_SCORES: Record<EvaluationStatus, number> = {
-  미제출: 0,
-  검토중: 0,
-  수정필요: 7, // 미흡
-  승인: 10,
-  모범답안: 13,
-};
 
 /** 과제 점수 입력 허용 값 */
 const ALLOWED_ASSIGNMENT_SCORES = [0, 7, 10, 13] as const;
@@ -97,11 +91,6 @@ function scoreToEvaluationStatus(
   score: number,
 ): Exclude<EvaluationStatus, "미제출"> {
   return SCORE_TO_STATUS[snapAssignmentScore(score)];
-}
-
-/** 상태를 화면 표시용 점수로 변환 */
-function evaluationStatusToScore(status: EvaluationStatus): number {
-  return EVALUATION_SCORES[status];
 }
 
 /** mm/dd 형식으로 날짜 표시 */
@@ -508,6 +497,7 @@ export default function EvaluationTab({
 
         setUsers(usersList);
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("사용자 목록 가져오기 중 오류:", error);
       } finally {
         setIsLoadingUsers(false);
@@ -581,6 +571,7 @@ export default function EvaluationTab({
           setEvaluationStatuses((prev) => ({ ...prev, ...initialStatuses }));
         }
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("제출 정보 가져오기 중 오류:", error);
       }
     };
@@ -617,6 +608,7 @@ export default function EvaluationTab({
         }));
         setExtraFields(sortExtraFieldsByDisplayDate(normalizedFields));
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("추가 필드 조회 중 오류:", error);
         setExtraFields([]);
       } finally {
@@ -653,6 +645,7 @@ export default function EvaluationTab({
         });
         setExtraScores(scoreMap);
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("추가 점수 조회 중 오류:", error);
       }
     };
@@ -725,6 +718,7 @@ export default function EvaluationTab({
           );
         }
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("추가 점수 저장 중 오류:", error);
         setExtraScores((prev) => ({ ...prev, [key]: rollbackFrom }));
         alert("점수 저장 중 오류가 발생했습니다.");
@@ -780,6 +774,7 @@ export default function EvaluationTab({
         ),
       );
     } catch (error) {
+      if (isAbortError(error)) return;
       console.error("필드 날짜 수정 중 오류:", error);
       setExtraFields(previousFields);
       alert("날짜 저장 중 오류가 발생했습니다.");
@@ -831,6 +826,7 @@ export default function EvaluationTab({
       setNewFieldDate(dateToInputValue(new Date()));
       setShowAddFieldForm(false);
     } catch (error) {
+      if (isAbortError(error)) return;
       console.error("필드 추가 중 오류:", error);
       alert("필드 추가 중 오류가 발생했습니다.");
     } finally {
@@ -875,6 +871,7 @@ export default function EvaluationTab({
         setExtraFields(payload.fields);
       }
     } catch (error) {
+      if (isAbortError(error)) return;
       console.error("필드 순서 변경 중 오류:", error);
       setExtraFields(previousFields);
       alert("필드 순서 변경 중 오류가 발생했습니다.");
@@ -1006,6 +1003,7 @@ export default function EvaluationTab({
         );
       }
     } catch (error) {
+      if (isAbortError(error)) return;
       console.error("필드 삭제 중 오류:", error);
       setExtraFields(previousFields);
       setExtraScores(previousScores);
@@ -1059,6 +1057,7 @@ export default function EvaluationTab({
           [key]: status,
         }));
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("상태 업데이트 중 오류:", error);
         setEvaluationStatuses((prev) => ({
           ...prev,

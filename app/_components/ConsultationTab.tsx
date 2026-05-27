@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin, useSession } from "@/lib/auth/SessionProvider";
+import { isAbortError } from "@/lib/errors/is-abort-error";
 import {
   Avatar,
   AvatarImage,
@@ -163,6 +164,13 @@ export default function ConsultationTab({
                 consultation_count: count,
               };
             } catch (error) {
+              if (isAbortError(error)) {
+                return {
+                  ...student,
+                  latest_consultation_date: null,
+                  consultation_count: 0,
+                };
+              }
               console.error(
                 `학생 ${student.id}의 상담일지 정보 가져오기 중 오류:`,
                 error instanceof Error ? error.message : error,
@@ -178,6 +186,7 @@ export default function ConsultationTab({
 
         setStudents(studentsWithConsultationInfo);
       } catch (error) {
+        if (isAbortError(error)) return;
         console.error("학생 목록 가져오기 중 오류:", error instanceof Error ? error.message : error);
         setError("학생 목록을 불러오는 중 예기치 않은 오류가 발생했습니다.");
       } finally {

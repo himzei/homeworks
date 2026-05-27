@@ -2,8 +2,11 @@
 
 /* eslint-disable no-console -- 인증 디버깅용 에러 로깅 필요 */
 import { createContext, useContext, useEffect, useState, useRef, useMemo } from "react";
+import { registerAbortErrorSuppression } from "@/lib/errors/register-abort-error-suppression";
 import { createClient } from "@/lib/supabase/client";
 import { isAbortError } from "@/lib/errors/is-abort-error";
+
+registerAbortErrorSuppression();
 import type { User } from "@supabase/supabase-js";
 
 // 세션 컨텍스트 타입 정의
