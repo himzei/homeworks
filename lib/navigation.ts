@@ -69,6 +69,7 @@ export const COMMUNITY_NAV_ITEM: HeaderNavItem = {
     { href: "/survey", label: "설문조사", authRequired: true },
     { href: "/ladder", label: "사다리게임", authRequired: true },
     { href: "/vote", label: "투표", authRequired: true },
+    { href: "/company-inquiry", label: "기업(문의)", authRequired: true },
   ],
 };
 

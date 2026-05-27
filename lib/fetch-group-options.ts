@@ -10,6 +10,13 @@ export type GroupOption = {
 
 const EMPTY_GROUP_OPTION: GroupOption = { value: "", label: "선택하세요" };
 
+/** UI 표시용 짧은 과정명 (예: "15기 교육생 - …" → "15기") */
+export function formatShortGroupLabel(groupName: string | null | undefined): string {
+  if (!groupName?.trim()) return "미지정";
+  const match = groupName.match(/^(\d+기)/);
+  return match ? match[1] : groupName;
+}
+
 /** 기수 번호 추출 — 정렬용 (예: "16기 교육생 - …" → 16) */
 export function parseCohortNumberFromGroupName(name: string): number | null {
   const match = name.match(/(\d+)기/);

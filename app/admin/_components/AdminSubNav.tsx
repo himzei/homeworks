@@ -33,6 +33,11 @@ const ADMIN_NAV_ITEMS = [
     exact: false,
   },
   {
+    href: "/admin/company-inquiries",
+    label: "기업(문의)",
+    exact: false,
+  },
+  {
     href: "/admin/members",
     label: "회원 관리",
     exact: false,
