@@ -1,0 +1,41 @@
+# 관련뉴스 수집: 배포된 앱의 /api/cron/related-news 를 호출합니다.
+# 스케줄: 매일 07:00 KST (= 22:00 UTC)
+name: Related News Sync
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 관련뉴스 크론 API 호출
+        env:
+          CRON_SITE_URL: ${{ secrets.CRON_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SITE_URL, CRON_SECRET 시크릿을 GitHub 저장소에 등록해 주세요."
+            exit 1
+          fi
+
+          base_url="${CRON_SITE_URL%/}"
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            "${base_url}/api/cron/related-news" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 600)
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "$body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "실패: HTTP ${http_code}"
+            exit 1
+          fi
+
+          echo "완료: HTTP 200"
