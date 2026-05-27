@@ -73,6 +73,17 @@ export const COMMUNITY_NAV_ITEM: HeaderNavItem = {
   ],
 };
 
+/** 관련뉴스 드롭다운 */
+export const RELATED_NEWS_NAV_ITEM: HeaderNavItem = {
+  label: "관련뉴스",
+  authRequired: true,
+  children: [
+    { href: "/related-news/sl", label: "SL", authRequired: true },
+    { href: "/related-news/thn", label: "THN", authRequired: true },
+    { href: "/related-news/ajin", label: "아진산업", authRequired: true },
+  ],
+};
+
 /** 교육일정 (로그인 회원 전용) */
 export const EDUCATION_SCHEDULE_PATH = "/schedule";
 
@@ -87,6 +98,7 @@ export const STUDENT_NAV_ITEMS: HeaderNavItem[] = [
   COMMUNITY_NAV_ITEM,
   EDUCATION_SCHEDULE_NAV_ITEM,
   USAGE_GUIDE_NAV_ITEM,
+  RELATED_NEWS_NAV_ITEM,
   BLOG_NAV_ITEM,
 ];
 
