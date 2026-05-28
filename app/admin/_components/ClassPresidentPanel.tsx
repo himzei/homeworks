@@ -36,7 +36,8 @@ export default function ClassPresidentPanel({
   );
 
   const [classPresidentId, setClassPresidentId] = useState(initialPresidentId);
-  const [isExpanded, setIsExpanded] = useState(true);
+  // 한글 주석: 반장 섹션은 기본적으로 접힘(요구사항)
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);

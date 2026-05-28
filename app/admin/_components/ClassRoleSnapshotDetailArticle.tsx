@@ -122,31 +122,37 @@ function ClassRoleTeamCard({
             >
               <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-zinc-900 dark:text-zinc-100">
                 {team.leaderName ? (
-                  <span className="inline-flex items-center gap-1 shrink-0">
-                    <span className="font-bold text-violet-700 dark:text-violet-300">
+                  <span className="relative inline-flex shrink-0 items-center">
+                    {/* 한글 주석: 배지는 이름을 기준으로 absolute(요구사항) */}
+                    <span className="pt-4 font-bold text-violet-700 dark:text-violet-300">
                       {team.leaderName}
                     </span>
-                    <ClassOfficerBadge
-                      classOfficerRole={team.leaderRole}
-                      teamNumber={team.teamNumber}
-                      isTeamLeader={team.leaderIsTeamLeader}
-                      honorBadgeLabels={team.leaderHonorBadgeLabels}
-                      showTeamBadges={false}
-                    />
+                    <span className="absolute left-1/2 top-0 -translate-x-1/2">
+                      <ClassOfficerBadge
+                        classOfficerRole={team.leaderRole}
+                        teamNumber={team.teamNumber}
+                        isTeamLeader={team.leaderIsTeamLeader}
+                        honorBadgeLabels={team.leaderHonorBadgeLabels}
+                        showTeamBadges={false}
+                      />
+                    </span>
                   </span>
                 ) : null}
                 {team.members.map((member) => (
                   <span
                     key={`${team.teamNumber}-${member.name}`}
-                    className="inline-flex items-center gap-1 shrink-0"
+                    className="relative inline-flex shrink-0 items-center"
                   >
-                    <span>{member.name}</span>
-                    <ClassOfficerBadge
-                      classOfficerRole={member.classOfficerRole}
-                      teamNumber={member.teamNumber}
-                      honorBadgeLabels={member.honorBadgeLabels}
-                      showTeamBadges={false}
-                    />
+                    {/* 한글 주석: 배지는 이름을 기준으로 absolute(요구사항) */}
+                    <span className="pt-4">{member.name}</span>
+                    <span className="absolute left-1/2 top-0 -translate-x-1/2">
+                      <ClassOfficerBadge
+                        classOfficerRole={member.classOfficerRole}
+                        teamNumber={member.teamNumber}
+                        honorBadgeLabels={member.honorBadgeLabels}
+                        showTeamBadges={false}
+                      />
+                    </span>
                   </span>
                 ))}
                 {!team.leaderName && team.members.length === 0 ? (
@@ -522,6 +528,8 @@ export default function ClassRoleSnapshotDetailArticle({
                   githubUrl: "",
                   pptStoragePath: null,
                   pptFileName: null,
+                  // 한글 주석: 팀 프로젝트 정보의 evaluations 필드는 필수라 기본값을 넣어준다.
+                  evaluations: {},
                 },
               );
 
