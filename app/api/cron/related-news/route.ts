@@ -21,6 +21,23 @@ type UpsertStats = {
   upserted: number;
 };
 
+function normalizeNewsSearchQuery(rawQuery: string): string {
+  // 뉴스 검색 키워드 보정
+  // - 약어가 그대로 들어가면 기사 제목/본문 매칭이 약해질 수 있어 한글 발음으로 치환합니다.
+  // - 단어의 일부(예: "slim", "thnk")까지 잘못 치환하지 않도록, 영숫자 경계를 기준으로만 치환합니다.
+  const query = (rawQuery ?? "").trim();
+  if (!query) return "";
+
+  const replaceToken = (input: string, token: string, replacement: string) => {
+    const tokenRegex = new RegExp(`(^|[^a-zA-Z0-9])${token}([^a-zA-Z0-9]|$)`, "gi");
+    return input.replace(tokenRegex, (_match, left: string, right: string) => {
+      return `${left}${replacement}${right}`;
+    });
+  };
+
+  return replaceToken(replaceToken(query, "sl", "에스엘"), "thn", "티에이치엔");
+}
+
 function isValidCategory(value: unknown): value is RelatedNewsCategory {
   return value === "sl" || value === "thn" || value === "ajin";
 }
@@ -136,20 +153,32 @@ export async function POST(request: Request) {
       // 병렬로 가져오기 (키워드별 검색은 독립)
       const results = await Promise.all(
         keywords.map(async (query) => {
+          const normalizedQuery = normalizeNewsSearchQuery(query);
+          // 치환 결과가 비어버리면(공백만 있던 경우 등) 안전하게 스킵
+          if (!normalizedQuery) return [];
+
           // 네이버 뉴스 API + Google News RSS를 보조로 함께 수집합니다.
           // - 네이버: 한국 기사에 강함, 제목/요약 품질 좋음
           // - 구글 RSS: 누락 보완/추가 소스 역할
           const [naverRows, googleRows] = await Promise.all([
             (async () => {
-              const response = await fetchNaverNewsByQuery({ query, display: 50, sort: "date" });
-              return normalizeNaverNewsItems({ category, query, items: response.items });
+              const response = await fetchNaverNewsByQuery({
+                query: normalizedQuery,
+                display: 50,
+                sort: "date",
+              });
+              return normalizeNaverNewsItems({
+                category,
+                query: normalizedQuery,
+                items: response.items,
+              });
             })(),
             (async () => {
-              const rows = await fetchGoogleNewsRssByQuery({ query, limit: 50 });
+              const rows = await fetchGoogleNewsRssByQuery({ query: normalizedQuery, limit: 50 });
               return rows.map(
                 (row): NormalizedRelatedNewsRow => ({
                   category,
-                  query,
+                  query: normalizedQuery,
                   title: row.title,
                   description: row.description,
                   origin_link: row.origin_link,
