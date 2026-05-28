@@ -12,7 +12,6 @@ import ClassPresidentPanel from "../_components/ClassPresidentPanel";
 import HonorBadgeSectionsManager from "../_components/HonorBadgeSectionsManager";
 import ClassRoleSnapshotList from "../_components/ClassRoleSnapshotList";
 import GroupTabsLoader from "../_components/GroupTabsLoader";
-import CollapsibleSection from "../_components/CollapsibleSection";
 import { Button } from "@/app/_components/ui/button";
 import Link from "next/link";
 
@@ -153,22 +152,26 @@ export default async function AdminClassRolesPage({
           </>
         )}
 
-        <CollapsibleSection
-          title="조 편성 게시판"
-          // 한글 주석: 섹션 제목도 기본적으로 접힘(요구사항)
-          defaultExpanded={false}
-          headerActions={
-            <Button asChild size="sm" className="bg-blue-500 hover:bg-blue-600 text-white">
+        {/* 한글 주석: 조 편성 게시판은 접기 없이 항상 표시 */}
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
+              조 편성 게시판
+            </h2>
+            <Button
+              asChild
+              size="sm"
+              className="bg-blue-500 hover:bg-blue-600 text-white shrink-0"
+            >
               <Link href={newSnapshotHref}>글쓰기</Link>
             </Button>
-          }
-        >
+          </div>
           <ClassRoleSnapshotList
             snapshots={snapshots}
             newSnapshotHref={newSnapshotHref}
             groupQuery={groupQuery}
           />
-        </CollapsibleSection>
+        </section>
     </>
   );
 }

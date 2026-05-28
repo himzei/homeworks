@@ -65,9 +65,9 @@ export default function HonorBadgeSectionsManager({
   const [sections, setSections] = useState<HonorBadgeSectionDraft[]>(() =>
     toSectionDrafts(initialSections),
   );
-  /** 펼쳐진 섹션 id (없으면 접힘) */
+  /** 펼쳐진 섹션 id (없으면 접힘 — 기본값: 모두 접힘) */
   const [expandedSectionIds, setExpandedSectionIds] = useState<Set<string>>(
-    () => new Set(initialSections.map((s) => s.id)),
+    () => new Set(),
   );
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -80,9 +80,8 @@ export default function HonorBadgeSectionsManager({
       setExpandedSectionIds((prevExpanded) => {
         const next = new Set<string>();
         for (const section of drafts) {
-          if (prevIdSet.has(section.id)) {
-            if (prevExpanded.has(section.id)) next.add(section.id);
-          } else {
+          // 한글 주석: 사용자가 펼친 섹션만 유지, 신규/갱신 섹션은 기본 접힘
+          if (prevIdSet.has(section.id) && prevExpanded.has(section.id)) {
             next.add(section.id);
           }
         }
@@ -191,7 +190,13 @@ export default function HonorBadgeSectionsManager({
       if (result.sections) {
         const saved = toSectionDrafts(result.sections);
         setSections(saved);
-        setExpandedSectionIds(new Set(saved.map((s) => s.id)));
+        // 한글 주석: 저장 후에도 펼침 상태 유지(저장 시 전체 펼침 방지)
+        setExpandedSectionIds((prevExpanded) => {
+          const savedIds = new Set(saved.map((s) => s.id));
+          return new Set(
+            [...prevExpanded].filter((sectionId) => savedIds.has(sectionId)),
+          );
+        });
       }
 
       setSaveMessage("명예 배지가 저장되었습니다.");

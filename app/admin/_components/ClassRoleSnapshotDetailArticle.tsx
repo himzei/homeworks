@@ -127,7 +127,7 @@ function ClassRoleTeamCard({
                     <span className="pt-4 font-bold text-violet-700 dark:text-violet-300">
                       {team.leaderName}
                     </span>
-                    <span className="absolute left-1/2 top-0 -translate-x-1/2">
+                    <span className="absolute left-1/2 top-0 z-10 w-max max-w-none -translate-x-1/2 whitespace-nowrap">
                       <ClassOfficerBadge
                         classOfficerRole={team.leaderRole}
                         teamNumber={team.teamNumber}
@@ -145,7 +145,7 @@ function ClassRoleTeamCard({
                   >
                     {/* 한글 주석: 배지는 이름을 기준으로 absolute(요구사항) */}
                     <span className="pt-4">{member.name}</span>
-                    <span className="absolute left-1/2 top-0 -translate-x-1/2">
+                    <span className="absolute left-1/2 top-0 z-10 w-max max-w-none -translate-x-1/2 whitespace-nowrap">
                       <ClassOfficerBadge
                         classOfficerRole={member.classOfficerRole}
                         teamNumber={member.teamNumber}

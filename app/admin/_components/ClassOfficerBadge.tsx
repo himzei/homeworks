@@ -40,7 +40,8 @@ function SingleBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] sm:text-xs font-medium shrink-0",
+        // 한글 주석: 조편성 등 좁은 영역에서도 1줄 가로 표시(세로 줄바꿈 방지)
+        "inline-flex max-w-none items-center whitespace-nowrap rounded-md px-1 py-0.5 text-[9px] font-medium leading-none shrink-0",
         variantClassName[variant],
         className,
       )}
@@ -103,7 +104,7 @@ export default function ClassOfficerBadge({
   }
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
+    <span className="inline-flex max-w-none flex-nowrap items-center gap-0.5 whitespace-nowrap">
       {items.map((item) => (
         <SingleBadge
           key={item.label}
