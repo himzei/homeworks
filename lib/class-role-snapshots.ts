@@ -31,6 +31,8 @@ export type ClassRoleSnapshotRecord = {
   team_members: Record<string, string[]> | null;
   team_count: number;
   team_projects: Record<string, unknown> | null;
+  // 한글 주석: 프로젝트 평가일(관리자 입력)
+  project_evaluation_date: string | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
@@ -60,6 +62,8 @@ export type ClassRoleSnapshotDetail = {
   teamLeaders: Record<number, string>;
   teamMembers: Record<number, string[]>;
   teamProjects: Record<number, TeamProjectInfo>;
+  // 한글 주석: 프로젝트 평가일(YYYY-MM-DD)
+  projectEvaluationDate: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -149,6 +153,10 @@ export function toClassRoleSnapshotDetail(
     teamLeaders: teamState.teamLeaders,
     teamMembers: teamState.teamMembers,
     teamProjects: parseTeamProjectsFromJson(record.team_projects ?? {}),
+    projectEvaluationDate:
+      typeof record.project_evaluation_date === "string"
+        ? record.project_evaluation_date
+        : null,
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };
