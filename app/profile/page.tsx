@@ -3,8 +3,11 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { PROFILE_GROUP_OPTIONS } from "@/lib/constants";
 import { isApprovedMember } from "@/lib/profile-approval";
+import {
+  fetchProfileGroupOptions,
+  type GroupOption,
+} from "@/lib/fetch-group-options";
 
 /** useSearchParams를 사용하는 내부 컴포넌트 (Suspense boundary 필요) */
 function ProfilePageContent() {
@@ -32,6 +35,10 @@ function ProfilePageContent() {
   const [success, setSuccess] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  // 과정 선택 콤보박스 옵션(서버/DB에서 조회, 실패 시 내부 폴백)
+  const [groupOptions, setGroupOptions] = useState<GroupOption[]>([
+    { value: "", label: "선택하세요" },
+  ]);
   // 사용자 정보 및 프로필 데이터 로드
   useEffect(() => {
     const loadProfile = async () => {
@@ -67,6 +74,11 @@ function ProfilePageContent() {
         }
 
         setUser(currentUser);
+
+        // 과정 옵션 조회 (RLS 상 인증된 사용자만 조회 가능)
+        // - 실패/데이터 없음 상황은 fetchProfileGroupOptions 내부에서 폴백 처리됨
+        const fetchedGroupOptions = await fetchProfileGroupOptions(supabase);
+        setGroupOptions(fetchedGroupOptions);
 
         // 프로필 정보 가져오기 (profiles 테이블에서)
         const { data: profile, error: profileError } = await supabase
@@ -416,7 +428,7 @@ function ProfilePageContent() {
                 onChange={(e) => setGroupName(e.target.value)}
                 className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {PROFILE_GROUP_OPTIONS.map((opt) => (
+                {groupOptions.map((opt) => (
                   <option key={opt.value || "empty"} value={opt.value}>
                     {opt.label}
                   </option>
