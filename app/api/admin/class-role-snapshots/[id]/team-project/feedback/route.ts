@@ -148,6 +148,7 @@ export async function POST(request: Request, context: RouteContext) {
       githubUrl: "",
       pptStoragePath: null,
       pptFileName: null,
+      evaluations: {},
     };
 
     allProjects[teamNumber] = appendTeamProjectFeedbackComment(current, {
@@ -235,6 +236,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       githubUrl: "",
       pptStoragePath: null,
       pptFileName: null,
+      evaluations: {},
     };
 
     const updated = updateTeamProjectFeedbackComment(
@@ -317,6 +319,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       githubUrl: "",
       pptStoragePath: null,
       pptFileName: null,
+      evaluations: {},
     };
 
     const hasComment = current.feedbackComments.some(

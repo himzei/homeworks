@@ -8,6 +8,7 @@ import {
   parseTeamProjectsFromJson,
   TEAM_ATTACHMENT_HINT,
   teamProjectsMapToJson,
+  type TeamMemberEvaluation,
   type TeamProjectInfo,
 } from "@/lib/class-role-team-projects";
 import { verifyAdminSession } from "@/lib/admin/verify-admin";
@@ -16,6 +17,47 @@ import { getServiceRoleClient } from "@/lib/supabase/service-role";
 const TEAM_FILES_BUCKET = "class-role-team-files";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+function clampScore(raw: unknown): number {
+  const parsed =
+    typeof raw === "number" ? raw : Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(20, Math.max(0, parsed));
+}
+
+function parseEvaluationsInput(raw: FormDataEntryValue | null): Record<
+  string,
+  TeamMemberEvaluation
+> | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const result: Record<string, TeamMemberEvaluation> = {};
+    for (const [profileId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!profileId || typeof profileId !== "string") continue;
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const row = value as Record<string, unknown>;
+      result[profileId] = {
+        topic: clampScore(row.topic),
+        responsibility: clampScore(row.responsibility),
+        dataAnalysis: clampScore(row.dataAnalysis),
+        resultQuality: clampScore(row.resultQuality),
+        explanation: clampScore(row.explanation),
+        workAssignment:
+          typeof row.workAssignment === "string" ? row.workAssignment : "",
+        feedback: typeof row.feedback === "string" ? row.feedback : "",
+      };
+    }
+
+    return result;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * POST: 조별 주제·GitHub·첨부파일 저장 (multipart/form-data)
@@ -36,6 +78,12 @@ export async function POST(request: Request, context: RouteContext) {
     const { id: snapshotId } = await context.params;
 
     const formData = await request.formData();
+    // 한글 주석: 부분 저장을 지원하기 위해 formData에 해당 키가 존재하는지 확인한다.
+    const hasTopic = formData.has("topic");
+    const hasGithubUrl = formData.has("githubUrl");
+    const hasEvaluationsJson = formData.has("evaluationsJson");
+    const hasRemovePpt = formData.has("removePpt");
+    const hasPptFile = formData.has("pptFile");
     const teamNumberRaw = formData.get("teamNumber");
     const teamNumber =
       typeof teamNumberRaw === "string"
@@ -49,17 +97,23 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const topic =
-      typeof formData.get("topic") === "string"
+    const topic = hasTopic
+      ? typeof formData.get("topic") === "string"
         ? formData.get("topic")!.toString().trim()
-        : "";
-    const githubUrl = normalizeGithubUrl(
-      typeof formData.get("githubUrl") === "string"
-        ? formData.get("githubUrl")!.toString()
-        : "",
-    );
-    const removePpt = formData.get("removePpt") === "true";
-    const pptFile = formData.get("pptFile");
+        : ""
+      : null;
+    const githubUrl = hasGithubUrl
+      ? normalizeGithubUrl(
+          typeof formData.get("githubUrl") === "string"
+            ? formData.get("githubUrl")!.toString()
+            : "",
+        )
+      : null;
+    const evaluationsInput = hasEvaluationsJson
+      ? parseEvaluationsInput(formData.get("evaluationsJson"))
+      : null;
+    const removePpt = hasRemovePpt && formData.get("removePpt") === "true";
+    const pptFile = hasPptFile ? formData.get("pptFile") : null;
 
     const { data: existing, error: fetchError } = await db
       .from("class_role_snapshots")
@@ -81,6 +135,7 @@ export async function POST(request: Request, context: RouteContext) {
       githubUrl: "",
       pptStoragePath: null,
       pptFileName: null,
+      evaluations: {},
     };
 
     let pptStoragePath = current.pptStoragePath;
@@ -135,11 +190,12 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     allProjects[teamNumber] = {
-      topic,
+      topic: topic ?? current.topic,
       feedbackComments: current.feedbackComments,
-      githubUrl,
+      githubUrl: githubUrl ?? current.githubUrl,
       pptStoragePath,
       pptFileName,
+      evaluations: evaluationsInput ?? current.evaluations ?? {},
     };
 
     const { error: updateError } = await db

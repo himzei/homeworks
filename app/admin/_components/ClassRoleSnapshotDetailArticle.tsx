@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
   ChevronDown,
@@ -24,7 +25,6 @@ import {
 import { cn } from "@/lib/utils";
 
 import ClassOfficerBadge from "./ClassOfficerBadge";
-import TeamProjectEditDialog from "./TeamProjectEditDialog";
 
 const feedbackCardDateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "2-digit",
@@ -209,7 +209,7 @@ function ClassRoleTeamCard({
                               )}
                             </time>
                           </div>
-                          <p className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap break-words">
+                          <p className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap wrap-break-word">
                             {comment.content}
                           </p>
                         </li>
@@ -228,7 +228,7 @@ function ClassRoleTeamCard({
 
             {isCollapsed ? (
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent dark:from-zinc-950"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-white to-transparent dark:from-zinc-950"
                 aria-hidden
               />
             ) : null}
@@ -312,13 +312,13 @@ export default function ClassRoleSnapshotDetailArticle({
   teams,
   initialTeamProjects = {},
 }: ClassRoleSnapshotDetailArticleProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const exportRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [teamProjects, setTeamProjects] =
     useState<Record<number, TeamProjectInfo>>(initialTeamProjects);
-  const [editingTeamNumber, setEditingTeamNumber] = useState<number | null>(
-    null,
-  );
   const [downloadingTeamNumber, setDownloadingTeamNumber] = useState<
     number | null
   >(null);
@@ -337,15 +337,22 @@ export default function ClassRoleSnapshotDetailArticle({
       ? Math.max(...visibleTeams.map((team) => team.teamNumber))
       : teamCount;
 
-  const editingTeam = editingTeamNumber
-    ? visibleTeams.find((team) => team.teamNumber === editingTeamNumber)
-    : null;
+  const buildReturnToHref = useCallback(() => {
+    // 한글 주석: 상세 페이지로 되돌아오기 위한 returnTo를 만든다.
+    // - searchParams는 ReadonlyURLSearchParams라 그대로 문자열로 복원
+    const qs = searchParams.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [pathname, searchParams]);
 
-  const handleTeamProjectSaved = useCallback(
-    (teamNumber: number, project: TeamProjectInfo) => {
-      setTeamProjects((previous) => ({ ...previous, [teamNumber]: project }));
+  const handleOpenTeamProjectPage = useCallback(
+    (teamNumber: number) => {
+      // 한글 주석: 모달 대신 조별 프로젝트 편집 페이지로 이동
+      const returnTo = buildReturnToHref();
+      router.push(
+        `/admin/class-roles/${snapshotId}/team-project/${teamNumber}?returnTo=${encodeURIComponent(returnTo)}`,
+      );
     },
-    [],
+    [buildReturnToHref, router, snapshotId],
   );
 
   const handleDownloadAttachment = useCallback(
@@ -527,7 +534,7 @@ export default function ClassRoleSnapshotDetailArticle({
                   isDownloadingAttachment={
                     downloadingTeamNumber === team.teamNumber
                   }
-                  onOpenEdit={() => setEditingTeamNumber(team.teamNumber)}
+                  onOpenEdit={() => handleOpenTeamProjectPage(team.teamNumber)}
                   onDownloadAttachment={(event, teamNumber, fileName) =>
                     void handleDownloadAttachment(event, teamNumber, fileName)
                   }
@@ -537,18 +544,6 @@ export default function ClassRoleSnapshotDetailArticle({
           </ul>
         </section>
       </div>
-
-      {editingTeam ? (
-        <TeamProjectEditDialog
-          isOpen={editingTeamNumber !== null}
-          snapshotId={snapshotId}
-          teamNumber={editingTeam.teamNumber}
-          teamLabel={`${cohortLabel} ${editingTeam.teamNumber}조`}
-          initialProject={editingTeam.teamProject ?? null}
-          onClose={() => setEditingTeamNumber(null)}
-          onSaved={handleTeamProjectSaved}
-        />
-      ) : null}
     </article>
   );
 }

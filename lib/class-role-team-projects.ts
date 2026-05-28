@@ -25,6 +25,8 @@ export type TeamProjectRecord = {
   github_url?: string | null;
   ppt_storage_path?: string | null;
   ppt_file_name?: string | null;
+  // 한글 주석: 조장/조원별 평가 점수(이미지의 평가표) 저장용
+  evaluations?: Record<string, TeamMemberEvaluationRecord> | null;
 };
 
 /** UI·API용 조별 프로젝트 */
@@ -34,7 +36,69 @@ export type TeamProjectInfo = {
   githubUrl: string;
   pptStoragePath: string | null;
   pptFileName: string | null;
+  // 한글 주석: key=profileId, value=평가 점수/피드백
+  evaluations: Record<string, TeamMemberEvaluation>;
 };
+
+/** 조원 평가(저장 형태, DB JSON) */
+export type TeamMemberEvaluationRecord = {
+  topic?: number | null;
+  responsibility?: number | null;
+  data_analysis?: number | null;
+  result_quality?: number | null;
+  explanation?: number | null;
+  // 한글 주석: 이름 옆에 표시할 업무 분장(텍스트)
+  work_assignment?: string | null;
+  feedback?: string | null;
+};
+
+/** 조원 평가(UI/클라이언트) */
+export type TeamMemberEvaluation = {
+  topic: number;
+  responsibility: number;
+  dataAnalysis: number;
+  resultQuality: number;
+  explanation: number;
+  // 한글 주석: 이름 옆 업무 분장
+  workAssignment: string;
+  feedback: string;
+};
+
+function clampScore(raw: unknown): number {
+  const parsed =
+    typeof raw === "number" ? raw : Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(parsed)) return 0;
+  // 한글 주석: 각 항목은 0~20점
+  return Math.min(20, Math.max(0, parsed));
+}
+
+function parseEvaluations(
+  row: TeamProjectRecord,
+): Record<string, TeamMemberEvaluation> {
+  if (!row.evaluations || typeof row.evaluations !== "object") {
+    return {};
+  }
+
+  const result: Record<string, TeamMemberEvaluation> = {};
+  for (const [profileId, value] of Object.entries(row.evaluations)) {
+    if (!profileId || typeof profileId !== "string") continue;
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const record = value as TeamMemberEvaluationRecord;
+
+    result[profileId] = {
+      topic: clampScore(record.topic),
+      responsibility: clampScore(record.responsibility),
+      dataAnalysis: clampScore(record.data_analysis),
+      resultQuality: clampScore(record.result_quality),
+      explanation: clampScore(record.explanation),
+      workAssignment:
+        typeof record.work_assignment === "string" ? record.work_assignment : "",
+      feedback: typeof record.feedback === "string" ? record.feedback : "",
+    };
+  }
+
+  return result;
+}
 
 /** 조 프로젝트 첨부 허용 확장자 */
 export const TEAM_ATTACHMENT_EXTENSIONS = [
@@ -134,6 +198,7 @@ export function parseTeamProjectsFromJson(
         typeof row.ppt_file_name === "string" && row.ppt_file_name.trim()
           ? row.ppt_file_name.trim()
           : null,
+      evaluations: parseEvaluations(row),
     };
   }
 
@@ -154,8 +219,9 @@ export function teamProjectsMapToJson(
     const pptPath = project.pptStoragePath?.trim() || null;
     const pptName = project.pptFileName?.trim() || null;
     const hasFeedback = project.feedbackComments.length > 0;
+    const hasEvaluations = Object.keys(project.evaluations ?? {}).length > 0;
 
-    if (!topic && !hasFeedback && !githubUrl && !pptPath) continue;
+    if (!topic && !hasFeedback && !githubUrl && !pptPath && !hasEvaluations) continue;
 
     json[String(teamNumber)] = {
       topic: topic || null,
@@ -171,6 +237,22 @@ export function teamProjectsMapToJson(
       github_url: githubUrl || null,
       ppt_storage_path: pptPath,
       ppt_file_name: pptName,
+      evaluations: hasEvaluations
+        ? Object.fromEntries(
+            Object.entries(project.evaluations).map(([profileId, evaluation]) => [
+              profileId,
+              {
+                topic: clampScore(evaluation.topic),
+                responsibility: clampScore(evaluation.responsibility),
+                data_analysis: clampScore(evaluation.dataAnalysis),
+                result_quality: clampScore(evaluation.resultQuality),
+                explanation: clampScore(evaluation.explanation),
+                work_assignment: evaluation.workAssignment?.trim() || null,
+                feedback: evaluation.feedback?.trim() || null,
+              } satisfies TeamMemberEvaluationRecord,
+            ]),
+          )
+        : null,
     };
   }
   return json;
