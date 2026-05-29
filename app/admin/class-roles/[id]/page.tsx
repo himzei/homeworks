@@ -14,7 +14,10 @@ import {
 } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { extractCourseShortLabel } from "@/lib/courses";
-import type { TeamMemberEvaluation } from "@/lib/class-role-team-projects";
+import {
+  normalizeGithubUrl,
+  type TeamMemberEvaluation,
+} from "@/lib/class-role-team-projects";
 import { Button } from "@/app/_components/ui/button";
 
 import ApplyClassRoleSnapshotButton from "../../_components/ApplyClassRoleSnapshotButton";
@@ -191,6 +194,7 @@ export default async function AdminClassRoleDetailPage({
     const teamProject = snapshot.teamProjects[teamNumber] ?? null;
     const evaluations = teamProject?.evaluations ?? {};
     const topicLabel = teamProject?.topic?.trim() || "";
+    const projectUrl = teamProject?.githubUrl?.trim() || "";
 
     const memberRows = orderedMemberIds.map((profileId) => {
       const student = studentById.get(profileId);
@@ -228,6 +232,7 @@ export default async function AdminClassRoleDetailPage({
     return {
       teamNumber,
       topicLabel,
+      projectUrl,
       memberRows,
       average,
       scoredCount: scoredTotals.length,
@@ -361,6 +366,24 @@ export default async function AdminClassRoleDetailPage({
                       {team.scoredCount}/{team.memberCount}명 평가됨
                       {team.average !== null ? ` · 평균 ${team.average}점` : ""}
                     </div>
+                  </div>
+
+                  <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs">
+                    <span className="font-medium text-zinc-500 dark:text-zinc-400">
+                      프로젝트 주소
+                    </span>
+                    {team.projectUrl ? (
+                      <a
+                        href={normalizeGithubUrl(team.projectUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-blue-600 dark:text-blue-400 hover:underline break-all"
+                      >
+                        {team.projectUrl}
+                      </a>
+                    ) : (
+                      <span className="ml-2 text-zinc-400">(미입력)</span>
+                    )}
                   </div>
 
                   <div className="overflow-x-auto" data-export-scroll-x>
