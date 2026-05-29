@@ -17,9 +17,14 @@ import {
   sanitizeDownloadFilename,
 } from "@/lib/download-element-as-image";
 import {
-  EVALUATION_SCORES,
   evaluationStatusToScore,
+  getAllowedHomeworkScores,
+  getHomeworkScoreMax,
+  resolveHomeworkScorePhase,
+  scoreToEvaluationStatus,
+  snapAssignmentScore,
   type EvaluationStatus,
+  type HomeworkScorePhase,
 } from "@/lib/evaluation/scoring";
 
 // 과제 데이터 타입 정의
@@ -48,50 +53,9 @@ interface ExtraEvaluationField {
   created_at: string;
 }
 
-/** 과제 점수 입력 허용 값 */
-const ALLOWED_ASSIGNMENT_SCORES = [0, 7, 10, 13] as const;
-
-const ASSIGNMENT_SCORE_MIN = 0;
-const ASSIGNMENT_SCORE_MAX = 13;
-
-const SCORE_TO_STATUS = {
-  0: "검토중",
-  7: "수정필요",
-  10: "승인",
-  13: "모범답안",
-} as const satisfies Record<
-  (typeof ALLOWED_ASSIGNMENT_SCORES)[number],
-  Exclude<EvaluationStatus, "미제출">
->;
-
 /** 평가 그리드 열 너비 (이름 · 총합·과제·추가 필드 박스) */
 const EVALUATION_NAME_COLUMN_WIDTH = "96px";
 const EVALUATION_FIELD_COLUMN_WIDTH = "88px";
-
-/** 입력 점수를 허용 값(0·7·10·13) 중 가장 가까운 값으로 맞춤 */
-function snapAssignmentScore(score: number): (typeof ALLOWED_ASSIGNMENT_SCORES)[number] {
-  const clamped = Math.min(
-    ASSIGNMENT_SCORE_MAX,
-    Math.max(ASSIGNMENT_SCORE_MIN, Math.round(score)),
-  );
-  let nearest: (typeof ALLOWED_ASSIGNMENT_SCORES)[number] = 0;
-  let minDiff = Number.POSITIVE_INFINITY;
-  for (const allowed of ALLOWED_ASSIGNMENT_SCORES) {
-    const diff = Math.abs(allowed - clamped);
-    if (diff < minDiff) {
-      minDiff = diff;
-      nearest = allowed;
-    }
-  }
-  return nearest;
-}
-
-/** 점수를 DB 저장용 상태로 변환 */
-function scoreToEvaluationStatus(
-  score: number,
-): Exclude<EvaluationStatus, "미제출"> {
-  return SCORE_TO_STATUS[snapAssignmentScore(score)];
-}
 
 /** mm/dd 형식으로 날짜 표시 */
 function formatDateMMDD(date: Date): string {
@@ -252,14 +216,35 @@ interface EvaluationTabProps {
   assignments: Assignment[];
   /** 과정 필터 - 지정 시 해당 과정 학생만 표시 */
   selectedGroup?: string | null;
+  /** 본교육 시작일 — 과제별 기초/본 점수 구간 판별용 */
+  mainEducationStartDate?: string | null;
 }
 
 export default function EvaluationTab({
   assignments,
   selectedGroup = null,
+  mainEducationStartDate = null,
 }: EvaluationTabProps) {
   // Supabase 클라이언트를 메모이제이션하여 무한 루프 방지
   const supabase = useMemo(() => createClient(), []);
+
+  /** 과제 ID → 점수 구간(기초/본) */
+  const homeworkScorePhaseByAssignmentId = useMemo(() => {
+    const phaseMap = new Map<string, HomeworkScorePhase>();
+    for (const assignment of assignments) {
+      phaseMap.set(
+        assignment.id,
+        resolveHomeworkScorePhase(assignment.startDate, mainEducationStartDate),
+      );
+    }
+    return phaseMap;
+  }, [assignments, mainEducationStartDate]);
+
+  const getHomeworkScorePhase = useCallback(
+    (assignmentId: string): HomeworkScorePhase =>
+      homeworkScorePhaseByAssignmentId.get(assignmentId) ?? "main",
+    [homeworkScorePhaseByAssignmentId],
+  );
 
   // 전역 세션에서 관리자 권한 가져오기
   const { isAdmin, isCheckingAdmin } = useAdmin();
@@ -275,7 +260,7 @@ export default function EvaluationTab({
   const assignmentEditRollbackRef = useRef<Record<string, EvaluationStatus>>(
     {},
   );
-  // 과제 점수 입력 중 표시용 (10·13 등 여러 자리 입력 시 깜빡임 방지)
+  // 과제 점수 입력 중 표시용 (여러 자리 입력 시 깜빡임 방지)
   const [assignmentScoreDraftByKey, setAssignmentScoreDraftByKey] = useState<
     Record<string, string>
   >({});
@@ -671,7 +656,7 @@ export default function EvaluationTab({
   // 특정 사용자의 특정 과제 점수 가져오기
   const getScore = (userId: string, assignmentId: string): number => {
     const status = getEvaluationStatus(userId, assignmentId);
-    return EVALUATION_SCORES[status];
+    return evaluationStatusToScore(status, getHomeworkScorePhase(assignmentId));
   };
 
   const getExtraScoreKey = (userId: string, fieldId: string): string =>
@@ -1606,8 +1591,13 @@ export default function EvaluationTab({
                       );
                       const key = getEvaluationKey(user.id, assignment.id);
                       const hasSubmission = !!submissionData[key];
-                      const currentScore =
-                        evaluationStatusToScore(currentStatus);
+                      const homeworkPhase = getHomeworkScorePhase(assignment.id);
+                      const allowedScores = getAllowedHomeworkScores(homeworkPhase);
+                      const scoreMax = getHomeworkScoreMax(homeworkPhase);
+                      const currentScore = evaluationStatusToScore(
+                        currentStatus,
+                        homeworkPhase,
+                      );
 
                       return (
                         <div
@@ -1643,13 +1633,11 @@ export default function EvaluationTab({
                                   return;
                                 }
                                 const parsed = Number.parseInt(raw, 10);
-                                if (
-                                  (
-                                    ALLOWED_ASSIGNMENT_SCORES as readonly number[]
-                                  ).includes(parsed)
-                                ) {
-                                  const newStatus =
-                                    scoreToEvaluationStatus(parsed);
+                                if (allowedScores.includes(parsed)) {
+                                  const newStatus = scoreToEvaluationStatus(
+                                    parsed,
+                                    homeworkPhase,
+                                  );
                                   setEvaluationStatuses((prev) => ({
                                     ...prev,
                                     [key]: newStatus,
@@ -1662,15 +1650,20 @@ export default function EvaluationTab({
                                   raw === ""
                                     ? 0
                                     : Math.min(
-                                        ASSIGNMENT_SCORE_MAX,
+                                        scoreMax,
                                         Math.max(
-                                          ASSIGNMENT_SCORE_MIN,
+                                          0,
                                           Number.parseInt(raw, 10) || 0,
                                         ),
                                       );
-                                const next = snapAssignmentScore(parsed);
-                                const newStatus =
-                                  scoreToEvaluationStatus(next);
+                                const next = snapAssignmentScore(
+                                  parsed,
+                                  homeworkPhase,
+                                );
+                                const newStatus = scoreToEvaluationStatus(
+                                  next,
+                                  homeworkPhase,
+                                );
                                 const beforeStatus =
                                   assignmentEditRollbackRef.current[key] ??
                                   currentStatus;

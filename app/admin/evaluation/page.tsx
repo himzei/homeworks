@@ -72,14 +72,31 @@ export default async function AdminEvaluationPage({
     return query.eq("group_name", filterGroup);
   };
 
-  const [assignmentsResult, profilesResult] = await Promise.all([
-    buildAssignmentsQuery(),
-    supabase
-      .from("profiles")
-      .select("group_name")
-      .neq("role", "admin")
-      .eq("is_dormant", false),
-  ]);
+  const courseScheduleQuery = filterGroup
+    ? supabase
+        .from("training_courses")
+        .select("main_education_start_date")
+        .eq("name", filterGroup)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+
+  const [assignmentsResult, profilesResult, courseScheduleResult] =
+    await Promise.all([
+      buildAssignmentsQuery(),
+      supabase
+        .from("profiles")
+        .select("group_name")
+        .neq("role", "admin")
+        .eq("is_dormant", false),
+      courseScheduleQuery,
+    ]);
+
+  if (courseScheduleResult.error) {
+    console.error("본교육 시작일 조회 오류:", courseScheduleResult.error);
+  }
+
+  const mainEducationStartDate =
+    courseScheduleResult.data?.main_education_start_date ?? null;
 
   const assignments = assignmentsResult.data ?? [];
   const allProfiles = profilesResult.data ?? [];
@@ -128,6 +145,7 @@ export default async function AdminEvaluationPage({
         <EvaluationTab
           assignments={evaluationAssignments}
           selectedGroup={filterGroup}
+          mainEducationStartDate={mainEducationStartDate}
         />
     </>
   );

@@ -88,8 +88,9 @@ export default function StudentEvaluationScoresSummary({
       )}
 
       <p className="mt-2 text-[10px] leading-tight text-zinc-500 dark:text-zinc-400">
-        제출물 평가 화면과 동일한 기준입니다. 과제는 승인·모범답안 등 상태별
-        점수(0·7·10·13)의 합이며, 시험·프로젝트는 추가 평가 필드 점수의 합입니다.
+        제출물 평가 화면과 동일한 기준입니다. 과제는 기초과정(0·1·2·3),
+        본과정(0·3·4·5) 상태별 점수의 합이며, 시험·프로젝트는 추가 평가 필드
+        점수의 합입니다.
       </p>
     </section>
   );

@@ -3,7 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { isAbortError } from "@/lib/errors/is-abort-error";
 import { classifyExtraFieldCategory } from "@/lib/evaluation/classify-extra-field";
-import { evaluationStatusToScore } from "@/lib/evaluation/scoring";
+import {
+  evaluationStatusToScore,
+  resolveHomeworkScorePhase,
+} from "@/lib/evaluation/scoring";
 
 /** 상담 모달 등에서 보여줄 학생별 성적 요약 */
 export type StudentEvaluationSummary = {
@@ -29,12 +32,17 @@ type ExtraFieldRow = {
   title: string;
 };
 
-/** 과정(그룹)에 해당하는 과제 ID 목록 */
-async function fetchAssignmentIdsForGroup(
+type AssignmentForScoring = {
+  id: string;
+  start_date: string;
+};
+
+/** 과정(그룹)에 해당하는 과제 목록 */
+async function fetchAssignmentsForGroup(
   supabase: SupabaseClient,
   groupName: string | null,
-): Promise<string[]> {
-  let query = supabase.from("assignments").select("id");
+): Promise<AssignmentForScoring[]> {
+  let query = supabase.from("assignments").select("id, start_date");
 
   if (groupName) {
     if (LEGACY_GROUPS.includes(groupName as (typeof LEGACY_GROUPS)[number])) {
@@ -52,7 +60,28 @@ async function fetchAssignmentIdsForGroup(
     return [];
   }
 
-  return (data ?? []).map((row) => row.id);
+  return (data ?? []) as AssignmentForScoring[];
+}
+
+/** 본교육 시작일 — 과제별 기초/본 점수 구간 판별 */
+async function fetchMainEducationStartDate(
+  supabase: SupabaseClient,
+  groupName: string | null,
+): Promise<string | null> {
+  if (!groupName) return null;
+
+  const { data, error } = await supabase
+    .from("training_courses")
+    .select("main_education_start_date")
+    .eq("name", groupName)
+    .maybeSingle();
+
+  if (error) {
+    console.error("본교육 시작일 조회 실패:", error);
+    return null;
+  }
+
+  return data?.main_education_start_date ?? null;
 }
 
 /** 과정에 맞는 추가 평가 필드 (시험·프로젝트 등) */
@@ -95,13 +124,15 @@ export async function fetchStudentEvaluationSummary(
   if (!studentId) return EMPTY_SUMMARY;
 
   try {
-    const [assignmentIds, extraFields] = await Promise.all([
-      fetchAssignmentIdsForGroup(supabase, groupName),
+    const [assignments, extraFields, mainEducationStartDate] = await Promise.all([
+      fetchAssignmentsForGroup(supabase, groupName),
       fetchExtraFieldsForGroup(supabase, groupName),
+      fetchMainEducationStartDate(supabase, groupName),
     ]);
 
     let homeworkScore = 0;
-    const homeworkAssignmentCount = assignmentIds.length;
+    const homeworkAssignmentCount = assignments.length;
+    const assignmentIds = assignments.map((row) => row.id);
 
     if (assignmentIds.length > 0) {
       const { data: homeworkRows, error: homeworkError } = await supabase
@@ -113,16 +144,18 @@ export async function fetchStudentEvaluationSummary(
       if (homeworkError) {
         console.error("과제 제출 점수 조회 실패:", homeworkError);
       } else {
-        const scoreByAssignmentId = new Map<string, number>();
+        const statusByAssignmentId = new Map<string, string>();
         for (const row of homeworkRows ?? []) {
-          scoreByAssignmentId.set(
-            row.assignment_id,
-            evaluationStatusToScore(row.status),
-          );
+          statusByAssignmentId.set(row.assignment_id, row.status);
         }
 
-        for (const assignmentId of assignmentIds) {
-          homeworkScore += scoreByAssignmentId.get(assignmentId) ?? 0;
+        for (const assignment of assignments) {
+          const phase = resolveHomeworkScorePhase(
+            assignment.start_date,
+            mainEducationStartDate,
+          );
+          const status = statusByAssignmentId.get(assignment.id);
+          homeworkScore += evaluationStatusToScore(status, phase);
         }
       }
     }
