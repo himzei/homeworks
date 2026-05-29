@@ -113,11 +113,6 @@ export default function CourseList({ courses, newCourseHref }: CourseListProps) 
             <span className="text-sm sm:text-base font-medium text-black dark:text-zinc-50">
               {course.name}
             </span>
-            {course.description ? (
-              <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">
-                {course.description}
-              </p>
-            ) : null}
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
               {course.preEducationPeriod ? (
                 <span className="inline-flex items-center gap-1">

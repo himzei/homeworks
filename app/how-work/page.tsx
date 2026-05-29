@@ -6,8 +6,7 @@ const gistSteps = [
   {
     step: 1,
     title: "Gist description 입력",
-    description:
-      "Gist 설명란에 과제 번호를 입력합니다. 예: assignment1",
+    description: "Gist 설명란에 과제 번호를 입력합니다. 예: assignment1",
     example: "assignment1",
   },
   {
@@ -26,8 +25,7 @@ const gistSteps = [
   {
     step: 4,
     title: "Secret Gist 생성",
-    description:
-      "오른쪽 하단의 초록색 버튼 Create secret gist를 클릭합니다.",
+    description: "오른쪽 하단의 초록색 버튼 Create secret gist를 클릭합니다.",
     highlight: "Create secret gist",
   },
   {
@@ -62,8 +60,7 @@ const submitSteps = [
   {
     step: 9,
     title: "제출 확인",
-    description:
-      "제출이 완료되면 과제 제출 확인 메일을 받을 수 있습니다.",
+    description: "제출이 완료되면 과제 제출 확인 메일을 받을 수 있습니다.",
   },
 ];
 
@@ -200,8 +197,8 @@ export default function WorkHowPage() {
           </h2>
           <ul className="space-y-2 text-sm text-yellow-900 dark:text-yellow-200/90 list-disc list-inside">
             <li>
-              Gist는 반드시 <strong>Secret Gist</strong>로 생성하고, 공유
-              설정을 <strong>Share</strong>로 변경해야 합니다.
+              Gist는 반드시 <strong>Secret Gist</strong>로 생성하고, 공유 설정을{" "}
+              <strong>Share</strong>로 변경해야 합니다.
             </li>
             <li>
               파일명과 description은 과제 안내에 맞게 입력하세요. (예:
@@ -213,18 +210,6 @@ export default function WorkHowPage() {
             </li>
           </ul>
         </section>
-
-        {/* 원본 Notion 링크 */}
-        <footer className="text-center text-sm text-zinc-500 dark:text-zinc-500">
-          <a
-            href={HOMEWORK_GUIDE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-zinc-700 dark:hover:text-zinc-300 hover:underline"
-          >
-            원본 Notion 가이드 보기
-          </a>
-        </footer>
       </div>
     </div>
   );

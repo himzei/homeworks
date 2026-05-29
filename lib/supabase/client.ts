@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+import { isSessionExpiredError } from '@/lib/auth/is-session-expired-error'
 import { registerAbortErrorSuppression } from '@/lib/errors/register-abort-error-suppression'
 
 // 전역 리스너가 이미 등록되었는지 확인하는 플래그
@@ -26,13 +27,8 @@ export function createClient() {
 
       const errorMessage = error?.message || String(error || '')
       
-      // refresh token 에러 감지
-      if (
-        errorMessage.includes('Invalid Refresh Token') ||
-        errorMessage.includes('Refresh Token Not Found') ||
-        errorMessage.includes('refresh_token') ||
-        error?.status === 401
-      ) {
+      // refresh token 만료 등 확정적 세션 종료만 처리
+      if (isSessionExpiredError(error ?? errorMessage)) {
         // 에러를 조용히 처리 (콘솔에 출력하지 않음)
         event.preventDefault() // 기본 에러 출력 방지
         
@@ -49,12 +45,7 @@ export function createClient() {
     window.addEventListener('error', (event) => {
       const errorMessage = event.message || String(event.error || '')
       
-      // refresh token 에러 감지
-      if (
-        errorMessage.includes('Invalid Refresh Token') ||
-        errorMessage.includes('Refresh Token Not Found') ||
-        errorMessage.includes('refresh_token')
-      ) {
+      if (isSessionExpiredError(errorMessage)) {
         event.preventDefault() // 기본 에러 출력 방지
         
         console.warn('세션이 만료되었습니다. 자동으로 세션을 정리합니다.')

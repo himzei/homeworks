@@ -60,8 +60,8 @@ export default function CheckedList({
     return submissionStatuses[key] || "검토중";
   };
 
-  // 관리자가 아닐 때는 아무것도 렌더링하지 않음
-  if (!isAdmin) {
+  // 권한 확인 중이거나 관리자가 아니면 표시하지 않음
+  if (isCheckingAdmin || !isAdmin) {
     return null;
   }
 

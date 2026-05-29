@@ -1161,9 +1161,18 @@ export default function EvaluationTab({
     .join(" ");
   const gridCols = `${EVALUATION_NAME_COLUMN_WIDTH} ${EVALUATION_FIELD_COLUMN_WIDTH}${scoreColumnWidths ? ` ${scoreColumnWidths}` : ""}`;
 
-  // 관리자 권한 확인 중이거나 사용자 목록 로딩 중일 때 로딩 표시
-  // isCheckingAdmin이 false로 바뀌지 않으면 무한 로딩이 될 수 있으므로,
-  // 타임아웃 처리는 useEffect에서 처리됨
+  // 권한 확인이 끝나기 전에는 거부 UI를 보여주지 않음 (네비게이션 시 오탐 방지)
+  if (isCheckingAdmin) {
+    return (
+      <div className="w-full space-y-4">
+        <div className="text-center py-12">
+          <p className="text-zinc-500 dark:text-zinc-400">
+            권한을 확인하는 중...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (

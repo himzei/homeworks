@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdmin, useSession } from "@/lib/auth/SessionProvider";
@@ -10,7 +11,6 @@ import {
   AvatarImage,
   AvatarFallback,
 } from "@/app/_components/ui/avatar";
-import StudentConsultationModal from "@/app/_components/StudentConsultationModal";
 import DeleteStudentDialog from "@/app/admin/_components/DeleteStudentDialog";
 
 // 학생 프로필 타입 정의
@@ -49,12 +49,6 @@ export default function ConsultationTab({
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
-  // 학생 상담 모달 상태
-  const [selectedStudent, setSelectedStudent] = useState<StudentProfile | null>(
-    null,
-  );
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   // 회원 삭제 다이얼로그 상태
   const [studentToDelete, setStudentToDelete] = useState<StudentProfile | null>(
@@ -197,6 +191,14 @@ export default function ConsultationTab({
     fetchStudents();
   }, [isCheckingAdmin, selectedGroup]);
 
+  // 학생 상담 상세 페이지 URL (기수 필터 유지)
+  const buildConsultationDetailHref = (studentId: string) => {
+    if (selectedGroup) {
+      return `/admin/consultations/${studentId}?group=${encodeURIComponent(selectedGroup)}`;
+    }
+    return `/admin/consultations/${studentId}`;
+  };
+
   // 에러가 발생한 경우 에러 메시지 표시
   if (error) {
     return (
@@ -236,21 +238,21 @@ export default function ConsultationTab({
           {students.map((student) => (
             <div
               key={student.id}
-              onClick={() => {
-                setSelectedStudent(student);
-                setIsModalOpen(true);
-              }}
-              className="relative bg-white h-64 flex flex-col justify-between dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 p-4 hover:shadow-md transition-shadow cursor-pointer"
+              className="relative bg-white h-64 flex flex-col justify-between dark:bg-zinc-900 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 p-4 hover:shadow-md transition-shadow"
             >
+              {/* 카드 전체 클릭 영역 (GitHub 링크와 형제로 분리해 a 중첩 방지) */}
+              <Link
+                href={buildConsultationDetailHref(student.id)}
+                aria-label={`${student.name || "학생"} 상담 상세 보기`}
+                className="absolute inset-0 z-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              />
               {/* 회원 삭제 버튼 - 관리자만, 본인 계정 제외 */}
               {isAdmin && currentUser?.id !== student.id ? (
                 <button
                   type="button"
                   aria-label={`${student.name || "학생"} 회원 삭제`}
                   title="회원 삭제"
-                  onClick={(e) => {
-                    // 카드 onClick(모달 열림) 방지
-                    e.stopPropagation();
+                  onClick={() => {
                     setStudentToDelete(student);
                   }}
                   className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 dark:hover:text-rose-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
@@ -258,7 +260,7 @@ export default function ConsultationTab({
                   <Trash2 className="size-4" />
                 </button>
               ) : null}
-              <div className="h-full flex flex-col">
+              <div className="relative z-1 h-full flex flex-col pointer-events-none">
                 {/* 학생 아바타 및 이름 */}
                 <div className="flex items-center gap-3 mb-3">
                   <Avatar size="lg" className="shrink-0">
@@ -307,13 +309,13 @@ export default function ConsultationTab({
 
                 {/* GitHub 주소 */}
                 {student.github_url && (
-                  <div className="mb-2">
+                  <div className="mb-2 pointer-events-auto">
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 overflow-hidden text-ellipsis whitespace-nowrap">
                       <a
                         href={student.github_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                        className="relative z-1 text-blue-600 dark:text-blue-400 hover:underline"
                       >
                         {student.github_url}
                       </a>
@@ -341,7 +343,7 @@ export default function ConsultationTab({
               </div>
 
               {/* 최근 상담일 및 상담 횟수 */}
-              <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <div className="relative z-1 pt-2 border-t border-zinc-200 dark:border-zinc-800 pointer-events-none">
                 {student.latest_consultation_date ? (
                   <div className="space-y-1">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -369,16 +371,6 @@ export default function ConsultationTab({
         </div>
       )}
 
-      {/* 학생 상담 모달 */}
-      <StudentConsultationModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedStudent(null);
-        }}
-        student={selectedStudent}
-      />
-
       {/* 회원 삭제 확인 다이얼로그 */}
       <DeleteStudentDialog
         isOpen={!!studentToDelete}
@@ -390,11 +382,6 @@ export default function ConsultationTab({
           setStudents((prev) =>
             prev.filter((student) => student.id !== deletedId),
           );
-          // 동일 학생의 상담 모달이 열려 있다면 닫기
-          if (selectedStudent?.id === deletedId) {
-            setIsModalOpen(false);
-            setSelectedStudent(null);
-          }
         }}
       />
     </div>

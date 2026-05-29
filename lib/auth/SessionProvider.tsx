@@ -1,415 +1,410 @@
 "use client";
 
 /* eslint-disable no-console -- 인증 디버깅용 에러 로깅 필요 */
-import { createContext, useContext, useEffect, useState, useRef, useMemo } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
+import { useRouter } from "next/navigation";
 import { registerAbortErrorSuppression } from "@/lib/errors/register-abort-error-suppression";
 import { createClient } from "@/lib/supabase/client";
 import { isAbortError } from "@/lib/errors/is-abort-error";
-
-registerAbortErrorSuppression();
+import { isSessionExpiredError } from "@/lib/auth/is-session-expired-error";
 import type { User } from "@supabase/supabase-js";
 
-// 세션 컨텍스트 타입 정의
+registerAbortErrorSuppression();
+
+/** SessionProvider가 노출하는 프로필 (profiles 테이블 행) */
+export interface SessionProfile {
+  role?: string;
+  avatar_url?: string | null;
+  name?: string | null;
+  approval_status?: string | null;
+  group_name?: string | null;
+  [key: string]: string | null | undefined | number | boolean;
+}
+
 interface SessionContextType {
   user: User | null;
-  profile: { role?: string; [key: string]: any } | null;
+  profile: SessionProfile | null;
   isLoading: boolean;
   isAdmin: boolean;
   isCheckingAdmin: boolean;
 }
 
-// 세션 컨텍스트 생성
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-// 세션 Provider 컴포넌트
+const SESSION_RETRY_DELAY_MS = 300;
+const MAX_SESSION_LOAD_RETRIES = 3;
+
+/** 일시적 네트워크·타임아웃 오류 — 재시도 대상 */
+function isRetryableAuthError(error: unknown): boolean {
+  if (!error || isAbortError(error)) return true;
+  if (isSessionExpiredError(error)) return false;
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message?: string }).message ?? "")
+        : "";
+
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? (error as { status?: number }).status
+      : undefined;
+
+  return (
+    status === 0 ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("fetch")
+  );
+}
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<{ role?: string; [key: string]: any } | null>(null);
+  const [profile, setProfile] = useState<SessionProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
 
-  // Supabase 클라이언트를 메모이제이션하여 무한 루프 방지
   const supabase = useMemo(() => createClient(), []);
-  const isInitialLoadRef = useRef(true);
+  const router = useRouter();
   const isMountedRef = useRef(true);
-  // 가시성 변경 핸들러의 중복 실행 방지를 위한 ref
+  const isInitialLoadRef = useRef(true);
   const isCheckingVisibilityRef = useRef(false);
-  // user와 profile의 최신 값을 참조하기 위한 ref
   const userRef = useRef<User | null>(null);
-  const profileRef = useRef<{ role?: string; [key: string]: any } | null>(null);
+  const profileRef = useRef<SessionProfile | null>(null);
+  const loadGenerationRef = useRef(0);
 
-  // isCheckingAdmin이 5초 이상 stuck 시 강제 해제 (클라이언트 네비게이션/탭 전환 이슈 회피)
-  const adminCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyProfile = useCallback(
+    (profileValue: SessionProfile | null) => {
+      if (!isMountedRef.current) return;
+      setProfile(profileValue);
+      profileRef.current = profileValue;
+      setIsAdmin(profileValue?.role === "admin");
+      setIsCheckingAdmin(false);
+    },
+    [],
+  );
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    setIsCheckingAdmin(true);
+  const clearSessionState = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setUser(null);
+    userRef.current = null;
+    setProfile(null);
+    profileRef.current = null;
+    setIsAdmin(false);
+    setIsCheckingAdmin(false);
+  }, []);
 
-    // 5초 후 강제 해제 (Supabase 요청 멈춤 시 fallback)
-    adminCheckTimeoutRef.current = setTimeout(() => {
-      if (isMountedRef.current) {
-        setIsCheckingAdmin(false);
-      }
-      adminCheckTimeoutRef.current = null;
-    }, 5000);
+  const applyUser = useCallback((currentUser: User | null) => {
+    if (!isMountedRef.current) return;
+    setUser(currentUser);
+    userRef.current = currentUser;
+  }, []);
 
-    // 초기 세션 및 프로필 로드
-    const loadSession = async () => {
+  /** 프로필 조회 — 실패 시 기존 프로필 유지(동일 사용자) */
+  const fetchProfileForUser = useCallback(
+    async (currentUser: User): Promise<void> => {
       try {
-        // 사용자 정보 가져오기 (재시도 로직 포함)
-        let currentUser = null;
-        let userError = null;
-        
-        // 최대 2번 재시도
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", currentUser.id)
+          .single();
+
+        if (profileError && profileError.code !== "PGRST116") {
+          console.error(
+            "프로필 정보 가져오기 실패:",
+            profileError?.message ?? profileError?.code ?? profileError,
+          );
+          // 동일 사용자의 기존 프로필이 있으면 유지
+          if (profileRef.current && userRef.current?.id === currentUser.id) {
+            setIsCheckingAdmin(false);
+            return;
+          }
+          applyProfile(null);
+          return;
+        }
+
+        applyProfile(profileData ?? null);
+      } catch (profileErr) {
+        if (isAbortError(profileErr)) {
+          // abort 시 기존 상태 유지, 확인 중 상태만 해제하지 않음
+          if (profileRef.current && userRef.current?.id === currentUser.id) {
+            return;
+          }
+          throw profileErr;
+        }
+        console.error(
+          "프로필 조회 중 오류:",
+          profileErr instanceof Error ? profileErr.message : profileErr,
+        );
+        if (profileRef.current && userRef.current?.id === currentUser.id) {
+          setIsCheckingAdmin(false);
+          return;
+        }
+        applyProfile(null);
+      }
+    },
+    [applyProfile, supabase],
+  );
+
+  const loadSession = useCallback(
+    async (retryCount = 0): Promise<void> => {
+      const generation = ++loadGenerationRef.current;
+
+      try {
+        // 로컬 세션으로 먼저 UI 복구 (네비게이션 abort 시에도 쿠키 기반 표시)
+        const { data: sessionData } = await supabase.auth.getSession();
+        const sessionUser = sessionData.session?.user ?? null;
+        if (sessionUser && isMountedRef.current) {
+          applyUser(sessionUser);
+        }
+
+        let currentUser: User | null = null;
+        let userError: unknown = null;
+
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             const result = await supabase.auth.getUser();
             currentUser = result.data.user;
             userError = result.error;
-            
-            // 성공하거나 재시도할 수 없는 에러면 중단
             if (!userError || attempt === 1) break;
-            
-            // 네트워크 에러나 일시적 에러인 경우에만 재시도
-            if (
-              userError.message?.includes("network") ||
-              userError.message?.includes("timeout") ||
-              userError.status === 0
-            ) {
-              // 짧은 대기 후 재시도
+            if (isRetryableAuthError(userError)) {
               await new Promise((resolve) => setTimeout(resolve, 100));
               continue;
             }
-            
             break;
-          } catch (err: any) {
+          } catch (err: unknown) {
             userError = err;
+            if (isAbortError(err)) throw err;
             if (attempt === 1) break;
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            if (isRetryableAuthError(err)) {
+              await new Promise((resolve) => setTimeout(resolve, 100));
+              continue;
+            }
+            break;
           }
         }
 
-        // refresh token 에러 체크
+        if (!isMountedRef.current || generation !== loadGenerationRef.current) {
+          return;
+        }
+
         if (userError) {
-          if (
-            userError.message?.includes("Refresh Token") ||
-            userError.message?.includes("refresh_token") ||
-            userError.status === 401
-          ) {
+          if (isSessionExpiredError(userError)) {
             console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
             await supabase.auth.signOut();
+            clearSessionState();
+            return;
           }
-          
-          if (isMountedRef.current) {
-            setUser(null);
-            userRef.current = null;
-            setProfile(null);
-            profileRef.current = null;
-            setIsAdmin(false);
+
+          // 일시 오류 — 기존 세션이 있으면 유지
+          if (userRef.current) {
             setIsCheckingAdmin(false);
             setIsLoading(false);
+            return;
           }
+
+          if (
+            isRetryableAuthError(userError) &&
+            retryCount < MAX_SESSION_LOAD_RETRIES
+          ) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, SESSION_RETRY_DELAY_MS),
+            );
+            if (isMountedRef.current) {
+              return loadSession(retryCount + 1);
+            }
+            return;
+          }
+
+          clearSessionState();
           return;
         }
 
-        if (!isMountedRef.current) {
-          // 마운트 해제된 경우에도 isCheckingAdmin을 false로 설정
-          setIsCheckingAdmin(false);
-          return;
-        }
+        applyUser(currentUser);
 
-        setUser(currentUser);
-        userRef.current = currentUser;
-
-        // 프로필 정보 가져오기
         if (currentUser) {
-          try {
-            const { data: profileData, error: profileError } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", currentUser.id)
-              .single();
-
-            if (profileError && profileError.code !== "PGRST116") {
-              console.error("프로필 정보 가져오기 실패:", profileError?.message ?? profileError?.code ?? profileError);
-            }
-
-            if (isMountedRef.current) {
-              const profileValue = profileData || null;
-              setProfile(profileValue);
-              profileRef.current = profileValue;
-              setIsAdmin(profileData?.role === "admin" || false);
-              setIsCheckingAdmin(false);
-            } else {
-              // 마운트 해제된 경우에도 isCheckingAdmin을 false로 설정
-              setIsCheckingAdmin(false);
-            }
-          } catch (profileErr) {
-            if (!isAbortError(profileErr)) {
-              console.error(
-                "프로필 조회 중 오류:",
-                profileErr instanceof Error ? profileErr.message : profileErr,
-              );
-            }
-            if (isMountedRef.current) {
-              setProfile(null);
-              profileRef.current = null;
-              setIsAdmin(false);
-              setIsCheckingAdmin(false);
-            } else {
-              setIsCheckingAdmin(false);
-            }
-          }
+          setIsCheckingAdmin(true);
+          await fetchProfileForUser(currentUser);
         } else {
-          if (isMountedRef.current) {
-            setProfile(null);
-            profileRef.current = null;
-            setIsAdmin(false);
-            setIsCheckingAdmin(false);
-          } else {
-            setIsCheckingAdmin(false);
-          }
+          applyProfile(null);
         }
       } catch (error: unknown) {
-        // 빠른 페이지 이동 시 Supabase 요청이 취소되는 경우 — 무시
+        if (!isMountedRef.current || generation !== loadGenerationRef.current) {
+          return;
+        }
+
         if (isAbortError(error)) {
-          if (isMountedRef.current) {
-            setIsLoading(false);
+          // 빠른 페이지 이동 시 요청 취소 — 기존 세션 유지 후 재시도
+          if (retryCount < MAX_SESSION_LOAD_RETRIES) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, SESSION_RETRY_DELAY_MS),
+            );
+            if (isMountedRef.current) {
+              return loadSession(retryCount + 1);
+            }
+          }
+          if (userRef.current) {
             setIsCheckingAdmin(false);
           }
           return;
         }
 
         console.error("세션 로드 실패:", error);
-        if (isMountedRef.current) {
-          setUser(null);
-          userRef.current = null;
-          setProfile(null);
-          profileRef.current = null;
-          setIsAdmin(false);
-          setIsCheckingAdmin(false);
-        } else {
-          setIsCheckingAdmin(false);
+
+        if (isSessionExpiredError(error)) {
+          await supabase.auth.signOut().catch(() => {});
+          clearSessionState();
+          return;
         }
+
+        if (userRef.current) {
+          setIsCheckingAdmin(false);
+          return;
+        }
+
+        if (
+          isRetryableAuthError(error) &&
+          retryCount < MAX_SESSION_LOAD_RETRIES
+        ) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, SESSION_RETRY_DELAY_MS),
+          );
+          if (isMountedRef.current) {
+            return loadSession(retryCount + 1);
+          }
+          return;
+        }
+
+        clearSessionState();
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && generation === loadGenerationRef.current) {
           setIsLoading(false);
           isInitialLoadRef.current = false;
-          // finally 블록에서도 isCheckingAdmin을 false로 설정 (안전장치)
-          setIsCheckingAdmin(false);
-        } else {
-          setIsCheckingAdmin(false);
         }
       }
-    };
+    },
+    [
+      applyUser,
+      applyProfile,
+      clearSessionState,
+      fetchProfileForUser,
+      supabase,
+    ],
+  );
 
-    loadSession().finally(() => {
-      if (adminCheckTimeoutRef.current) {
-        clearTimeout(adminCheckTimeoutRef.current);
-        adminCheckTimeoutRef.current = null;
-      }
-    });
+  useEffect(() => {
+    isMountedRef.current = true;
+    setIsCheckingAdmin(true);
+    void loadSession();
 
-    // 인증 상태 변경 리스너
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // 초기 로드가 완료된 후에만 상태 업데이트
-      if (!isInitialLoadRef.current && isMountedRef.current) {
-        // 인증 상태 변경 시 isCheckingAdmin을 true로 설정하여 로딩 상태 표시
+      if (!isMountedRef.current) return;
+
+      if (
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "USER_UPDATED"
+      ) {
+        router.refresh();
+      }
+
+      if (!isInitialLoadRef.current) {
         setIsCheckingAdmin(true);
-        
         const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        userRef.current = currentUser;
+        applyUser(currentUser);
 
         if (currentUser) {
-          try {
-            // 프로필 정보 다시 가져오기
-            const { data: profileData, error: profileError } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", currentUser.id)
-              .single();
-
-            if (profileError && profileError.code !== "PGRST116") {
-              console.error("프로필 정보 가져오기 실패:", profileError?.message ?? profileError?.code ?? profileError);
-            }
-
-            if (isMountedRef.current) {
-              const profileValue = profileData || null;
-              setProfile(profileValue);
-              profileRef.current = profileValue;
-              setIsAdmin(profileData?.role === "admin" || false);
-              setIsCheckingAdmin(false);
-            } else {
-              setIsCheckingAdmin(false);
-            }
-          } catch (profileErr) {
-            if (!isAbortError(profileErr)) {
-              console.error(
-                "프로필 조회 중 오류:",
-                profileErr instanceof Error ? profileErr.message : profileErr,
-              );
-            }
-            if (isMountedRef.current) {
-              setProfile(null);
-              profileRef.current = null;
-              setIsAdmin(false);
-              setIsCheckingAdmin(false);
-            } else {
-              setIsCheckingAdmin(false);
-            }
-          }
+          await fetchProfileForUser(currentUser);
         } else {
-          if (isMountedRef.current) {
-            setProfile(null);
-            profileRef.current = null;
-            setIsAdmin(false);
-            setIsCheckingAdmin(false);
-          } else {
-            setIsCheckingAdmin(false);
-          }
+          applyProfile(null);
         }
       }
     });
 
-    // 페이지 가시성 변경 감지 (다른 탭에서 돌아올 때 세션 확인)
     const handleVisibilityChange = async () => {
-      // 이미 확인 중이면 중복 실행 방지
-      if (isCheckingVisibilityRef.current) {
+      if (
+        isCheckingVisibilityRef.current ||
+        typeof window === "undefined" ||
+        document.visibilityState !== "visible" ||
+        !isMountedRef.current
+      ) {
         return;
       }
 
-      if (
-        typeof window !== "undefined" &&
-        document.visibilityState === "visible" &&
-        isMountedRef.current
-      ) {
-        // 중복 실행 방지 플래그 설정
-        isCheckingVisibilityRef.current = true;
+      isCheckingVisibilityRef.current = true;
 
-        try {
-          // 현재 사용자 정보 가져오기
-          const { data: { user: currentUser }, error } = await supabase.auth.getUser();
-          
-          if (error) {
-            console.error("세션 확인 실패:", error);
-            if (isMountedRef.current) {
-              setUser(null);
-              userRef.current = null;
-              setProfile(null);
-              profileRef.current = null;
-              setIsAdmin(false);
-              setIsCheckingAdmin(false);
-            }
-            isCheckingVisibilityRef.current = false;
-            return;
-          }
+      try {
+        const {
+          data: { user: currentUser },
+          error,
+        } = await supabase.auth.getUser();
 
-          // 사용자가 변경되지 않았고 프로필도 이미 로드되어 있다면 다시 조회하지 않음
-          // ref를 사용하여 최신 값 참조
-          if (
-            isMountedRef.current &&
-            currentUser?.id === userRef.current?.id &&
-            profileRef.current
-          ) {
-            // 사용자와 프로필이 변경되지 않았으므로 확인 완료
-            setIsCheckingAdmin(false);
-            isCheckingVisibilityRef.current = false;
-            return;
+        if (error) {
+          if (isSessionExpiredError(error)) {
+            await supabase.auth.signOut();
+            clearSessionState();
           }
-
-          if (isMountedRef.current) {
-            setUser(currentUser);
-            userRef.current = currentUser;
-            
-            if (currentUser) {
-              setIsCheckingAdmin(true);
-              try {
-                const { data: profileData, error: profileError } = await supabase
-                  .from("profiles")
-                  .select("*")
-                  .eq("id", currentUser.id)
-                  .single();
-
-                if (profileError && profileError.code !== "PGRST116") {
-                  console.error("프로필 정보 가져오기 실패:", profileError?.message ?? profileError?.code ?? profileError);
-                  // 프로필 조회 실패 시에도 isCheckingAdmin을 false로 설정
-                  if (isMountedRef.current) {
-                    setProfile(null);
-                    profileRef.current = null;
-                    setIsAdmin(false);
-                    setIsCheckingAdmin(false);
-                  }
-                  return;
-                }
-
-                if (isMountedRef.current) {
-                  const profileValue = profileData || null;
-                  setProfile(profileValue);
-                  profileRef.current = profileValue;
-                  setIsAdmin(profileData?.role === "admin" || false);
-                  setIsCheckingAdmin(false);
-                } else {
-                  // 마운트 해제된 경우에도 isCheckingAdmin을 false로 설정
-                  setIsCheckingAdmin(false);
-                }
-              } catch (profileErr) {
-                if (!isAbortError(profileErr)) {
-                  console.error(
-                    "프로필 조회 중 오류:",
-                    profileErr instanceof Error ? profileErr.message : profileErr,
-                  );
-                }
-                if (isMountedRef.current) {
-                  setProfile(null);
-                  profileRef.current = null;
-                  setIsAdmin(false);
-                  setIsCheckingAdmin(false);
-                }
-              }
-            } else {
-              if (isMountedRef.current) {
-                setProfile(null);
-                profileRef.current = null;
-                setIsAdmin(false);
-                setIsCheckingAdmin(false);
-              }
-            }
-          }
-        } catch (err) {
-          if (!isAbortError(err)) {
-            console.error("세션 확인 중 오류:", err);
-          }
-          if (isMountedRef.current) {
-            setIsCheckingAdmin(false);
-          }
-        } finally {
-          // 항상 플래그 해제 (에러 발생 시에도)
-          isCheckingVisibilityRef.current = false;
+          return;
         }
+
+        if (
+          currentUser?.id === userRef.current?.id &&
+          profileRef.current
+        ) {
+          return;
+        }
+
+        applyUser(currentUser);
+
+        if (currentUser) {
+          setIsCheckingAdmin(true);
+          await fetchProfileForUser(currentUser);
+        } else {
+          applyProfile(null);
+        }
+      } catch (err) {
+        if (!isAbortError(err)) {
+          console.error("세션 확인 중 오류:", err);
+        }
+      } finally {
+        isCheckingVisibilityRef.current = false;
       }
     };
 
-    // 페이지 가시성 변경 이벤트 리스너 등록 (클라이언트 사이드에서만)
     if (typeof window !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
     }
 
     return () => {
       isMountedRef.current = false;
-      if (adminCheckTimeoutRef.current) {
-        clearTimeout(adminCheckTimeoutRef.current);
-        adminCheckTimeoutRef.current = null;
-      }
+      loadGenerationRef.current += 1;
       subscription.unsubscribe();
       if (typeof window !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
       }
     };
-  }, [supabase]);
+  }, [
+    applyUser,
+    applyProfile,
+    clearSessionState,
+    fetchProfileForUser,
+    loadSession,
+    router,
+    supabase,
+  ]);
 
   const value: SessionContextType = {
     user,
@@ -424,7 +419,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 세션 훅
 export function useSession() {
   const context = useContext(SessionContext);
   if (context === undefined) {
@@ -433,7 +427,6 @@ export function useSession() {
   return context;
 }
 
-// 관리자 권한 확인 훅
 export function useAdmin() {
   const { isAdmin, isCheckingAdmin, isLoading } = useSession();
   return { isAdmin, isCheckingAdmin, isLoading };

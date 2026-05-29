@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isSessionExpiredError } from "@/lib/auth/is-session-expired-error";
 import { isApprovedMember } from "@/lib/profile-approval";
 import {
   fetchProfileGroupOptions,
@@ -49,21 +50,15 @@ function ProfilePageContent() {
           error: userError,
         } = await supabase.auth.getUser();
 
-        // refresh token 에러 체크
         if (userError) {
-          // refresh token 관련 에러인 경우 세션 정리 후 홈으로 리다이렉트
-          if (
-            userError.message?.includes("Refresh Token") ||
-            userError.message?.includes("refresh_token") ||
-            userError.status === 401
-          ) {
+          if (isSessionExpiredError(userError)) {
             console.warn("세션이 만료되었습니다. 자동 로그아웃합니다.");
             await supabase.auth.signOut();
             router.push("/");
             return;
           }
-          // 다른 에러인 경우도 홈으로 리다이렉트
-          router.push("/");
+          // 일시적 오류 — 기존 화면 유지 (새로고침 없이 복구 가능)
+          console.warn("프로필 로드 중 인증 확인 실패:", userError.message);
           return;
         }
 
