@@ -78,38 +78,10 @@ export default async function AdminAssignmentsPage({
     return query.eq("group_name", filterGroup);
   };
 
-  const [assignmentsResult, profilesResult] = await Promise.all([
-    buildAssignmentsQuery(),
-    supabase
-      .from("profiles")
-      .select("group_name")
-      .neq("role", "admin")
-      .eq("is_dormant", false),
-  ]);
-
+  const assignmentsResult = await buildAssignmentsQuery();
   const assignments = assignmentsResult.data ?? [];
-  const allProfiles = profilesResult.data ?? [];
 
-  // 3) 그룹별 학생 수 집계 (탭 배지 표시용)
-  // 일관성을 위해 다른 admin 페이지와 동일하게 미지정 인원을 각 기수에 합산
-  const unsetGroupCount = allProfiles.filter((p) => !p.group_name).length;
-  const studentCountsByGroup: Record<string, number> = {
-    all: allProfiles.length,
-  };
-  for (const profile of allProfiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
-
-  // 4) 각 과제별 제출 학생 수 조회 (count만 가져와서 가볍게 처리)
+  // 각 과제별 제출 학생 수 조회 (count만 가져와서 가볍게 처리)
   // Promise.all로 병렬 처리하여 N개 과제에 대한 waterfall 방지
   const assignmentListData = await Promise.all(
     assignments.map(async (assignment) => {
@@ -149,10 +121,7 @@ export default async function AdminAssignmentsPage({
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabsLoader
-              selectedGroup={selectedGroupParam}
-              studentCountsByGroup={studentCountsByGroup}
-            />
+            <GroupTabsLoader selectedGroup={selectedGroupParam} />
           </Suspense>
         </div>
 

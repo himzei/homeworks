@@ -80,16 +80,10 @@ export default async function AdminEvaluationPage({
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
-  const [assignmentsResult, profilesResult, courseScheduleResult] =
-    await Promise.all([
-      buildAssignmentsQuery(),
-      supabase
-        .from("profiles")
-        .select("group_name")
-        .neq("role", "admin")
-        .eq("is_dormant", false),
-      courseScheduleQuery,
-    ]);
+  const [assignmentsResult, courseScheduleResult] = await Promise.all([
+    buildAssignmentsQuery(),
+    courseScheduleQuery,
+  ]);
 
   if (courseScheduleResult.error) {
     console.error("본교육 시작일 조회 오류:", courseScheduleResult.error);
@@ -99,28 +93,8 @@ export default async function AdminEvaluationPage({
     courseScheduleResult.data?.main_education_start_date ?? null;
 
   const assignments = assignmentsResult.data ?? [];
-  const allProfiles = profilesResult.data ?? [];
 
-  // 3) 그룹별 학생 수 집계 (탭 배지용) - 다른 admin 페이지와 동일 정책
-  // (각 기수 카운트에 그룹 미지정 인원도 합산)
-  const unsetGroupCount = allProfiles.filter((p) => !p.group_name).length;
-  const studentCountsByGroup: Record<string, number> = {
-    all: allProfiles.length,
-  };
-  for (const profile of allProfiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
-
-  // 4) EvaluationTab에 전달할 과제 목록 형식 변환
+  // EvaluationTab에 전달할 과제 목록 형식 변환
   const evaluationAssignments = assignments.map((assignment) => ({
     id: assignment.id,
     title: assignment.title,
@@ -134,10 +108,7 @@ export default async function AdminEvaluationPage({
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabsLoader
-              selectedGroup={selectedGroupParam}
-              studentCountsByGroup={studentCountsByGroup}
-            />
+            <GroupTabsLoader selectedGroup={selectedGroupParam} />
           </Suspense>
         </div>
 

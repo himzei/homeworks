@@ -11,6 +11,14 @@ import { getActiveTeamAssignmentGroupNames } from "@/lib/class-role-snapshots";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { parseSupabaseUtcTimestamp } from "@/lib/format-date";
+import { fetchRowsWithChunkedInFilter } from "@/lib/supabase/chunked-in-filter";
+
+type ProgressHomeworkRow = {
+  user_id: string;
+  assignment_id: string;
+  url: string;
+  status: string | null;
+};
 
 /** 진행과정 그리드용 과제 열 */
 export type ProgressGridAssignment = {
@@ -152,58 +160,6 @@ function applyPresidentFromSnapshotRow(
   });
 }
 
-/** 특정 과정 활성 조 편성 글에서 반장 정보 보강 */
-async function enrichPresidentFromActiveSnapshotForGroup(
-  supabase: SupabaseClient,
-  users: ProgressGridUser[],
-  groupName: string,
-): Promise<ProgressGridUser[]> {
-  const { data, error } = await supabase
-    .from("class_role_snapshots")
-    .select("class_president_id, team_leaders, team_members, team_count")
-    .eq("group_name", groupName)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (error || !data) {
-    return users;
-  }
-
-  return applyPresidentFromSnapshotRow(
-    users,
-    data as ActiveClassRoleSnapshotRow,
-  );
-}
-
-/** 전체 보기: 과정별 활성 조 편성에서 반장 정보 보강 (admin/progress · 전체 탭) */
-async function enrichAllPresidentsFromActiveSnapshots(
-  supabase: SupabaseClient,
-  users: ProgressGridUser[],
-): Promise<ProgressGridUser[]> {
-  const { data: snapshots, error } = await supabase
-    .from("class_role_snapshots")
-    .select(
-      "group_name, class_president_id, team_leaders, team_members, team_count",
-    )
-    .eq("is_active", true);
-
-  if (error || !snapshots?.length) {
-    return users;
-  }
-
-  let result = users;
-  for (const snapshot of snapshots) {
-    if (!snapshot.class_president_id) {
-      continue;
-    }
-    result = applyPresidentFromSnapshotRow(
-      result,
-      snapshot as ActiveClassRoleSnapshotRow,
-    );
-  }
-  return result;
-}
-
 /** 조 편성이 없을 때 조·조장 배지만 제거 (반장·명예 배지는 유지, 반장의 조 정보는 유지) */
 function stripTeamBadgesFromProgressUser(
   user: ProgressGridUser,
@@ -226,13 +182,35 @@ function stripTeamBadgesFromProgressUser(
  * - 일반 사용자: filterGroup에 해당하는 과정만
  * - 관리자: filterGroup이 null이면 전체, 지정 시 해당 과정만
  */
+async function fetchHomeworksForProgressGrid(
+  supabase: SupabaseClient,
+  userIds: string[],
+  assignmentIds: string[],
+): Promise<ProgressHomeworkRow[]> {
+  if (userIds.length === 0 || assignmentIds.length === 0) {
+    return [];
+  }
+
+  const assignmentIdSet = new Set(assignmentIds);
+
+  const rows = await fetchRowsWithChunkedInFilter<ProgressHomeworkRow>({
+    supabase,
+    table: "homeworks",
+    select: "user_id, assignment_id, url, status",
+    filterColumn: "user_id",
+    filterValues: userIds,
+    extraInFilter: { column: "assignment_id", values: assignmentIds },
+  });
+
+  return rows.filter((row) => assignmentIdSet.has(row.assignment_id));
+}
+
 export async function fetchProgressGridData(
   supabase: SupabaseClient,
   { filterGroup, currentUserId }: FetchProgressGridOptions,
 ): Promise<ProgressGridData> {
   const now = new Date();
 
-  // assignments 조회
   let assignmentsQuery = supabase
     .from("assignments")
     .select("id, title, start_date, group_name")
@@ -245,12 +223,45 @@ export async function fetchProgressGridData(
     );
   }
 
-  const { data: assignmentsRaw, error: assignmentsError } =
-    await assignmentsQuery;
+  let profilesQuery = supabase
+    .from("profiles")
+    .select("id, name, role, group_name, class_officer_role, team_number")
+    .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
+    .eq("is_dormant", false)
+    .order("created_at", { ascending: true });
 
-  if (assignmentsError) {
-    console.error("진행과정 과제 조회 오류:", assignmentsError);
+  if (filterGroup) {
+    profilesQuery = profilesQuery.eq("group_name", filterGroup);
   }
+
+  const snapshotsQuery = filterGroup
+    ? supabase
+        .from("class_role_snapshots")
+        .select(
+          "class_president_id, team_leaders, team_members, team_count",
+        )
+        .eq("group_name", filterGroup)
+        .eq("is_active", true)
+        .maybeSingle()
+    : supabase
+        .from("class_role_snapshots")
+        .select(
+          "group_name, class_president_id, team_leaders, team_members, team_count",
+        )
+        .eq("is_active", true);
+
+  const [assignmentsResult, profilesResult, snapshotsResult] = await Promise.all([
+    assignmentsQuery,
+    profilesQuery,
+    snapshotsQuery,
+  ]);
+
+  if (assignmentsResult.error) {
+    console.error("진행과정 과제 조회 오류:", assignmentsResult.error);
+  }
+
+  const assignmentsRaw = assignmentsResult.data;
 
   // 게시 시작일 이후 과제만 그리드에 표시
   const assignments: ProgressGridAssignment[] = (assignmentsRaw ?? [])
@@ -266,24 +277,11 @@ export async function fetchProgressGridData(
       name: assignment.title,
     }));
 
-  // profiles 조회 (관리자 제외)
-  let profilesQuery = supabase
-    .from("profiles")
-    .select("id, name, role, group_name, class_officer_role, team_number")
-    .neq("role", "admin")
-    .eq("approval_status", PROFILE_APPROVAL_STATUS.approved)
-    .eq("is_dormant", false)
-    .order("created_at", { ascending: true });
-
-  if (filterGroup) {
-    profilesQuery = profilesQuery.eq("group_name", filterGroup);
+  if (profilesResult.error) {
+    console.error("진행과정 프로필 조회 오류:", profilesResult.error);
   }
 
-  const { data: profilesRaw, error: profilesError } = await profilesQuery;
-
-  if (profilesError) {
-    console.error("진행과정 프로필 조회 오류:", profilesError);
-  }
+  const profilesRaw = profilesResult.data;
 
   const filteredProfiles = (profilesRaw ?? []).filter((profile) => {
     if (!filterGroup) return true;
@@ -328,13 +326,23 @@ export async function fetchProgressGridData(
     return { ...user, isTeamLeader: true };
   });
 
-  users = filterGroup
-    ? await enrichPresidentFromActiveSnapshotForGroup(
-        supabase,
+  if (filterGroup) {
+    const snapshotRow = snapshotsResult.data;
+    if (snapshotRow && !snapshotsResult.error) {
+      users = applyPresidentFromSnapshotRow(
         users,
-        filterGroup,
-      )
-    : await enrichAllPresidentsFromActiveSnapshots(supabase, users);
+        snapshotRow as ActiveClassRoleSnapshotRow,
+      );
+    }
+  } else if (Array.isArray(snapshotsResult.data) && snapshotsResult.data.length > 0) {
+    for (const snapshot of snapshotsResult.data) {
+      if (!snapshot.class_president_id) continue;
+      users = applyPresidentFromSnapshotRow(
+        users,
+        snapshot as ActiveClassRoleSnapshotRow,
+      );
+    }
+  }
 
   const groupNamesForTeamBadges = filterGroup
     ? [filterGroup]
@@ -346,50 +354,55 @@ export async function fetchProgressGridData(
         ),
       ];
 
-  const activeTeamAssignmentGroups = await getActiveTeamAssignmentGroupNames(
-    supabase,
-    groupNamesForTeamBadges,
-  );
+  const userIds = users.map((user) => user.id);
+  const assignmentIds = assignments.map((assignment) => assignment.id);
+
+  const [activeTeamAssignmentGroups, honorLabelsByProfileId, allHomeworks] =
+    await Promise.all([
+      getActiveTeamAssignmentGroupNames(supabase, groupNamesForTeamBadges),
+      fetchHonorBadgeLabelsByProfileId(
+        supabase,
+        userIds,
+        filterGroup
+          ? { groupName: filterGroup }
+          : { profileGroupNameById: profileGroupNameById },
+      ),
+      fetchHomeworksForProgressGrid(supabase, userIds, assignmentIds),
+    ]);
 
   users = users.map((user) => {
     const userGroupName = profileGroupNameById[user.id];
     const showTeamBadges =
       !!userGroupName && activeTeamAssignmentGroups.has(userGroupName);
-    return showTeamBadges ? user : stripTeamBadgesFromProgressUser(user);
+    const withTeamBadges = showTeamBadges
+      ? user
+      : stripTeamBadgesFromProgressUser(user);
+    return {
+      ...withTeamBadges,
+      honorBadgeLabels: honorLabelsByProfileId[user.id] ?? [],
+    };
   });
 
-  const honorLabelsByProfileId = await fetchHonorBadgeLabelsByProfileId(
-    supabase,
-    users.map((u) => u.id),
-    filterGroup
-      ? { groupName: filterGroup }
-      : { profileGroupNameById: profileGroupNameById },
-  );
-
-  users = users.map((user) => ({
-    ...user,
-    honorBadgeLabels: honorLabelsByProfileId[user.id] ?? [],
-  }));
-
-  const { data: allHomeworks, error: homeworksError } = await supabase
-    .from("homeworks")
-    .select("user_id, assignment_id, url, status");
-
-  if (homeworksError) {
-    console.error("진행과정 제출 상태 조회 오류:", homeworksError);
+  const submissionByUserAssignment = new Map<
+    string,
+    ProgressHomeworkRow
+  >();
+  for (const homework of allHomeworks) {
+    submissionByUserAssignment.set(
+      `${homework.user_id}:${homework.assignment_id}`,
+      homework,
+    );
   }
 
-  const userIdSet = new Set(users.map((user) => user.id));
-  const assignmentIdSet = new Set(assignments.map((assignment) => assignment.id));
+  const userIdSet = new Set(userIds);
+  const assignmentIdSet = new Set(assignmentIds);
 
   const progressData: ProgressGridCell[] = [];
 
   for (const user of users) {
     for (const assignment of assignments) {
-      const submission = (allHomeworks ?? []).find(
-        (homework) =>
-          homework.user_id === user.id &&
-          homework.assignment_id === assignment.id,
+      const submission = submissionByUserAssignment.get(
+        `${user.id}:${assignment.id}`,
       );
 
       progressData.push({

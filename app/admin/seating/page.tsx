@@ -70,14 +70,7 @@ export default async function AdminSeatingPage({
     return query.eq("group_name", filterGroup);
   };
 
-  const [chartsResult, profilesResult] = await Promise.all([
-    buildChartsQuery(),
-    supabase
-      .from("profiles")
-      .select("group_name")
-      .neq("role", "admin")
-      .eq("is_dormant", false),
-  ]);
+  const chartsResult = await buildChartsQuery();
 
   if (chartsResult.error) {
     console.error("자리배치도 목록 조회 오류:", chartsResult.error);
@@ -86,25 +79,6 @@ export default async function AdminSeatingPage({
   const charts = (chartsResult.data ?? []).map((record) =>
     toSeatingChartListItem(record as SeatingChartRecord),
   );
-
-  const profiles = profilesResult.data ?? [];
-  const unsetGroupCount = profiles.filter((profile) => !profile.group_name).length;
-
-  const studentCountsByGroup: Record<string, number> = {
-    all: profiles.length,
-  };
-  for (const profile of profiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
 
   const groupQuery = filterGroup
     ? `?group=${encodeURIComponent(filterGroup)}`
@@ -118,10 +92,7 @@ export default async function AdminSeatingPage({
     <>
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabsLoader
-              selectedGroup={selectedGroupParam}
-              studentCountsByGroup={studentCountsByGroup}
-            />
+            <GroupTabsLoader selectedGroup={selectedGroupParam} />
           </Suspense>
         </div>
 

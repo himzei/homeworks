@@ -54,42 +54,12 @@ export default async function AdminConsultationsPage({
     redirect("/home");
   }
 
-  // 2) 그룹별 학생 수 집계 (GroupTabs 배지용, 관리자 제외)
-  const { data: allProfiles } = await supabase
-    .from("profiles")
-    .select("group_name")
-    .neq("role", "admin")
-    .eq("is_dormant", false);
-
-  const profiles = allProfiles ?? [];
-  const unsetGroupCount = profiles.filter((p) => !p.group_name).length;
-
-  const studentCountsByGroup: Record<string, number> = {
-    all: profiles.length,
-  };
-  for (const profile of profiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  // 각 기수 카운트에 그룹 미지정 인원 합산 (실제 표시 인원과 일치)
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
-
   return (
     <>
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabsLoader
-              selectedGroup={selectedGroupParam}
-              studentCountsByGroup={studentCountsByGroup}
-            />
+            <GroupTabsLoader selectedGroup={selectedGroupParam} />
           </Suspense>
         </div>
 

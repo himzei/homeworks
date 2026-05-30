@@ -54,41 +54,12 @@ export default async function AdminSurveysPage({
     redirect("/home");
   }
 
-  // 2) 그룹별 학생 수 집계 (탭 배지용)
-  // 다른 admin 페이지와 동일한 정책으로 미지정 인원은 각 기수에 합산
-  const { data: allProfiles } = await supabase
-    .from("profiles")
-    .select("group_name")
-    .neq("role", "admin")
-    .eq("is_dormant", false);
-
-  const profiles = allProfiles ?? [];
-  const unsetGroupCount = profiles.filter((p) => !p.group_name).length;
-  const studentCountsByGroup: Record<string, number> = {
-    all: profiles.length,
-  };
-  for (const profile of profiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
-
   return (
     <>
         {/* 기수(그룹) 필터 탭 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabsLoader
-              selectedGroup={selectedGroupParam}
-              studentCountsByGroup={studentCountsByGroup}
-            />
+            <GroupTabsLoader selectedGroup={selectedGroupParam} />
           </Suspense>
         </div>
 

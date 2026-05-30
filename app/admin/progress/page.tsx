@@ -52,34 +52,6 @@ export default async function AdminProgressPage({
     redirect("/home");
   }
 
-  // GroupTabs 배지용 학생 수 집계
-  const { data: allProfiles } = await supabase
-    .from("profiles")
-    .select("group_name")
-    .neq("role", "admin")
-    .eq("is_dormant", false);
-
-  const profiles = allProfiles ?? [];
-  const unsetGroupCount = profiles.filter(
-    (profile) => !profile.group_name,
-  ).length;
-
-  const studentCountsByGroup: Record<string, number> = {
-    all: profiles.length,
-  };
-  for (const profile of profiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
-
   const { assignments, users, progressData } = await fetchProgressGridData(
     supabase,
     {
@@ -92,10 +64,7 @@ export default async function AdminProgressPage({
     <>
       <div className="mb-6 sm:mb-8">
         <Suspense fallback={null}>
-          <GroupTabsLoader
-            selectedGroup={selectedGroupParam}
-            studentCountsByGroup={studentCountsByGroup}
-          />
+          <GroupTabsLoader selectedGroup={selectedGroupParam} />
         </Suspense>
       </div>
 

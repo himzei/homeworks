@@ -33,6 +33,13 @@ import AdminAccountCards, {
 import PendingMemberApprovalList, {
   type PendingMemberItem,
 } from "./_components/PendingMemberApprovalList";
+import {
+  countDashboardPendingConsultations,
+  countDashboardPendingHomeworks,
+  fetchDashboardHomeworkRows,
+  fetchDashboardPendingConsultationList,
+  fetchDashboardPendingHomeworkList,
+} from "@/lib/admin/fetch-dashboard-scoped-rows";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
 // 동적 렌더링 강제 (세션별/그룹별 데이터를 매 요청마다 새로 조회)
@@ -111,8 +118,6 @@ export default async function AdminDashboardPage({
     return query.eq("group_name", filterGroup);
   };
 
-  // profiles는 그룹별 학생 수 집계를 위해 항상 전체를 가져오고,
-  // 화면용 필터링은 메모리에서 처리한다.
   const allProfilesQuery = supabase
     .from("profiles")
     .select("id, name, group_name")
@@ -127,108 +132,107 @@ export default async function AdminDashboardPage({
     .eq("role", "admin")
     .order("name", { ascending: true });
 
+  const pendingMembersCountQuery = supabase
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.pending);
+
+  const pendingMembersListQuery = supabase
+    .from("profiles")
+    .select("id, name, group_name, phone, created_at, approval_status")
+    .neq("role", "admin")
+    .eq("approval_status", PROFILE_APPROVAL_STATUS.pending)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
   const [
     assignmentsResult,
     profilesResult,
     adminProfilesResult,
-    homeworksResult,
-    consultationsResult,
     surveysResult,
-    pendingMembersResult,
+    pendingMembersCountResult,
+    pendingMembersListResult,
   ] = await Promise.all([
     buildAssignmentsQuery(),
     allProfilesQuery,
     adminProfilesQuery,
     supabase
-      .from("homeworks")
-      .select("id, user_id, assignment_id, url, status, created_at"),
-    supabase
-      .from("consultations")
-      .select("id, student_id, content, status, created_at")
-      .order("created_at", { ascending: false }),
-    supabase
       .from("surveys")
       .select("id, title, start_date, end_date, group_name"),
-    supabase
-      .from("profiles")
-      .select("id, name, group_name, phone, created_at, approval_status")
-      .neq("role", "admin")
-      .eq("approval_status", PROFILE_APPROVAL_STATUS.pending)
-      .order("created_at", { ascending: false }),
+    pendingMembersCountQuery,
+    pendingMembersListQuery,
   ]);
 
   const assignments = assignmentsResult.data ?? [];
   const allProfiles = profilesResult.data ?? [];
   const adminProfiles = adminProfilesResult.data ?? [];
-  const allHomeworks = homeworksResult.data ?? [];
-  const allConsultations = consultationsResult.data ?? [];
   const allSurveys = surveysResult.data ?? [];
-  const allPendingMembers = pendingMembersResult.data ?? [];
 
-  if (pendingMembersResult.error) {
-    console.error("가입 검토 대기 회원 조회 오류:", pendingMembersResult.error);
+  if (pendingMembersCountResult.error) {
+    console.error(
+      "가입 검토 대기 회원 count 오류:",
+      pendingMembersCountResult.error,
+    );
+  }
+  if (pendingMembersListResult.error) {
+    console.error(
+      "가입 검토 대기 회원 목록 오류:",
+      pendingMembersListResult.error,
+    );
   }
 
-  const pendingMemberCount = allPendingMembers.length;
-  const pendingMembersForDashboard: PendingMemberItem[] = allPendingMembers
-    .slice(0, 5)
-    .map((row) => ({
-      id: row.id,
-      name: row.name?.trim() || "(이름 없음)",
-      groupName: row.group_name,
-      phone: row.phone,
-      createdAtLabel: memberApprovalDateFormatter.format(
-        new Date(row.created_at),
-      ),
-      approvalStatus: row.approval_status,
-    }));
+  const pendingMemberCount = pendingMembersCountResult.count ?? 0;
+  const pendingMembersForDashboard: PendingMemberItem[] = (
+    pendingMembersListResult.data ?? []
+  ).map((row) => ({
+    id: row.id,
+    name: row.name?.trim() || "(이름 없음)",
+    groupName: row.group_name,
+    phone: row.phone,
+    createdAtLabel: memberApprovalDateFormatter.format(
+      new Date(row.created_at),
+    ),
+    approvalStatus: row.approval_status,
+  }));
 
-  // 그룹별 학생 수 집계 (탭 배지 표시용)
-  // - "all": 전체 학생 수
-  // - 각 group_name 키: 해당 그룹에 정확히 매칭되는 학생 수
-  // - 특정 기수 탭을 선택해도 "그룹 미지정" 학생은 함께 노출되므로,
-  //   각 기수 카운트에는 미지정 인원을 더해 실제 표시될 인원과 일치시킨다.
-  const unsetGroupCount = allProfiles.filter((p) => !p.group_name).length;
-  const studentCountsByGroup: Record<string, number> = {
-    all: allProfiles.length,
-  };
-  for (const profile of allProfiles) {
-    const groupKey = profile.group_name;
-    if (groupKey) {
-      studentCountsByGroup[groupKey] =
-        (studentCountsByGroup[groupKey] ?? 0) + 1;
-    }
-  }
-  // 각 기수 카운트에 미지정 인원 합산 (탭에 보이는 실제 인원과 일치)
-  for (const key of Object.keys(studentCountsByGroup)) {
-    if (key !== "all") {
-      studentCountsByGroup[key] += unsetGroupCount;
-    }
-  }
-
-  // 선택된 그룹에 해당하는 학생 추출 (전체 선택 시 그대로 사용)
-  // - 특정 기수 선택 시에도 "그룹 미지정(null)" 학생을 함께 포함
   const filteredProfiles = filterGroup
     ? allProfiles.filter(
         (p) => p.group_name === filterGroup || !p.group_name,
       )
     : allProfiles;
 
-  // 3) 통계 계산
   const totalStudents = filteredProfiles.length;
+  const filteredStudentIds = filteredProfiles.map((profile) => profile.id);
+  const filteredAssignmentIds = assignments.map((assignment) => assignment.id);
 
-  // 학생 ID Set: 그룹 필터링된 학생의 제출물만 추리기 위함
-  const studentIdSet = new Set(filteredProfiles.map((p) => p.id));
+  const [
+    scopedHomeworkRows,
+    pendingHomeworkCount,
+    pendingHomeworkListRows,
+    pendingConsultationCount,
+    pendingConsultationListRows,
+  ] = await Promise.all([
+    fetchDashboardHomeworkRows(
+      supabase,
+      filteredStudentIds,
+      filteredAssignmentIds,
+    ),
+    countDashboardPendingHomeworks(
+      supabase,
+      filteredStudentIds,
+      filteredAssignmentIds,
+    ),
+    fetchDashboardPendingHomeworkList(
+      supabase,
+      filteredStudentIds,
+      filteredAssignmentIds,
+      5,
+    ),
+    countDashboardPendingConsultations(supabase, filteredStudentIds),
+    fetchDashboardPendingConsultationList(supabase, filteredStudentIds, 5),
+  ]);
 
-  // 과제 ID Set: 그룹 필터링된 과제의 제출물만 추리기 위함
-  const assignmentIdSet = new Set(assignments.map((a) => a.id));
-
-  // 필터링된 제출물 (해당 그룹 학생 + 해당 그룹 과제만)
-  const filteredHomeworks = allHomeworks.filter(
-    (h) => studentIdSet.has(h.user_id) && assignmentIdSet.has(h.assignment_id),
-  );
-
-  // 현재 시각 (마감/진행 판단용)
   const now = new Date();
 
   // 진행중 / 예정 / 종료된 과제 분류
@@ -241,19 +245,6 @@ export default async function AdminDashboardPage({
   const upcomingAssignments = assignments.filter(
     (a) => new Date(a.start_date) > now,
   );
-
-  // 검토 대기 제출물 수
-  const pendingHomeworkCount = filteredHomeworks.filter(
-    (h) => h.status === "검토중",
-  ).length;
-
-  // 답변 대기 상담 (학생이 현재 그룹에 속한 경우만)
-  const filteredConsultations = allConsultations.filter((c) =>
-    studentIdSet.has(c.student_id),
-  );
-  const pendingConsultationCount = filteredConsultations.filter(
-    (c) => c.status === "대기중",
-  ).length;
 
   // 진행중 설문조사
   const activeSurveys = allSurveys.filter((s) => {
@@ -273,9 +264,8 @@ export default async function AdminDashboardPage({
 
   const activeAssignmentsWithProgress: AssignmentProgressItem[] =
     activeAssignments.slice(0, 5).map((assignment) => {
-      // 해당 과제에 대한 제출물 수 (현재 그룹 학생만)
-      const submittedCount = filteredHomeworks.filter(
-        (h) => h.assignment_id === assignment.id,
+      const submittedCount = scopedHomeworkRows.filter(
+        (homework) => homework.assignment_id === assignment.id,
       ).length;
 
       return {
@@ -291,34 +281,27 @@ export default async function AdminDashboardPage({
   // assignment 제목 매핑
   const assignmentTitleMap = new Map(assignments.map((a) => [a.id, a.title]));
 
-  const pendingHomeworks: PendingHomeworkItem[] = filteredHomeworks
-    .filter((h) => h.status === "검토중")
-    .sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    )
-    .slice(0, 5)
-    .map((h) => ({
-      id: h.id,
-      studentId: h.user_id,
-      studentName: profileNameMap.get(h.user_id) ?? "알 수 없는 학생",
-      assignmentId: h.assignment_id,
+  const pendingHomeworks: PendingHomeworkItem[] = pendingHomeworkListRows.map(
+    (homework) => ({
+      id: homework.id,
+      studentId: homework.user_id,
+      studentName: profileNameMap.get(homework.user_id) ?? "알 수 없는 학생",
+      assignmentId: homework.assignment_id,
       assignmentTitle:
-        assignmentTitleMap.get(h.assignment_id) ?? "삭제된 과제",
-      submissionUrl: h.url,
-      submittedAt: h.created_at,
-    }));
+        assignmentTitleMap.get(homework.assignment_id) ?? "삭제된 과제",
+      submissionUrl: homework.url,
+      submittedAt: homework.created_at,
+    }),
+  );
 
-  // 6) 답변 대기 상담 리스트 (최근 5개)
-  const pendingConsultations: PendingConsultationItem[] = filteredConsultations
-    .filter((c) => c.status === "대기중")
-    .slice(0, 5)
-    .map((c) => ({
-      id: c.id,
-      studentId: c.student_id,
-      studentName: profileNameMap.get(c.student_id) ?? "알 수 없는 학생",
-      content: c.content,
-      createdAt: c.created_at,
+  const pendingConsultations: PendingConsultationItem[] =
+    pendingConsultationListRows.map((consultation) => ({
+      id: consultation.id,
+      studentId: consultation.student_id,
+      studentName:
+        profileNameMap.get(consultation.student_id) ?? "알 수 없는 학생",
+      content: consultation.content,
+      createdAt: consultation.created_at,
     }));
 
   // 7) 관리자 계정 카드 데이터 (이메일 RPC 병렬 조회)
@@ -362,10 +345,7 @@ export default async function AdminDashboardPage({
         {/* 과정(기수) 탭 필터 - 클릭한 그룹의 데이터만 하단에 표시됨 */}
         <div className="mb-6 sm:mb-8">
           <Suspense fallback={null}>
-            <GroupTabsLoader
-              selectedGroup={selectedGroupParam}
-              studentCountsByGroup={studentCountsByGroup}
-            />
+            <GroupTabsLoader selectedGroup={selectedGroupParam} />
           </Suspense>
         </div>
 
