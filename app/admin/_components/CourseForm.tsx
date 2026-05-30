@@ -20,6 +20,8 @@ type CourseFormProps = {
   /** 수정 모드일 때 과정 ID */
   courseId?: string;
   initialValues?: CourseFormValues;
+  /** false면 승인된 회원이 있는 과정 — 과정명 변경 불가 */
+  isNameEditable?: boolean;
   listPath?: string;
   submitLabel?: string;
 };
@@ -33,11 +35,13 @@ const inputClassName =
 export default function CourseForm({
   courseId,
   initialValues,
+  isNameEditable = true,
   listPath = "/admin/courses",
   submitLabel,
 }: CourseFormProps) {
   const router = useRouter();
   const isEditMode = !!courseId;
+  const canEditCourseName = !isEditMode || isNameEditable;
 
   const [formData, setFormData] = useState<CourseFormValues>(
     initialValues ?? createDefaultCourseFormValues(),
@@ -75,7 +79,7 @@ export default function CourseForm({
       setFormError("과정명을 입력해 주세요.");
       return;
     }
-    if (trimmedName.length < 4) {
+    if (canEditCourseName && trimmedName.length < 4) {
       setFormError("과정명은 4자 이상 입력해 주세요.");
       return;
     }
@@ -174,11 +178,22 @@ export default function CourseForm({
             name="name"
             type="text"
             required
+            readOnly={!canEditCourseName}
             value={formData.name}
             onChange={handleChange}
             placeholder='예: 16기 교육생 - 빅데이터 전문가 양성과정'
-            className={inputClassName}
+            className={`${inputClassName}${
+              !canEditCourseName
+                ? " cursor-not-allowed bg-zinc-100 text-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-400"
+                : ""
+            }`}
+            aria-readonly={!canEditCourseName}
           />
+          {!canEditCourseName ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              승인된 회원이 등록된 과정은 과정명을 변경할 수 없습니다.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">

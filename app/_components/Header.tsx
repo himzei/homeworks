@@ -1,13 +1,11 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/lib/auth/SessionProvider";
-import AuthModal from "./AuthModal";
 import HeaderNav from "./HeaderNav";
-import { LOGIN_REQUIRED_MESSAGE } from "@/lib/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,11 +44,9 @@ function HeaderAccountSection({
   user,
   profile,
   isAdmin,
-  onSignup,
-  onLogin,
   onLogout,
   onProfile,
-  onSettings,
+  onLearningStatus,
   onHome,
   onAdmin,
 }: {
@@ -58,11 +54,9 @@ function HeaderAccountSection({
   user: ReturnType<typeof useSession>["user"];
   profile: ReturnType<typeof useSession>["profile"];
   isAdmin: boolean;
-  onSignup: () => void;
-  onLogin: () => void;
   onLogout: () => void;
   onProfile: () => void;
-  onSettings: () => void;
+  onLearningStatus: () => void;
   onHome: () => void;
   onAdmin: () => void;
 }) {
@@ -119,8 +113,8 @@ function HeaderAccountSection({
           <DropdownMenuItem onClick={onProfile} className="cursor-pointer">
             프로필
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={onSettings} className="cursor-pointer">
-            계정 설정
+          <DropdownMenuItem onClick={onLearningStatus} className="cursor-pointer">
+            학습현황
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onHome} className="cursor-pointer">
             과제 홈
@@ -145,40 +139,37 @@ function HeaderAccountSection({
 
   return (
     <>
-      {/* 회원가입 — 투명 버튼 */}
-      <button
-        type="button"
-        onClick={onSignup}
+      <Link
+        href="/signup"
         className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-brand-cream/80 hover:text-brand-cream transition-colors whitespace-nowrap"
       >
         회원가입
-      </button>
-      {/* 로그인 — 크림 배경, 네이비 텍스트 */}
-      <button
-        type="button"
-        onClick={onLogin}
+      </Link>
+      <Link
+        href="/login"
         className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-brand-cream text-brand-navy rounded-lg hover:bg-white transition-colors whitespace-nowrap"
       >
         로그인
-      </button>
+      </Link>
     </>
   );
 }
 
 export default function Header() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const { user, profile, isLoading, isAdmin } = useSession();
   const supabase = createClient();
 
-  const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-
   const isLoggedIn = Boolean(user);
 
   const handleLoginRequiredNav = () => {
-    window.alert(LOGIN_REQUIRED_MESSAGE);
-    setIsLoginModalOpen(true);
+    const redirectQuery =
+      pathname && pathname !== "/login"
+        ? `?redirect=${encodeURIComponent(pathname)}`
+        : "";
+    router.push(`/login${redirectQuery}`);
   };
 
   const handleLogout = async () => {
@@ -220,13 +211,11 @@ export default function Header() {
                 user={user}
                 profile={profile}
                 isAdmin={isAdmin}
-                onSignup={() => setIsSignupModalOpen(true)}
-                onLogin={() => setIsLoginModalOpen(true)}
                 onLogout={handleLogout}
                 onProfile={() => {
                   if (user?.id) router.push(`/user/${user.id}`);
                 }}
-                onSettings={() => router.push("/profile")}
+                onLearningStatus={() => router.push("/learning-status")}
                 onHome={() => router.push("/home")}
                 onAdmin={() => router.push("/admin")}
               />
@@ -247,18 +236,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-
-      <AuthModal
-        isOpen={isSignupModalOpen}
-        onClose={() => setIsSignupModalOpen(false)}
-        mode="signup"
-      />
-
-      <AuthModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        mode="login"
-      />
     </>
   );
 }

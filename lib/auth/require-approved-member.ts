@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { LOGIN_REQUIRED_REDIRECT } from "@/lib/navigation";
 import {
   isApprovedMember,
   PROFILE_APPROVAL_STATUS,
@@ -29,7 +30,7 @@ export async function requireApprovedMember(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/?login_required=1");
+    redirect(LOGIN_REQUIRED_REDIRECT);
   }
 
   const { data: profile, error } = await supabase

@@ -129,6 +129,9 @@ export function isUsageGuideSectionPath(pathname: string): boolean {
 /** 로그인 없이 메뉴 클릭 시 안내 문구 */
 export const LOGIN_REQUIRED_MESSAGE = "로그인이 필요한 서비스입니다.";
 
+/** 비로그인 사용자 로그인 유도 페이지 */
+export const LOGIN_REQUIRED_REDIRECT = "/login?login_required=1";
+
 /** 비로그인 사용자가 해당 메뉴를 눌렀을 때 로그인 안내가 필요한지 */
 export function isHeaderNavLoginRequired(
   item: HeaderNavItem,

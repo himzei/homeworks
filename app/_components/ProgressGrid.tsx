@@ -229,16 +229,12 @@ export default function ProgressGrid({
                         >
                           {status === "completed" ? (
                             isCurrentUser && submissionUrl ? (
-                              // 현재 사용자이고 제출한 경우: 클릭 가능한 상태 표시
-                              <a
-                                href={submissionUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`px-3 py-1 rounded-md ${statusStyle.bgColor} ${statusStyle.textColor} font-medium text-xs hover:opacity-80 transition-opacity cursor-pointer`}
-                                title={`${statusStyle.text} - 클릭하여 제출물 보기`}
+                              // 현재 사용자 제출 완료: 평가 상태만 표시 (링크 없음)
+                              <span
+                                className={`px-3 py-1 rounded-md ${statusStyle.bgColor} ${statusStyle.textColor} font-medium text-xs`}
                               >
                                 {statusStyle.text}
-                              </a>
+                              </span>
                             ) : (
                               // 다른 사용자이거나 URL이 없는 경우: 아이콘만 표시
                               <div
@@ -299,10 +295,6 @@ export default function ProgressGrid({
                     {/* 각 과제별 진행 상태 셀 */}
                     {assignments.map((assignment) => {
                       const status = getProgressStatus(user.id, assignment.id);
-                      const submissionUrl = getSubmissionUrl(
-                        user.id,
-                        assignment.id,
-                      );
 
                       return (
                         <div
@@ -310,21 +302,9 @@ export default function ProgressGrid({
                           className="bg-white dark:bg-zinc-900 rounded-lg px-2 sm:px-4 py-2 sm:py-3 shadow-sm border border-zinc-200 dark:border-zinc-800 flex items-center justify-center min-h-[50px] sm:min-h-[60px]"
                         >
                           {status === "completed" ? (
-                            submissionUrl ? (
-                              <a
-                                href={submissionUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors"
-                                title={submissionUrl}
-                              >
-                                <Check className="w-4 h-4 text-white" />
-                              </a>
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                                <Check className="w-4 h-4 text-white" />
-                              </div>
-                            )
+                            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                              <Check className="w-4 h-4 text-white" />
+                            </div>
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
                               <X className="w-4 h-4 text-white" />

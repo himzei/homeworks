@@ -1,13 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { X, Github, ArrowLeft, Edit } from "lucide-react";
+import { Github, ArrowLeft, Edit } from "lucide-react";
 import ClassOfficerBadge from "@/app/admin/_components/ClassOfficerBadge";
 import { CLASS_OFFICER_ROLE } from "@/lib/class-officers";
 import { fetchHonorBadgeLabelsByProfileId } from "@/lib/honor-badges";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import {
-  formatKoreaDateTimeFromUtc,
+  isAssignmentCountableAfterMemberRegistration,
   parseSupabaseUtcTimestamp,
 } from "@/lib/format-date";
 
@@ -109,78 +109,32 @@ export default async function UserProfilePage({
 
   const now = new Date();
 
-  // 게시 시작일 이전 과제는 목록·통계에서 제외
+  // 게시 시작일 이후 + 회원 등록일 이후 과제만 통계에 포함
   const publishedAssignments = (assignmentsData || []).filter((a) => {
     const startDate = parseSupabaseUtcTimestamp(a.start_date);
-    return !Number.isNaN(startDate.getTime()) && now >= startDate;
+    if (Number.isNaN(startDate.getTime()) || now < startDate) {
+      return false;
+    }
+
+    return isAssignmentCountableAfterMemberRegistration(
+      a.start_date,
+      profile.created_at,
+    );
   });
 
   const publishedAssignmentIds = publishedAssignments.map((a) => a.id);
 
   // 게시된 과제에 대한 제출만 조회 (빈 배열이면 .in 호출 생략)
-  let homeworksData:
-    | {
-        assignment_id: string;
-        url: string | null;
-        status: string | null;
-        created_at: string;
-      }[]
-    | null = [];
+  let homeworksData: { assignment_id: string }[] | null = [];
 
   if (publishedAssignmentIds.length > 0) {
     const { data: hw } = await supabase
       .from("homeworks")
-      .select("assignment_id, url, status, created_at")
+      .select("assignment_id")
       .eq("user_id", id)
       .in("assignment_id", publishedAssignmentIds);
     homeworksData = hw;
   }
-
-  // 과제별 제출 정보를 맵으로 변환
-  const submissionMap = new Map();
-  homeworksData?.forEach((homework) => {
-    submissionMap.set(homework.assignment_id, {
-      url: homework.url,
-      status: homework.status || "검토중",
-      submittedAt: homework.created_at,
-    });
-  });
-
-  // 평가 상태에 따른 스타일 반환
-  const getStatusStyle = (status?: string) => {
-    switch (status) {
-      case "검토중":
-        return {
-          bgColor: "bg-yellow-300",
-          text: "검토중",
-          textColor: "text-yellow-700 dark:text-yellow-300",
-        };
-      case "승인":
-        return {
-          bgColor: "bg-green-300",
-          text: "승인",
-          textColor: "text-green-700 dark:text-green-300",
-        };
-      case "수정필요":
-        return {
-          bgColor: "bg-orange-300",
-          text: "수정필요",
-          textColor: "text-orange-700 dark:text-orange-300",
-        };
-      case "모범답안":
-        return {
-          bgColor: "bg-blue-300",
-          text: "모범답안",
-          textColor: "text-blue-700 dark:text-blue-300",
-        };
-      default:
-        return {
-          bgColor: "bg-gray-400",
-          text: "제출완료",
-          textColor: "text-gray-700 dark:text-gray-300",
-        };
-    }
-  };
 
   return (
     <div className="flex min-h-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
@@ -282,84 +236,6 @@ export default async function UserProfilePage({
               </div>
             </div>
           </div>
-        </div>
-
-        {/* 과제 진행 상황 — 프로필의 과정(group_name)에 해당하는 과제만 표시 */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-black dark:text-zinc-50 mb-4">
-            과제 진행 상황
-            {courseGroupName && (
-              <span className="block text-sm font-normal text-zinc-500 dark:text-zinc-400 mt-1">
-                {courseGroupName} 기준
-              </span>
-            )}
-          </h2>
-          {!courseGroupName ? (
-            <p className="text-zinc-500 dark:text-zinc-400">
-              과정이 설정되지 않아 해당 과정 과제를 표시할 수 없습니다.
-            </p>
-          ) : publishedAssignments.length > 0 ? (
-            <div className="space-y-3">
-              {publishedAssignments.map((assignment) => {
-                const submission = submissionMap.get(assignment.id);
-                const statusStyle = getStatusStyle(submission?.status);
-
-                return (
-                  <div
-                    key={assignment.id}
-                    className="bg-zinc-50 dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-800"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-medium text-black dark:text-zinc-50 mb-1">
-                          {assignment.title}
-                        </h3>
-                        {submission ? (
-                          <div className="flex items-center gap-4 mt-2">
-                            <span
-                              className={`px-3 py-1 rounded-md ${statusStyle.bgColor} ${statusStyle.textColor} font-medium text-xs`}
-                            >
-                              {statusStyle.text}
-                            </span>
-                            <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                              제출일: {formatKoreaDateTimeFromUtc(submission.submittedAt)}
-                            </span>
-                            {submission.url && (
-                              <a
-                                href={submission.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                제출물 보기 →
-                              </a>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
-                              <X className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                              미제출
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (assignmentsData?.length ?? 0) > 0 ? (
-            <p className="text-zinc-500 dark:text-zinc-400">
-              게시 시작일이 지난 과제가 아직 없습니다.
-            </p>
-          ) : (
-            <p className="text-zinc-500 dark:text-zinc-400">
-              이 과정에 등록된 과제가 없습니다.
-            </p>
-          )}
         </div>
 
         {/* 통계 정보 — 게시 시작일이 지난 과제만 집계 */}

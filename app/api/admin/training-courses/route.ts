@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isCourseNameEditLocked } from "@/lib/admin/course-name-edit";
 import { verifyAdminSession } from "@/lib/admin/verify-admin";
 import { mapTrainingCourseError } from "@/lib/admin/training-course-errors";
 import {
@@ -173,6 +174,21 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const db = getServiceRoleClient() ?? session.supabase!;
+
+    const { data: existingCourse, error: fetchError } = await db
+      .from("training_courses")
+      .select("name")
+      .eq("id", courseId)
+      .single();
+
+    if (fetchError || !existingCourse) {
+      return NextResponse.json(
+        { error: "과정을 찾을 수 없습니다." },
+        { status: 404 },
+      );
+    }
+
     const trimmedName = formValues.name.trim();
     if (!trimmedName) {
       return NextResponse.json(
@@ -181,7 +197,31 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const db = getServiceRoleClient() ?? session.supabase!;
+    const isRenamingCourse = trimmedName !== existingCourse.name.trim();
+    if (isRenamingCourse) {
+      try {
+        const isNameLocked = await isCourseNameEditLocked(
+          db,
+          existingCourse.name,
+        );
+        if (isNameLocked) {
+          return NextResponse.json(
+            {
+              error:
+                "승인된 회원이 등록된 과정은 과정명을 변경할 수 없습니다.",
+            },
+            { status: 400 },
+          );
+        }
+      } catch (lockCheckError) {
+        console.error("과정명 수정 잠금 확인 실패:", lockCheckError);
+        return NextResponse.json(
+          { error: "과정명 변경 가능 여부를 확인하지 못했습니다." },
+          { status: 500 },
+        );
+      }
+    }
+
     const payload = formValuesToDbPayload(formValues);
 
     const { error } = await db

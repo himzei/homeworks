@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { isCourseNameEditLocked } from "@/lib/admin/course-name-edit";
 import { createClient } from "@/lib/supabase/server";
 import {
   courseRecordToFormValues,
@@ -35,7 +36,7 @@ export default async function AdminCourseEditPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/?login_required=1");
+    redirect("/login?login_required=1");
   }
 
   const { data: currentProfile } = await supabase
@@ -61,6 +62,13 @@ export default async function AdminCourseEditPage({ params }: PageProps) {
   const record = course as TrainingCourseRecord;
   const initialValues = courseRecordToFormValues(record);
 
+  let isNameEditable = true;
+  try {
+    isNameEditable = !(await isCourseNameEditLocked(supabase, record.name));
+  } catch (lockCheckError) {
+    console.error("과정명 수정 가능 여부 확인 실패:", lockCheckError);
+  }
+
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 sm:p-6">
       <div className="mb-4 flex justify-end">
@@ -71,7 +79,11 @@ export default async function AdminCourseEditPage({ params }: PageProps) {
           </Button>
         </Link>
       </div>
-      <CourseForm courseId={id} initialValues={initialValues} />
+      <CourseForm
+        courseId={id}
+        initialValues={initialValues}
+        isNameEditable={isNameEditable}
+      />
     </div>
   );
 }

@@ -24,6 +24,28 @@ export function parseSupabaseUtcTimestamp(input: string): Date {
 
 const KOREA_TIMEZONE = "Asia/Seoul";
 
+/** Date | ISO 문자열 → KST 기준 YYYY-MM-DD */
+export function toKoreaDateString(date: Date | string): string {
+  const parsed =
+    typeof date === "string" ? parseSupabaseUtcTimestamp(date) : date;
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: KOREA_TIMEZONE,
+  }).format(parsed);
+}
+
+/** 게시 시작일이 회원 등록일(가입일) 이후인지 — 과제 카운트 집계용 */
+export function isAssignmentCountableAfterMemberRegistration(
+  assignmentStartDate: string,
+  memberRegisteredAt: string,
+): boolean {
+  const assignmentDay = toKoreaDateString(assignmentStartDate);
+  const memberRegisteredDay = toKoreaDateString(memberRegisteredAt);
+  if (!assignmentDay || !memberRegisteredDay) return false;
+  return assignmentDay >= memberRegisteredDay;
+}
+
 /**
  * UTC 기준 시각을 한국 표준시로 표시 (날짜+시간 한 번에 포맷해 경계 불일치 방지)
  */

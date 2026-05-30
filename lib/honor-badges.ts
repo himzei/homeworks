@@ -222,6 +222,83 @@ export async function fetchHonorBadgeLabelsByProfileId(
   return result;
 }
 
+/** 학습현황 등 — 특정 회원이 받은 명예 배지 목록 */
+export type ProfileCollectedHonorBadge = {
+  label: string;
+  sectionTitle: string | null;
+  sectionSortOrder: number;
+  sortOrder: number;
+};
+
+export async function fetchProfileCollectedHonorBadges(
+  supabase: SupabaseClient,
+  profileId: string,
+  groupName: string | null,
+): Promise<ProfileCollectedHonorBadge[]> {
+  const trimmedGroupName = groupName?.trim() || null;
+
+  const { data, error } = await supabase
+    .from("profile_honor_badges")
+    .select(
+      "honor_badges(label, sort_order, group_name, honor_badge_sections(title, sort_order))",
+    )
+    .eq("profile_id", profileId);
+
+  if (error) {
+    console.error("회원 명예 배지 조회:", error);
+    return [];
+  }
+
+  const badges: ProfileCollectedHonorBadge[] = [];
+
+  for (const row of data ?? []) {
+    const badgeRaw = row.honor_badges as
+      | {
+          label: string;
+          sort_order: number;
+          group_name: string;
+          honor_badge_sections:
+            | { title: string; sort_order: number }
+            | { title: string; sort_order: number }[]
+            | null;
+        }
+      | {
+          label: string;
+          sort_order: number;
+          group_name: string;
+          honor_badge_sections:
+            | { title: string; sort_order: number }
+            | { title: string; sort_order: number }[]
+            | null;
+        }[]
+      | null;
+
+    const badge = Array.isArray(badgeRaw) ? badgeRaw[0] : badgeRaw;
+    if (!badge?.label?.trim()) continue;
+
+    if (trimmedGroupName && badge.group_name?.trim() !== trimmedGroupName) {
+      continue;
+    }
+
+    const sectionRaw = badge.honor_badge_sections;
+    const section = Array.isArray(sectionRaw) ? sectionRaw[0] : sectionRaw;
+
+    badges.push({
+      label: badge.label.trim(),
+      sectionTitle: section?.title?.trim() || null,
+      sectionSortOrder: section?.sort_order ?? 0,
+      sortOrder: badge.sort_order ?? 0,
+    });
+  }
+
+  return badges.toSorted(
+    (badgeA, badgeB) =>
+      badgeA.sectionSortOrder - badgeB.sectionSortOrder ||
+      badgeA.sortOrder - badgeB.sortOrder ||
+      badgeA.label.localeCompare(badgeB.label, "ko"),
+  );
+}
+
 type ApplyHonorBadgesResult =
   | { ok: true }
   | { ok: false; error: string; status: number };

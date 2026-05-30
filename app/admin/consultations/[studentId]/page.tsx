@@ -55,7 +55,7 @@ export default async function AdminConsultationDetailPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/?login_required=1");
+    redirect("/login?login_required=1");
   }
 
   const { data: currentProfile } = await supabase

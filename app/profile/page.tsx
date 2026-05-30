@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { isSessionExpiredError } from "@/lib/auth/is-session-expired-error";
-import { isApprovedMember } from "@/lib/profile-approval";
+import { isApprovedMember, PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 import {
   fetchProfileGroupOptions,
   type GroupOption,
@@ -40,6 +40,9 @@ function ProfilePageContent() {
   const [groupOptions, setGroupOptions] = useState<GroupOption[]>([
     { value: "", label: "선택하세요" },
   ]);
+  // 관리자 승인 후 과정명 변경 불가
+  const [isGroupNameEditable, setIsGroupNameEditable] = useState(true);
+  const [savedGroupName, setSavedGroupName] = useState("");
   // 사용자 정보 및 프로필 데이터 로드
   useEffect(() => {
     const loadProfile = async () => {
@@ -89,7 +92,13 @@ function ProfilePageContent() {
 
         // 프로필 데이터가 있으면 폼에 채우기
         if (profile) {
-          setGroupName(profile.group_name || "");
+          const profileGroupName = profile.group_name || "";
+          setGroupName(profileGroupName);
+          setSavedGroupName(profileGroupName);
+          setIsGroupNameEditable(
+            profile.role === "admin" ||
+              profile.approval_status !== PROFILE_APPROVAL_STATUS.approved,
+          );
           setName(profile.name || "");
           setPhone(profile.phone || "");
           setBio(profile.bio || "");
@@ -265,7 +274,7 @@ function ProfilePageContent() {
       // 프로필 정보 저장 또는 업데이트
       const { error: upsertError } = await supabase.from("profiles").upsert({
         id: user.id,
-        group_name: groupName,
+        group_name: isGroupNameEditable ? groupName : savedGroupName,
         name: name,
         phone: phone,
         bio: bio,
@@ -409,7 +418,7 @@ function ProfilePageContent() {
               </p>
             </div>
 
-            {/* 과정명 - 저장 후에도 변경 가능 */}
+            {/* 과정명 — 승인 전에만 선택·변경 가능 */}
             <div>
               <label
                 htmlFor="groupName"
@@ -421,7 +430,13 @@ function ProfilePageContent() {
                 id="groupName"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={!isGroupNameEditable}
+                className={`w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  isGroupNameEditable
+                    ? "bg-white dark:bg-zinc-800"
+                    : "cursor-not-allowed bg-zinc-100 text-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-400"
+                }`}
+                aria-disabled={!isGroupNameEditable}
               >
                 {groupOptions.map((opt) => (
                   <option key={opt.value || "empty"} value={opt.value}>
@@ -429,6 +444,11 @@ function ProfilePageContent() {
                   </option>
                 ))}
               </select>
+              {!isGroupNameEditable ? (
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  관리자 승인 후에는 과정명을 변경할 수 없습니다.
+                </p>
+              ) : null}
             </div>
 
             {/* 이름 */}
