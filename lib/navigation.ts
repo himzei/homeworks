@@ -11,12 +11,16 @@ export const GIT_HOW_PATH = "/git-how";
 /** 과제 제출 방법 안내 페이지 */
 export const HOW_WORK_PATH = "/how-work";
 
+/** 그룹 GitHub 안내 페이지 */
+export const GROUP_GITHUB_PATH = "/group-github";
+
 /** 사용방법 드롭다운 하위 메뉴 */
 export const USAGE_GUIDE_NAV_ITEM: HeaderNavItem = {
   label: "사용방법",
   children: [
     { href: GIT_HOW_PATH, label: "깃이란?" },
     { href: HOW_WORK_PATH, label: "과제제출방법" },
+    { href: GROUP_GITHUB_PATH, label: "그룹 깃허브" },
   ],
 };
 

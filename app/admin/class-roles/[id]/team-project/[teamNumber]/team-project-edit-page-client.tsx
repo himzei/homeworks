@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, FileText, Loader2, MessageSquare } from "lucide-react";
+import {
+  Download,
+  Eye,
+  FileText,
+  Loader2,
+  MessageSquare,
+} from "lucide-react";
 
+import TeamAttachmentPreviewContent from "@/app/admin/_components/TeamAttachmentPreviewContent";
+import TeamAttachmentPreviewModal from "@/app/admin/_components/TeamAttachmentPreviewModal";
 import {
   TEAM_ATTACHMENT_ACCEPT,
   TEAM_ATTACHMENT_HINT,
@@ -11,6 +19,10 @@ import {
   type TeamProjectFeedbackComment,
   type TeamProjectInfo,
 } from "@/lib/class-role-team-projects";
+import {
+  canPreviewTeamAttachment,
+  downloadAdminTeamAttachment,
+} from "@/lib/team-attachment-utils";
 import { Button } from "@/app/_components/ui/button";
 
 const feedbackDateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -64,6 +76,8 @@ export default function TeamProjectEditPageClient({
   const [isSavingEvaluations, setIsSavingEvaluations] = useState(false);
   const [isPostingFeedback, setIsPostingFeedback] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [evaluationsByProfileId, setEvaluationsByProfileId] = useState<
     Record<string, TeamMemberEvaluation>
@@ -85,8 +99,21 @@ export default function TeamProjectEditPageClient({
     setPptFile(null);
     setExistingPptFileName(initialProject?.pptFileName ?? null);
     setRemoveExistingPpt(false);
+    setIsPreviewModalOpen(false);
     setErrorMessage(null);
   }, [initialProject, teamNumber]);
+
+  // 한글 주석: 선택한 로컬 파일 blob URL 생성·정리
+  useEffect(() => {
+    if (!pptFile) {
+      setLocalPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(pptFile);
+    setLocalPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [pptFile]);
 
   const applyProjectUpdate = (project: TeamProjectInfo) => {
     // 한글 주석: 서버 응답을 화면 상태에 반영(부분 저장 포함)
@@ -96,6 +123,10 @@ export default function TeamProjectEditPageClient({
     setExistingPptFileName(project.pptFileName ?? null);
     setRemoveExistingPpt(false);
     setPptFile(null);
+    if (fileInputRef.current) {
+      // 한글 주석: 같은 파일을 다시 선택해도 onChange가 동작하도록 초기화
+      fileInputRef.current.value = "";
+    }
     setEvaluationsByProfileId(project.evaluations ?? {});
   };
 
@@ -155,23 +186,106 @@ export default function TeamProjectEditPageClient({
     setIsDownloading(true);
     setErrorMessage(null);
     try {
-      const response = await fetch(
-        `/api/admin/class-role-snapshots/${snapshotId}/team-project?teamNumber=${teamNumber}`,
+      const downloadError = await downloadAdminTeamAttachment(
+        snapshotId,
+        teamNumber,
+        existingPptFileName,
       );
-      const payload = (await response.json()) as {
-        signedUrl?: string;
-        fileName?: string;
-        error?: string;
-      };
-      if (!response.ok || !payload.signedUrl) {
-        setErrorMessage(payload.error ?? "파일을 불러오지 못했습니다.");
-        return;
+      if (downloadError) {
+        setErrorMessage(downloadError);
       }
-      window.open(payload.signedUrl, "_blank", "noopener,noreferrer");
     } catch {
       setErrorMessage("파일 다운로드 중 오류가 발생했습니다.");
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadLocalFile = () => {
+    if (!pptFile || !localPreviewUrl) return;
+    const link = document.createElement("a");
+    link.href = localPreviewUrl;
+    link.download = pptFile.name;
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleFileInputChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) return;
+
+    setPptFile(file);
+    setRemoveExistingPpt(false);
+    setErrorMessage(null);
+
+    // 한글 주석: 파일 선택 시 즉시 업로드하여 기존 첨부를 교체
+    setIsSavingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.set("teamNumber", String(teamNumber));
+      formData.set("pptFile", file);
+
+      const response = await fetch(
+        `/api/admin/class-role-snapshots/${snapshotId}/team-project`,
+        { method: "POST", body: formData },
+      );
+      const payload = (await response.json()) as {
+        project?: TeamProjectInfo;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.project) {
+        setErrorMessage(payload.error ?? "첨부파일 저장에 실패했습니다.");
+        setPptFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      applyProjectUpdate(payload.project);
+    } catch {
+      setErrorMessage("첨부파일 저장 중 오류가 발생했습니다.");
+      setPptFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } finally {
+      setIsSavingAttachment(false);
+    }
+  };
+
+  const handleRemoveExistingPpt = async () => {
+    setRemoveExistingPpt(true);
+    setErrorMessage(null);
+    setIsSavingAttachment(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("teamNumber", String(teamNumber));
+      formData.set("removePpt", "true");
+
+      const response = await fetch(
+        `/api/admin/class-role-snapshots/${snapshotId}/team-project`,
+        { method: "POST", body: formData },
+      );
+      const payload = (await response.json()) as {
+        project?: TeamProjectInfo;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.project) {
+        setErrorMessage(payload.error ?? "첨부파일 삭제에 실패했습니다.");
+        setRemoveExistingPpt(false);
+        return;
+      }
+
+      applyProjectUpdate(payload.project);
+    } catch {
+      setErrorMessage("첨부파일 삭제 중 오류가 발생했습니다.");
+      setRemoveExistingPpt(false);
+    } finally {
+      setIsSavingAttachment(false);
     }
   };
 
@@ -364,15 +478,6 @@ export default function TeamProjectEditPageClient({
     }
   };
 
-  const handleSaveAttachment = async () => {
-    setIsSavingAttachment(true);
-    try {
-      await saveProjectSection({ includeAttachment: true });
-    } finally {
-      setIsSavingAttachment(false);
-    }
-  };
-
   const handleSaveMeta = async () => {
     setIsSavingMeta(true);
     try {
@@ -393,6 +498,12 @@ export default function TeamProjectEditPageClient({
 
   const showExistingPpt =
     !!existingPptFileName && !removeExistingPpt && !pptFile;
+  const showLocalPpt = !!pptFile && !!localPreviewUrl;
+  const activePreviewFileName = pptFile?.name ?? existingPptFileName;
+  const canShowInlinePreview =
+    !!activePreviewFileName &&
+    canPreviewTeamAttachment(activePreviewFileName) &&
+    (showLocalPpt || showExistingPpt);
 
   const isBusy =
     isSavingAttachment ||
@@ -421,65 +532,84 @@ export default function TeamProjectEditPageClient({
 
       <div className="px-4 sm:px-6 py-6 space-y-5">
 
-        {/* 첨부파일 (요청: 평가표 아래로 배치) */}
+        {/* 첨부파일 — 선택 시 즉시 업로드·교체, 미리보기·다운로드 지원 */}
         <section>
-          <div className="flex items-center justify-between gap-2">
-            <label
-              htmlFor="team-project-ppt"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              첨부파일
-            </label>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-blue-500 hover:bg-blue-600 text-white"
-              disabled={
-                isBusy ||
-                (!pptFile && !removeExistingPpt) // 한글 주석: 업로드/삭제 변경 없으면 저장 불필요
-              }
-              onClick={() => void handleSaveAttachment()}
-            >
-              {isSavingAttachment ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  저장 중...
-                </>
-              ) : (
-                "첨부 저장"
-              )}
-            </Button>
-          </div>
+          <label
+            htmlFor="team-project-ppt"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            첨부파일
+          </label>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {TEAM_ATTACHMENT_HINT} · 최대 50MB · 파일 선택 시 자동 저장(기존 파일 교체)
+          </p>
+
+          {isSavingAttachment ? (
+            <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+              <Loader2 className="size-3.5 animate-spin" />
+              첨부파일 저장 중...
+            </div>
+          ) : null}
 
           {showExistingPpt ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2">
-              <FileText className="size-4 shrink-0 text-zinc-500" />
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50 px-3 py-2">
+                <FileText className="size-4 shrink-0 text-zinc-500" />
+                <span className="text-sm text-zinc-800 dark:text-zinc-200 truncate flex-1 min-w-0">
+                  {existingPptFileName}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isBusy}
+                  onClick={() => setIsPreviewModalOpen(true)}
+                >
+                  <Eye className="size-3.5" />
+                  미리보기
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isBusy || isDownloading}
+                  onClick={() => void handleDownloadExisting()}
+                >
+                  {isDownloading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                  다운로드
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isBusy}
+                  onClick={() => void handleRemoveExistingPpt()}
+                >
+                  삭제
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {showLocalPpt && pptFile ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 px-3 py-2">
+              <FileText className="size-4 shrink-0 text-blue-500" />
               <span className="text-sm text-zinc-800 dark:text-zinc-200 truncate flex-1 min-w-0">
-                {existingPptFileName}
+                업로드 중: {pptFile.name}
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isBusy || isDownloading}
-                onClick={() => void handleDownloadExisting()}
-              >
-                {isDownloading ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <ExternalLink className="size-3.5" />
-                )}
-                열기
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isBusy}
-                onClick={() => setRemoveExistingPpt(true)}
-              >
-                삭제
-              </Button>
+            </div>
+          ) : null}
+
+          {canShowInlinePreview && activePreviewFileName && localPreviewUrl && showLocalPpt ? (
+            <div className="mt-2 rounded-md border border-zinc-200 dark:border-zinc-700 p-2">
+              <TeamAttachmentPreviewContent
+                previewUrl={localPreviewUrl}
+                fileName={activePreviewFileName}
+              />
             </div>
           ) : null}
 
@@ -489,21 +619,46 @@ export default function TeamProjectEditPageClient({
             type="file"
             accept={TEAM_ATTACHMENT_ACCEPT}
             disabled={isBusy}
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              setPptFile(file);
-              if (file) setRemoveExistingPpt(false);
-            }}
+            onChange={(event) => void handleFileInputChange(event)}
             className="mt-2 block w-full text-sm text-zinc-600 dark:text-zinc-400 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-blue-700 dark:file:bg-blue-950/40 dark:file:text-blue-300"
           />
-          {pptFile ? (
-            <p className="mt-1 text-xs text-zinc-500">선택됨: {pptFile.name}</p>
-          ) : (
-            <p className="mt-1 text-xs text-zinc-500">
-              {TEAM_ATTACHMENT_HINT} · 최대 50MB
-            </p>
-          )}
+
+          {showLocalPpt && pptFile ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => setIsPreviewModalOpen(true)}
+              >
+                <Eye className="size-3.5" />
+                미리보기
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBusy}
+                onClick={handleDownloadLocalFile}
+              >
+                <Download className="size-3.5" />
+                다운로드
+              </Button>
+            </div>
+          ) : null}
         </section>
+
+        {activePreviewFileName ? (
+          <TeamAttachmentPreviewModal
+            isOpen={isPreviewModalOpen}
+            snapshotId={snapshotId}
+            teamNumber={teamNumber}
+            fileName={activePreviewFileName}
+            localPreviewUrl={showLocalPpt ? localPreviewUrl : null}
+            onClose={() => setIsPreviewModalOpen(false)}
+          />
+        ) : null}
 
         <div>
           <div className="flex items-center justify-between gap-2">

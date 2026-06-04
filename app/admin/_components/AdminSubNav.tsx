@@ -62,6 +62,11 @@ const ADMIN_NAV_ITEMS = [
     label: "과정 관리",
     exact: false,
   },
+  {
+    href: "/admin/final-evaluations",
+    label: "최종 평가",
+    exact: false,
+  },
 ] as const;
 
 /**

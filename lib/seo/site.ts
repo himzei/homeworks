@@ -181,5 +181,6 @@ export const PUBLIC_SITEMAP_PATHS = [
   { path: "/", changeFrequency: "weekly" as const, priority: 1 },
   { path: "/git-how", changeFrequency: "monthly" as const, priority: 0.8 },
   { path: "/how-work", changeFrequency: "monthly" as const, priority: 0.8 },
+  { path: "/group-github", changeFrequency: "monthly" as const, priority: 0.8 },
   { path: "/blog", changeFrequency: "weekly" as const, priority: 0.7 },
 ] as const;

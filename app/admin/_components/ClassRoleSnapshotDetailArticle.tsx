@@ -8,10 +8,11 @@ import {
   ChevronUp,
   Crown,
   Download,
+  Eye,
   Loader2,
-  Paperclip,
 } from "lucide-react";
 
+import TeamAttachmentPreviewModal from "@/app/admin/_components/TeamAttachmentPreviewModal";
 import { Button } from "@/app/_components/ui/button";
 import type { ClassOfficerRole } from "@/lib/class-officers";
 import {
@@ -22,6 +23,7 @@ import {
   downloadElementAsPng,
   sanitizeDownloadFilename,
 } from "@/lib/download-element-as-image";
+import { downloadAdminTeamAttachment } from "@/lib/team-attachment-utils";
 import { cn } from "@/lib/utils";
 
 import ClassOfficerBadge from "./ClassOfficerBadge";
@@ -42,6 +44,11 @@ type ClassRoleTeamCardProps = {
   projectFilled: boolean;
   isDownloadingAttachment: boolean;
   onOpenEdit: () => void;
+  onPreviewAttachment: (
+    event: React.MouseEvent,
+    teamNumber: number,
+    fileName: string,
+  ) => void;
   onDownloadAttachment: (
     event: React.MouseEvent,
     teamNumber: number,
@@ -56,6 +63,7 @@ function ClassRoleTeamCard({
   projectFilled,
   isDownloadingAttachment,
   onOpenEdit,
+  onPreviewAttachment,
   onDownloadAttachment,
 }: ClassRoleTeamCardProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -173,28 +181,47 @@ function ClassRoleTeamCard({
                         <span className="flex-1" aria-hidden />
                       )}
                       {team.teamProject.pptStoragePath ? (
-                        <button
-                          type="button"
-                          title={
-                            team.teamProject.pptFileName ?? "첨부파일 다운로드"
-                          }
-                          aria-label={`첨부파일 다운로드: ${team.teamProject.pptFileName ?? "파일"}`}
-                          disabled={isDownloadingAttachment}
-                          onClick={(event) =>
-                            onDownloadAttachment(
-                              event,
-                              team.teamNumber,
-                              team.teamProject?.pptFileName ?? null,
-                            )
-                          }
-                          className="shrink-0 cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400 disabled:opacity-50"
-                        >
-                          {isDownloadingAttachment ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Paperclip className="size-4" />
-                          )}
-                        </button>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <button
+                            type="button"
+                            title={
+                              team.teamProject.pptFileName ?? "첨부파일 미리보기"
+                            }
+                            aria-label={`첨부파일 미리보기: ${team.teamProject.pptFileName ?? "파일"}`}
+                            onClick={(event) =>
+                              onPreviewAttachment(
+                                event,
+                                team.teamNumber,
+                                team.teamProject?.pptFileName ?? "첨부파일",
+                              )
+                            }
+                            className="cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400"
+                          >
+                            <Eye className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title={
+                              team.teamProject.pptFileName ?? "첨부파일 다운로드"
+                            }
+                            aria-label={`첨부파일 다운로드: ${team.teamProject.pptFileName ?? "파일"}`}
+                            disabled={isDownloadingAttachment}
+                            onClick={(event) =>
+                              onDownloadAttachment(
+                                event,
+                                team.teamNumber,
+                                team.teamProject?.pptFileName ?? null,
+                              )
+                            }
+                            className="cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-blue-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400 disabled:opacity-50"
+                          >
+                            {isDownloadingAttachment ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Download className="size-4" />
+                            )}
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}
@@ -328,6 +355,10 @@ export default function ClassRoleSnapshotDetailArticle({
   const [downloadingTeamNumber, setDownloadingTeamNumber] = useState<
     number | null
   >(null);
+  const [previewTarget, setPreviewTarget] = useState<{
+    teamNumber: number;
+    fileName: string;
+  } | null>(null);
 
   const teamsWithProjects: ClassRoleSnapshotTeam[] = teams.map((team) => ({
     ...team,
@@ -361,6 +392,15 @@ export default function ClassRoleSnapshotDetailArticle({
     [buildReturnToHref, router, snapshotId],
   );
 
+  const handlePreviewAttachment = useCallback(
+    (event: React.MouseEvent, teamNumber: number, fileName: string) => {
+      event.stopPropagation();
+      event.preventDefault();
+      setPreviewTarget({ teamNumber, fileName });
+    },
+    [],
+  );
+
   const handleDownloadAttachment = useCallback(
     async (
       event: React.MouseEvent,
@@ -372,37 +412,14 @@ export default function ClassRoleSnapshotDetailArticle({
 
       setDownloadingTeamNumber(teamNumber);
       try {
-        const response = await fetch(
-          `/api/admin/class-role-snapshots/${snapshotId}/team-project?teamNumber=${teamNumber}`,
+        const downloadError = await downloadAdminTeamAttachment(
+          snapshotId,
+          teamNumber,
+          fileName,
         );
-        const payload = (await response.json()) as {
-          signedUrl?: string;
-          fileName?: string;
-          error?: string;
-        };
-
-        if (!response.ok || !payload.signedUrl) {
-          window.alert(payload.error ?? "첨부파일을 불러오지 못했습니다.");
-          return;
+        if (downloadError) {
+          window.alert(downloadError);
         }
-
-        const downloadName = payload.fileName ?? fileName ?? "attachment";
-        const fileResponse = await fetch(payload.signedUrl);
-        if (!fileResponse.ok) {
-          window.alert("첨부파일 다운로드에 실패했습니다.");
-          return;
-        }
-
-        const blob = await fileResponse.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.download = downloadName;
-        link.rel = "noopener noreferrer";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(objectUrl);
       } catch {
         window.alert("첨부파일 다운로드 중 오류가 발생했습니다.");
       } finally {
@@ -543,8 +560,11 @@ export default function ClassRoleSnapshotDetailArticle({
                     downloadingTeamNumber === team.teamNumber
                   }
                   onOpenEdit={() => handleOpenTeamProjectPage(team.teamNumber)}
-                  onDownloadAttachment={(event, teamNumber, fileName) =>
-                    void handleDownloadAttachment(event, teamNumber, fileName)
+                  onPreviewAttachment={(event, teamNumber, attachmentFileName) =>
+                    handlePreviewAttachment(event, teamNumber, attachmentFileName)
+                  }
+                  onDownloadAttachment={(event, teamNumber, attachmentFileName) =>
+                    void handleDownloadAttachment(event, teamNumber, attachmentFileName)
                   }
                 />
               );
@@ -552,6 +572,16 @@ export default function ClassRoleSnapshotDetailArticle({
           </ul>
         </section>
       </div>
+
+      {previewTarget ? (
+        <TeamAttachmentPreviewModal
+          isOpen
+          snapshotId={snapshotId}
+          teamNumber={previewTarget.teamNumber}
+          fileName={previewTarget.fileName}
+          onClose={() => setPreviewTarget(null)}
+        />
+      ) : null}
     </article>
   );
 }
