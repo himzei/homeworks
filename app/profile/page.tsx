@@ -31,6 +31,7 @@ function ProfilePageContent() {
   // UI 상태 관리
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSigningOutAllDevices, setIsSigningOutAllDevices] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -308,6 +309,36 @@ function ProfilePageContent() {
       setError(err.message || "프로필 저장 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /** 다른 기기·브라우저 포함 전체 세션 종료 (공용 PC 등 원격 로그아웃) */
+  const handleSignOutAllDevices = async () => {
+    const confirmed = window.confirm(
+      "다른 기기와 브라우저를 포함해 모든 곳에서 로그아웃합니다.\n이 기기에서도 로그아웃됩니다. 계속할까요?",
+    );
+    if (!confirmed) return;
+
+    setIsSigningOutAllDevices(true);
+    setError(null);
+
+    try {
+      const { error: signOutError } = await supabase.auth.signOut({
+        scope: "global",
+      });
+      if (signOutError) {
+        throw signOutError;
+      }
+      router.push("/login");
+      router.refresh();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "전체 로그아웃 중 오류가 발생했습니다.";
+      setError(message);
+    } finally {
+      setIsSigningOutAllDevices(false);
     }
   };
 
@@ -596,6 +627,38 @@ function ProfilePageContent() {
               </button>
             </div>
           </form>
+
+          {/* 계정 보안 — 다른 기기 세션 일괄 종료 */}
+          <section
+            className="mt-10 pt-8 border-t border-zinc-200 dark:border-zinc-800"
+            aria-labelledby="profile-security-heading"
+          >
+            <h2
+              id="profile-security-heading"
+              className="text-lg font-semibold text-black dark:text-zinc-50 mb-2"
+            >
+              계정 보안
+            </h2>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+              공용 PC 등에서 로그아웃을 깜빡했을 때, 다른 기기·브라우저에 남은
+              로그인을 모두 끊을 수 있습니다. 실행하면 이 기기에서도
+              로그아웃됩니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSignOutAllDevices()}
+              disabled={isSigningOutAllDevices || isSaving}
+              className="px-4 py-2 text-sm font-medium border border-red-300 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSigningOutAllDevices
+                ? "로그아웃 처리 중..."
+                : "다른 기기에서 모두 로그아웃"}
+            </button>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              다른 기기 화면은 access token 만료(최대 약 1시간) 전까지 로그인처럼
+              보일 수 있습니다.
+            </p>
+          </section>
         </div>
 
         {/* 저장 완료 인포팁 (화면 하단 중앙 토스트) */}

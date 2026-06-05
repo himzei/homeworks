@@ -173,7 +173,8 @@ export default function Header() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // 이 브라우저만 로그아웃 (다른 기기 세션 유지)
+    await supabase.auth.signOut({ scope: "local" });
     window.location.reload();
   };
 

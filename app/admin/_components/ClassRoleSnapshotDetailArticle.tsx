@@ -102,9 +102,17 @@ function ClassRoleTeamCard({
           "hover:border-blue-300 hover:bg-blue-50/40 dark:hover:border-blue-800 dark:hover:bg-blue-950/20",
         )}
       >
-        <button
-          type="button"
+        {/* 한글 주석: 내부에 미리보기·다운로드 button이 있어 <button> 래퍼는 hydration 오류 발생 */}
+        <div
+          role="button"
+          tabIndex={0}
           onClick={onOpenEdit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onOpenEdit();
+            }
+          }}
           className={cn(
             "flex w-full flex-col px-3 pt-3 text-left space-y-2.5 cursor-pointer",
             needsCollapse ? "pb-1" : "pb-3",
@@ -266,7 +274,7 @@ function ClassRoleTeamCard({
               />
             ) : null}
           </div>
-        </button>
+        </div>
 
         {needsCollapse ? (
           <button
