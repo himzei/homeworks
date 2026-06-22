@@ -15,6 +15,10 @@ import {
   type EducationCalendarDay,
   type HolidayExclusionOptions,
 } from "@/lib/course-schedule";
+import {
+  normalizeCourseSlug,
+  suggestCourseSlugFromName,
+} from "@/lib/admin/course-slug";
 
 export type {
   CourseEventSchedule,
@@ -28,6 +32,7 @@ export type {
 export type TrainingCourseRecord = {
   id: string;
   name: string;
+  slug?: string | null;
   description: string | null;
   is_legacy: boolean;
   is_active: boolean;
@@ -56,6 +61,7 @@ export type TrainingCourseRecord = {
 export type TrainingCourseListItem = {
   id: string;
   name: string;
+  slug: string;
   description: string | null;
   isLegacy: boolean;
   isActive: boolean;
@@ -71,6 +77,7 @@ export type TrainingCourseListItem = {
 export type TrainingCourseDetail = {
   id: string;
   name: string;
+  slug: string;
   description: string | null;
   isLegacy: boolean;
   isActive: boolean;
@@ -90,6 +97,7 @@ export type TrainingCourseDetail = {
 /** 폼 초기값 */
 export type CourseFormValues = {
   name: string;
+  slug: string;
   description: string;
   isLegacy: boolean;
   sortOrder: string;
@@ -110,6 +118,7 @@ export type CourseFormValues = {
 export function createDefaultCourseFormValues(): CourseFormValues {
   return {
     name: "",
+    slug: "",
     description: "",
     isLegacy: false,
     sortOrder: "",
@@ -156,6 +165,7 @@ export function courseRecordToFormValues(
 ): CourseFormValues {
   return {
     name: record.name,
+    slug: record.slug?.trim() || suggestCourseSlugFromName(record.name),
     description: record.description ?? "",
     isLegacy: record.is_legacy,
     sortOrder: String(record.sort_order),
@@ -224,6 +234,7 @@ export function formValuesToDbPayload(
 
   return {
     name: values.name.trim(),
+    slug: normalizeCourseSlug(values.slug),
     description: values.description.trim() || null,
     is_legacy: values.isLegacy,
     sort_order: Number.isNaN(parsedSortOrder) ? 0 : parsedSortOrder,
@@ -256,6 +267,7 @@ export function toTrainingCourseDetail(
   return {
     id: record.id,
     name: record.name,
+    slug: record.slug?.trim() || suggestCourseSlugFromName(record.name),
     description: record.description,
     isLegacy: record.is_legacy,
     isActive: record.is_active,
@@ -359,6 +371,7 @@ export function toTrainingCourseListItem(
   return {
     id: record.id,
     name: record.name,
+    slug: record.slug?.trim() || suggestCourseSlugFromName(record.name),
     description: record.description,
     isLegacy: record.is_legacy,
     isActive: record.is_active,

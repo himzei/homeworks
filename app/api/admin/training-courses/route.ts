@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { isCourseNameEditLocked } from "@/lib/admin/course-name-edit";
+import {
+  normalizeCourseSlug,
+  validateCourseSlug,
+} from "@/lib/admin/course-slug";
+import { syncTrainingCourseGroupName } from "@/lib/admin/sync-training-course-group-name";
 import { verifyAdminSession } from "@/lib/admin/verify-admin";
 import { mapTrainingCourseError } from "@/lib/admin/training-course-errors";
 import {
@@ -23,6 +27,7 @@ function parseCourseFormBody(body: unknown): CourseFormValues | null {
   return {
     ...defaults,
     name: typeof raw.name === "string" ? raw.name : defaults.name,
+    slug: typeof raw.slug === "string" ? raw.slug : defaults.slug,
     description:
       typeof raw.description === "string"
         ? raw.description
@@ -114,6 +119,12 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedSlug = normalizeCourseSlug(formValues.slug);
+    const slugError = validateCourseSlug(normalizedSlug);
+    if (slugError) {
+      return NextResponse.json({ error: slugError }, { status: 400 });
+    }
+
     const db = getServiceRoleClient() ?? session.supabase!;
     const payload = formValuesToDbPayload(formValues, session.user!.id);
 
@@ -178,7 +189,7 @@ export async function PATCH(request: Request) {
 
     const { data: existingCourse, error: fetchError } = await db
       .from("training_courses")
-      .select("name")
+      .select("name, slug")
       .eq("id", courseId)
       .single();
 
@@ -197,28 +208,21 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const normalizedSlug = normalizeCourseSlug(formValues.slug);
+    const slugError = validateCourseSlug(normalizedSlug);
+    if (slugError) {
+      return NextResponse.json({ error: slugError }, { status: 400 });
+    }
+
     const isRenamingCourse = trimmedName !== existingCourse.name.trim();
     if (isRenamingCourse) {
-      try {
-        const isNameLocked = await isCourseNameEditLocked(
-          db,
-          existingCourse.name,
-        );
-        if (isNameLocked) {
-          return NextResponse.json(
-            {
-              error:
-                "승인된 회원이 등록된 과정은 과정명을 변경할 수 없습니다.",
-            },
-            { status: 400 },
-          );
-        }
-      } catch (lockCheckError) {
-        console.error("과정명 수정 잠금 확인 실패:", lockCheckError);
-        return NextResponse.json(
-          { error: "과정명 변경 가능 여부를 확인하지 못했습니다." },
-          { status: 500 },
-        );
+      const syncResult = await syncTrainingCourseGroupName(
+        db,
+        existingCourse.name,
+        trimmedName,
+      );
+      if (!syncResult.ok) {
+        return NextResponse.json({ error: syncResult.error }, { status: 400 });
       }
     }
 

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { normalizeMemberGroupName } from "@/lib/admin/members-list-query";
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
-const ALLOWED_ACTIONS = ["approve", "reject", "withdraw"] as const;
+const ALLOWED_ACTIONS = ["approve", "reject", "withdraw", "updateGroup"] as const;
 
 /**
  * 관리자 전용 — 회원 승인·거절·탈퇴(휴면) 처리
@@ -34,9 +35,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { userId, action } = body as {
+    const { userId, action, groupName } = body as {
       userId?: string;
       action?: (typeof ALLOWED_ACTIONS)[number];
+      /** updateGroup 전용 — null 또는 빈 문자열이면 미분류 */
+      groupName?: string | null;
     };
 
     if (typeof userId !== "string" || !userId) {
@@ -48,14 +51,17 @@ export async function POST(request: Request) {
 
     if (!action || !ALLOWED_ACTIONS.includes(action)) {
       return NextResponse.json(
-        { error: "action은 approve, reject, withdraw 중 하나여야 합니다." },
+        {
+          error:
+            "action은 approve, reject, withdraw, updateGroup 중 하나여야 합니다.",
+        },
         { status: 400 },
       );
     }
 
     const { data: target, error: targetError } = await supabase
       .from("profiles")
-      .select("id, role, name, approval_status, is_dormant")
+      .select("id, role, name, approval_status, is_dormant, group_name")
       .eq("id", userId)
       .maybeSingle();
 
@@ -71,6 +77,73 @@ export async function POST(request: Request) {
         { error: "관리자 계정은 변경할 수 없습니다." },
         { status: 400 },
       );
+    }
+
+    if (action === "updateGroup") {
+      if (groupName !== null && groupName !== undefined && typeof groupName !== "string") {
+        return NextResponse.json(
+          { error: "과정명 형식이 올바르지 않습니다." },
+          { status: 400 },
+        );
+      }
+
+      const normalizedGroupName = normalizeMemberGroupName(groupName);
+
+      if (normalizedGroupName) {
+        const { data: course, error: courseError } = await supabase
+          .from("training_courses")
+          .select("name")
+          .eq("name", normalizedGroupName)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (courseError) {
+          console.error("과정 검증 조회 실패:", courseError);
+          return NextResponse.json(
+            { error: "과정 정보를 확인하지 못했습니다." },
+            { status: 500 },
+          );
+        }
+
+        if (!course) {
+          return NextResponse.json(
+            { error: "선택한 과정을 찾을 수 없습니다." },
+            { status: 400 },
+          );
+        }
+      }
+
+      const currentGroupName = normalizeMemberGroupName(target.group_name);
+      if (currentGroupName === normalizedGroupName) {
+        return NextResponse.json({
+          ok: true,
+          userId,
+          groupName: normalizedGroupName,
+          memberName: target.name,
+        });
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          group_name: normalizedGroupName,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.error("과정 변경 실패:", updateError);
+        return NextResponse.json(
+          { error: updateError.message ?? "과정 변경에 실패했습니다." },
+          { status: 400 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        userId,
+        groupName: normalizedGroupName,
+        memberName: target.name,
+      });
     }
 
     if (action === "withdraw") {

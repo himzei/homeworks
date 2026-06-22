@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/app/_components/ui/button";
 import { validateDateRange } from "@/lib/course-schedule";
 import {
+  normalizeCourseSlug,
+  suggestCourseSlugFromName,
+  validateCourseSlug,
+} from "@/lib/admin/course-slug";
+import {
   createDefaultCourseFormValues,
   formValuesToHolidayOptions,
   type CourseFormValues,
@@ -20,8 +25,6 @@ type CourseFormProps = {
   /** 수정 모드일 때 과정 ID */
   courseId?: string;
   initialValues?: CourseFormValues;
-  /** false면 승인된 회원이 있는 과정 — 과정명 변경 불가 */
-  isNameEditable?: boolean;
   listPath?: string;
   submitLabel?: string;
 };
@@ -35,16 +38,17 @@ const inputClassName =
 export default function CourseForm({
   courseId,
   initialValues,
-  isNameEditable = true,
   listPath = "/admin/courses",
   submitLabel,
 }: CourseFormProps) {
   const router = useRouter();
   const isEditMode = !!courseId;
-  const canEditCourseName = !isEditMode || isNameEditable;
 
   const [formData, setFormData] = useState<CourseFormValues>(
     initialValues ?? createDefaultCourseFormValues(),
+  );
+  const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(
+    Boolean(initialValues?.slug?.trim()),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -63,10 +67,29 @@ export default function CourseForm({
     const checked =
       type === "checkbox" ? (e.target as HTMLInputElement).checked : undefined;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      };
+
+      // 등록 시 과정명 입력에 맞춰 슬러그 자동 제안
+      if (
+        name === "name" &&
+        !isEditMode &&
+        !isSlugManuallyEdited &&
+        typeof value === "string"
+      ) {
+        next.slug = suggestCourseSlugFromName(value);
+      }
+
+      if (name === "slug" && typeof value === "string") {
+        setIsSlugManuallyEdited(true);
+        next.slug = normalizeCourseSlug(value);
+      }
+
+      return next;
+    });
     setFormError(null);
   };
 
@@ -79,8 +102,14 @@ export default function CourseForm({
       setFormError("과정명을 입력해 주세요.");
       return;
     }
-    if (canEditCourseName && trimmedName.length < 4) {
+    if (trimmedName.length < 4) {
       setFormError("과정명은 4자 이상 입력해 주세요.");
+      return;
+    }
+
+    const slugError = validateCourseSlug(formData.slug);
+    if (slugError) {
+      setFormError(slugError);
       return;
     }
 
@@ -119,7 +148,16 @@ export default function CourseForm({
         method: isEditMode ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          isEditMode && courseId ? { id: courseId, ...formData } : formData,
+          isEditMode && courseId
+            ? {
+                id: courseId,
+                ...formData,
+                slug: normalizeCourseSlug(formData.slug),
+              }
+            : {
+                ...formData,
+                slug: normalizeCourseSlug(formData.slug),
+              },
         ),
       });
 
@@ -178,22 +216,36 @@ export default function CourseForm({
             name="name"
             type="text"
             required
-            readOnly={!canEditCourseName}
             value={formData.name}
             onChange={handleChange}
             placeholder='예: 16기 교육생 - 빅데이터 전문가 양성과정'
-            className={`${inputClassName}${
-              !canEditCourseName
-                ? " cursor-not-allowed bg-zinc-100 text-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-400"
-                : ""
-            }`}
-            aria-readonly={!canEditCourseName}
+            className={inputClassName}
           />
-          {!canEditCourseName ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              승인된 회원이 등록된 과정은 과정명을 변경할 수 없습니다.
-            </p>
-          ) : null}
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            회원·과제 등에 연결되는 공식 과정명입니다. 변경 시 연관 데이터도
+            함께 갱신됩니다.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="slug" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            슬러그 <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="slug"
+            name="slug"
+            type="text"
+            required
+            value={formData.slug}
+            onChange={handleChange}
+            placeholder="예: 16gi"
+            className={`${inputClassName} max-w-md font-mono`}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            영문 소문자, 숫자, 하이픈(-)만 사용합니다. 과정명과 별도로 관리됩니다.
+          </p>
         </div>
 
         <div className="space-y-2">

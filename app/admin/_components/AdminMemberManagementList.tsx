@@ -5,6 +5,12 @@ import { useState } from "react";
 import { Check, Loader2, UserMinus, X } from "lucide-react";
 
 import { Button } from "@/app/_components/ui/button";
+import { isUnsetMemberGroupName } from "@/lib/admin/members-list-query";
+import {
+  formatShortGroupLabel,
+  sortGroupOptionsByCohortDesc,
+  type GroupOption,
+} from "@/lib/fetch-group-options";
 import { getMemberActivityLabel } from "@/lib/profile-members";
 import {
   getApprovalStatusLabel,
@@ -16,26 +22,49 @@ export type AdminMemberListItem = {
   name: string;
   groupName: string | null;
   phone: string | null;
+  university: string | null;
+  major: string | null;
   createdAtLabel: string;
   approvalStatus: string;
   isDormant: boolean;
 };
 
+/** 학교·학과 표시 문자열 */
+function formatUniversityMajorLabel(
+  university: string | null,
+  major: string | null,
+): string {
+  const label = [university, major].filter(Boolean).join(" · ");
+  return label || "학교·학과 미입력";
+}
+
 type AdminMemberManagementListProps = {
   members: AdminMemberListItem[];
+  groupOptions: GroupOption[];
   emptyMessage?: string;
 };
 
 /**
- * 전체 회원 목록 — 승인·거절·탈퇴(휴면) 처리
+ * 전체 회원 목록 — 승인·거절·탈퇴(휴면)·과정 변경
  */
 export default function AdminMemberManagementList({
   members,
+  groupOptions,
   emptyMessage = "등록된 회원이 없습니다.",
 }: AdminMemberManagementListProps) {
   const router = useRouter();
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<
+    "approve" | "reject" | "withdraw" | "updateGroup" | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [groupDraftByUserId, setGroupDraftByUserId] = useState<
+    Record<string, string>
+  >({});
+
+  const courseOptions = sortGroupOptionsByCohortDesc(
+    groupOptions.filter((option) => option.value),
+  );
 
   const handleAction = async (
     userId: string,
@@ -54,6 +83,7 @@ export default function AdminMemberManagementList({
     if (!window.confirm(confirmMessage)) return;
 
     setBusyUserId(userId);
+    setBusyAction(action);
     setErrorMessage(null);
 
     try {
@@ -77,7 +107,69 @@ export default function AdminMemberManagementList({
       setErrorMessage("네트워크 오류가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setBusyUserId(null);
+      setBusyAction(null);
     }
+  };
+
+  const handleGroupChange = async (
+    userId: string,
+    memberName: string,
+    nextGroupName: string,
+  ): Promise<boolean> => {
+    const selectedLabel = nextGroupName
+      ? (courseOptions.find((option) => option.value === nextGroupName)?.label ??
+        nextGroupName)
+      : "미분류";
+
+    if (
+      !window.confirm(
+        `"${memberName}" 님의 과정을 "${selectedLabel}"(으)로 변경할까요?`,
+      )
+    ) {
+      return false;
+    }
+
+    setBusyUserId(userId);
+    setBusyAction("updateGroup");
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/member-management", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          action: "updateGroup",
+          groupName: nextGroupName || null,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setErrorMessage(payload.error ?? "과정 변경에 실패했습니다.");
+        return false;
+      }
+
+      router.refresh();
+      return true;
+    } catch {
+      setErrorMessage("네트워크 오류가 발생했습니다. 다시 시도해 주세요.");
+      return false;
+    } finally {
+      setBusyUserId(null);
+      setBusyAction(null);
+    }
+  };
+
+  const clearGroupDraft = (userId: string) => {
+    setGroupDraftByUserId((previousDrafts) => {
+      const nextDrafts = { ...previousDrafts };
+      delete nextDrafts[userId];
+      return nextDrafts;
+    });
   };
 
   if (members.length === 0) {
@@ -102,13 +194,18 @@ export default function AdminMemberManagementList({
           const isPending =
             member.approvalStatus === PROFILE_APPROVAL_STATUS.pending;
           const canWithdraw = !member.isDormant && !isPending;
+          const currentGroupValue = isUnsetMemberGroupName(member.groupName)
+            ? ""
+            : (member.groupName ?? "");
+          const selectGroupValue =
+            groupDraftByUserId[member.id] ?? currentGroupValue;
 
           return (
             <li
               key={member.id}
               className="flex flex-col gap-3 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between dark:bg-zinc-950"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-black dark:text-zinc-50">
                     {member.name}
@@ -126,9 +223,67 @@ export default function AdminMemberManagementList({
                     {getApprovalStatusLabel(member.approvalStatus)}
                   </span>
                 </div>
+
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="sr-only" htmlFor={`member-group-${member.id}`}>
+                    {member.name} 과정
+                  </label>
+                  <select
+                    id={`member-group-${member.id}`}
+                    value={selectGroupValue}
+                    disabled={isBusy}
+                    onChange={(event) => {
+                      const nextGroupName = event.target.value;
+                      if (nextGroupName === currentGroupValue) {
+                        clearGroupDraft(member.id);
+                        return;
+                      }
+
+                      setGroupDraftByUserId((previousDrafts) => ({
+                        ...previousDrafts,
+                        [member.id]: nextGroupName,
+                      }));
+
+                      void handleGroupChange(
+                        member.id,
+                        member.name,
+                        nextGroupName,
+                      ).then((isUpdated) => {
+                        if (!isUpdated) {
+                          clearGroupDraft(member.id);
+                        }
+                      });
+                    }}
+                    className="w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-black outline-none ring-blue-500 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  >
+                    <option value="">미분류</option>
+                    {courseOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {formatShortGroupLabel(option.label)}
+                      </option>
+                    ))}
+                    {!isUnsetMemberGroupName(member.groupName) &&
+                    member.groupName &&
+                    !courseOptions.some(
+                      (option) => option.value === member.groupName,
+                    ) ? (
+                      <option value={member.groupName}>
+                        {formatShortGroupLabel(member.groupName)} (현재)
+                      </option>
+                    ) : null}
+                  </select>
+                  {isBusy && busyAction === "updateGroup" ? (
+                    <Loader2
+                      className="size-4 shrink-0 animate-spin text-zinc-500"
+                      aria-hidden
+                    />
+                  ) : null}
+                </div>
+
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  {member.groupName ?? "미분류"}
-                  {member.phone ? ` · ${member.phone}` : ""}
+                  {member.phone ? member.phone : "연락처 없음"}
+                  {" · "}
+                  {formatUniversityMajorLabel(member.university, member.major)}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   가입 {member.createdAtLabel}

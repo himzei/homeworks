@@ -8,7 +8,9 @@ import AdminMembersPagination from "@/app/admin/_components/AdminMembersPaginati
 import {
   buildMembersListQueryString,
   buildMembersSearchPattern,
+  isUnsetMemberGroupName,
   MEMBERS_UNSET_GROUP,
+  MEMBERS_UNSET_GROUP_OR_FILTER,
   parseMembersGroupFilter,
 } from "@/lib/admin/members-list-query";
 import { fetchGroupOptions } from "@/lib/fetch-group-options";
@@ -84,14 +86,14 @@ export default async function AdminMembersPage({
       let query = supabase
         .from("profiles")
         .select(
-          "id, name, group_name, phone, created_at, approval_status, is_dormant",
+          "id, name, group_name, phone, university, major, created_at, approval_status, is_dormant",
           { count: "exact" },
         )
         .neq("role", "admin")
         .order("created_at", { ascending: false });
 
       if (selectedGroup === MEMBERS_UNSET_GROUP) {
-        query = query.is("group_name", null);
+        query = query.or(MEMBERS_UNSET_GROUP_OR_FILTER);
       } else if (selectedGroup) {
         query = query.eq("group_name", selectedGroup);
       }
@@ -120,7 +122,7 @@ export default async function AdminMembersPage({
     [MEMBERS_UNSET_GROUP]: 0,
   };
   for (const profile of allProfilesForCount) {
-    if (!profile.group_name) {
+    if (isUnsetMemberGroupName(profile.group_name)) {
       memberCountsByGroup[MEMBERS_UNSET_GROUP] += 1;
     } else {
       memberCountsByGroup[profile.group_name] =
@@ -148,6 +150,8 @@ export default async function AdminMembersPage({
     name: row.name?.trim() || "(이름 없음)",
     groupName: row.group_name,
     phone: row.phone,
+    university: row.university?.trim() || null,
+    major: row.major?.trim() || null,
     createdAtLabel: dateFormatter.format(new Date(row.created_at)),
     approvalStatus: row.approval_status,
     isDormant: row.is_dormant === true,
@@ -184,7 +188,11 @@ export default async function AdminMembersPage({
         memberCountsByGroup={memberCountsByGroup}
       />
 
-      <AdminMemberManagementList members={members} emptyMessage={emptyMessage} />
+      <AdminMemberManagementList
+        members={members}
+        groupOptions={groupOptions}
+        emptyMessage={emptyMessage}
+      />
 
       <AdminMembersPagination
         currentPage={safePage}

@@ -1,5 +1,24 @@
-/** URL·쿼리용 — 과정 미분류(group_name null) */
+/** URL·쿼리용 — 과정 미분류(group_name null·빈 문자열) */
 export const MEMBERS_UNSET_GROUP = "__unset__";
+
+/** Supabase `.or()` — group_name이 null 또는 빈 문자열인 회원 */
+export const MEMBERS_UNSET_GROUP_OR_FILTER =
+  'group_name.is.null,group_name.eq.';
+
+/** 과정 미분류 여부 (집계·표시·필터에서 동일 규칙 사용) */
+export function isUnsetMemberGroupName(
+  groupName: string | null | undefined,
+): boolean {
+  return !groupName?.trim();
+}
+
+/** 과정명 정규화 — 빈 문자열은 null(미분류)로 통일 */
+export function normalizeMemberGroupName(
+  groupName: string | null | undefined,
+): string | null {
+  const trimmedGroupName = groupName?.trim();
+  return trimmedGroupName ? trimmedGroupName : null;
+}
 
 export type MembersListSearchParams = {
   page?: string;

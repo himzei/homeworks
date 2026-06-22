@@ -25,7 +25,10 @@ export function mapTrainingCourseError(error: PostgrestError): string {
   }
 
   if (code === "23505") {
-    return "이미 동일한 이름의 과정이 있습니다.";
+    if (message.includes("slug")) {
+      return "이미 사용 중인 슬러그입니다.";
+    }
+    return "이미 동일한 이름 또는 슬러그의 과정이 있습니다.";
   }
 
   if (code === "42501" || message.toLowerCase().includes("permission")) {
