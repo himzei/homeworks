@@ -117,6 +117,7 @@ export default async function AdminEvaluationPage({
           assignments={evaluationAssignments}
           selectedGroup={filterGroup}
           mainEducationStartDate={mainEducationStartDate}
+          serverVerifiedAdmin
         />
     </>
   );

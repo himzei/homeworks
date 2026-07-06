@@ -1,4 +1,5 @@
 import * as React from "react"
+import Link from "next/link"
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -46,20 +47,39 @@ function PaginationLink({
   className,
   isActive,
   size = "icon",
+  href,
   ...props
 }: PaginationLinkProps) {
+  const linkClassName = cn(
+    buttonVariants({
+      variant: isActive ? "outline" : "ghost",
+      size,
+    }),
+    className
+  )
+
+  // href가 없으면(비활성 등) 일반 span으로 렌더 — Next Link는 href 필수
+  if (!href) {
+    return (
+      <span
+        aria-current={isActive ? "page" : undefined}
+        data-slot="pagination-link"
+        data-active={isActive}
+        className={linkClassName}
+        {...props}
+      />
+    )
+  }
+
+  // Next Link + scroll={false}: 페이지 이동 시 스크롤을 맨 위로 올리지 않고 현재 위치 유지
   return (
-    <a
+    <Link
+      href={href}
+      scroll={false}
       aria-current={isActive ? "page" : undefined}
       data-slot="pagination-link"
       data-active={isActive}
-      className={cn(
-        buttonVariants({
-          variant: isActive ? "outline" : "ghost",
-          size,
-        }),
-        className
-      )}
+      className={linkClassName}
       {...props}
     />
   )

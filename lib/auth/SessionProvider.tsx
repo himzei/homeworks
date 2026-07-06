@@ -137,8 +137,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         applyProfile(profileData ?? null);
       } catch (profileErr) {
         if (isAbortError(profileErr)) {
-          // abort 시 기존 상태 유지, 확인 중 상태만 해제하지 않음
+          // abort 시 기존 프로필은 그대로 두되, 확인 중 상태는 해제해
+          // 로딩 UI("권한을 확인하는 중...")가 무한히 멈추는 것을 방지
           if (profileRef.current && userRef.current?.id === currentUser.id) {
+            setIsCheckingAdmin(false);
             return;
           }
           throw profileErr;
@@ -313,17 +315,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMountedRef.current) return;
 
+      const currentUser = session?.user ?? null;
+
+      // 동일 사용자의 단순 토큰 갱신은 서버 상태에 영향이 없으므로 router.refresh 생략
+      // (매 갱신마다 서버 재렌더 → 관리자 화면이 "권한을 확인하는 중..."으로 깜빡이는 문제 방지)
+      const isSameUserTokenRefresh =
+        event === "TOKEN_REFRESHED" &&
+        !!currentUser &&
+        currentUser.id === userRef.current?.id;
+
       if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "USER_UPDATED"
+        (event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "USER_UPDATED") &&
+        !isSameUserTokenRefresh
       ) {
         router.refresh();
       }
 
       if (!isInitialLoadRef.current) {
+        // 이미 같은 사용자의 프로필을 보유 중이면 재조회 없이 로딩만 해제
+        // (토큰 갱신·탭 전환 등에서 로딩 UI가 반복 노출되는 것을 방지)
+        if (
+          currentUser &&
+          currentUser.id === userRef.current?.id &&
+          profileRef.current
+        ) {
+          applyUser(currentUser);
+          setIsCheckingAdmin(false);
+          return;
+        }
+
         setIsCheckingAdmin(true);
-        const currentUser = session?.user ?? null;
         applyUser(currentUser);
 
         if (currentUser) {

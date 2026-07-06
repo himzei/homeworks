@@ -143,6 +143,7 @@ export default async function AdminAssignmentsPage({
           assignments={assignmentListData}
           focusAssignmentId={focusAssignmentId}
           assignmentsListPath={assignmentsListPath}
+          serverVerifiedAdmin
         />
     </>
   );

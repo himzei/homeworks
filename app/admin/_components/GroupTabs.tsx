@@ -75,7 +75,8 @@ export default function GroupTabs({
     replaceDebounceTimerRef.current = setTimeout(() => {
       replaceDebounceTimerRef.current = null;
       startTransition(() => {
-        router.replace(newUrl);
+        // scroll: false — 탭 전환 시 스크롤을 맨 위로 올리지 않고 현재 위치 유지
+        router.replace(newUrl, { scroll: false });
       });
     }, 200);
   };

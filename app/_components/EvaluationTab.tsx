@@ -218,12 +218,19 @@ interface EvaluationTabProps {
   selectedGroup?: string | null;
   /** 본교육 시작일 — 과제별 기초/본 점수 구간 판별용 */
   mainEducationStartDate?: string | null;
+  /**
+   * 서버에서 이미 관리자 권한을 확인했는지 여부.
+   * 관리자 전용 라우트(서버에서 redirect 가드 통과)에서 true를 넘기면
+   * 클라이언트 세션 재확인을 기다리지 않아 "권한을 확인하는 중..." 지연을 방지한다.
+   */
+  serverVerifiedAdmin?: boolean;
 }
 
 export default function EvaluationTab({
   assignments,
   selectedGroup = null,
   mainEducationStartDate = null,
+  serverVerifiedAdmin = false,
 }: EvaluationTabProps) {
   // Supabase 클라이언트를 메모이제이션하여 무한 루프 방지
   const supabase = useMemo(() => createClient(), []);
@@ -247,7 +254,13 @@ export default function EvaluationTab({
   );
 
   // 전역 세션에서 관리자 권한 가져오기
-  const { isAdmin, isCheckingAdmin } = useAdmin();
+  const { isAdmin: sessionIsAdmin, isCheckingAdmin: sessionIsCheckingAdmin } =
+    useAdmin();
+
+  // 서버에서 관리자 검증을 통과한 경우 클라이언트 재확인을 기다리지 않는다.
+  // (Supabase 클라이언트는 쿠키 기반이라 서버 검증 직후 곧바로 쿼리 가능)
+  const isAdmin = sessionIsAdmin || serverVerifiedAdmin;
+  const isCheckingAdmin = serverVerifiedAdmin ? false : sessionIsCheckingAdmin;
 
   // 사용자 목록 상태
   const [users, setUsers] = useState<User[]>([]);

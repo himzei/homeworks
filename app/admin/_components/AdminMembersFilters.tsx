@@ -56,7 +56,8 @@ export default function AdminMembersFilters({
       page: 1,
     });
     startTransition(() => {
-      router.replace(`${pathname}${query}`);
+      // scroll: false — 필터 변경 시 스크롤을 맨 위로 올리지 않고 현재 위치 유지
+      router.replace(`${pathname}${query}`, { scroll: false });
     });
   };
 

@@ -6,6 +6,10 @@ import { Button } from "@/app/_components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { GROUP_OPTIONS } from "@/lib/constants";
 import {
+  fetchGroupOptions,
+  type GroupOption,
+} from "@/lib/fetch-group-options";
+import {
   filterTime24Input,
   formatTime24FromDate,
   normalizeTime24,
@@ -62,6 +66,27 @@ export default function EditAssignmentPage() {
   // 로딩 및 저장 상태 관리
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 대상 과정 옵션 (DB 조회 — 최신 기수까지 표시, 실패 시 constants 폴백)
+  const [groupOptions, setGroupOptions] = useState<GroupOption[]>(() =>
+    GROUP_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
+  );
+
+  useEffect(() => {
+    let isActive = true;
+
+    fetchGroupOptions(supabase)
+      .then((options) => {
+        if (isActive) setGroupOptions(options);
+      })
+      .catch((error) => {
+        console.error("대상 과정 옵션 조회 실패:", error);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [supabase]);
 
   // 기존 데이터 불러오기 (캐시 우선 → 없으면 Supabase 조회)
   useEffect(() => {
@@ -172,6 +197,18 @@ export default function EditAssignmentPage() {
       });
     }
   }, [assignmentId, router]);
+
+  // 현재 과제의 대상 과정이 옵션 목록에 없으면(비활성·레거시 등) 추가해 항상 표시
+  const resolvedGroupOptions = useMemo(() => {
+    const currentGroup = formData.groupName.trim();
+    if (
+      !currentGroup ||
+      groupOptions.some((opt) => opt.value === currentGroup)
+    ) {
+      return groupOptions;
+    }
+    return [...groupOptions, { value: currentGroup, label: currentGroup }];
+  }, [groupOptions, formData.groupName]);
 
   // 폼 필드 변경 핸들러
   const handleChange = (
@@ -419,7 +456,7 @@ export default function EditAssignmentPage() {
               onChange={handleChange}
               className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
             >
-              {GROUP_OPTIONS.map((opt) => (
+              {resolvedGroupOptions.map((opt) => (
                 <option key={opt.value || "empty"} value={opt.value}>
                   {opt.label}
                 </option>

@@ -15,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { buildAssignmentEditHref } from "@/lib/admin/admin-assignments-path";
 import { useAdmin } from "@/lib/auth/SessionProvider";
+import { isAbortError } from "@/lib/errors/is-abort-error";
 import CheckedList from "./CheckedList";
 
 // 숙제 데이터 타입 정의
@@ -59,12 +60,15 @@ interface AssignmentListProps {
   focusAssignmentId?: string | null;
   /** 수정 완료 후 돌아갈 관리자 목록 경로 (있으면 수정 링크에 returnTo 포함) */
   assignmentsListPath?: string;
+  /** 서버에서 관리자 검증을 통과한 경우 — 탭 전환 시 클라이언트 재확인 대기 생략 */
+  serverVerifiedAdmin?: boolean;
 }
 
 export default function AssignmentList({
   assignments,
   focusAssignmentId = null,
   assignmentsListPath,
+  serverVerifiedAdmin = false,
 }: AssignmentListProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -78,7 +82,14 @@ export default function AssignmentList({
   );
 
   // 전역 세션에서 관리자 권한 가져오기
-  const { isAdmin, isCheckingAdmin } = useAdmin();
+  const { isAdmin: sessionIsAdmin, isCheckingAdmin: sessionIsCheckingAdmin } =
+    useAdmin();
+
+  // 서버에서 이미 관리자임이 확인된 페이지는 탭 전환·토큰 갱신 시에도 목록을 유지
+  const isAdmin = sessionIsAdmin || serverVerifiedAdmin;
+  const isCheckingAdmin = serverVerifiedAdmin
+    ? false
+    : sessionIsCheckingAdmin;
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -107,109 +118,113 @@ export default function AssignmentList({
 
   // assignments의 최신 값을 참조하기 위한 ref
   const assignmentsRef = useRef(assignments);
+  const currentPageRef = useRef(currentPage);
   useEffect(() => {
     assignmentsRef.current = assignments;
   }, [assignments]);
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   // 각 과제의 제출 회원 정보 가져오는 함수
-  const fetchSubmissions = useCallback(async () => {
-    // 관리자가 아니면 실행하지 않음
-    if (!isAdmin || isCheckingAdmin) return;
+  const fetchSubmissions = useCallback(
+    async (targetAssignments?: Assignment[]) => {
+      // 관리자가 아니면 실행하지 않음
+      if (!isAdmin || isCheckingAdmin) return;
 
-    // ref를 통해 최신 assignments 참조
-    const currentAssignments = assignmentsRef.current;
+      const currentAssignments = targetAssignments ?? assignmentsRef.current;
 
-    for (const assignment of currentAssignments) {
-      setIsLoadingSubmissions((prev) => ({ ...prev, [assignment.id]: true }));
+      for (const assignment of currentAssignments) {
+        setIsLoadingSubmissions((prev) => ({ ...prev, [assignment.id]: true }));
 
-      try {
-        // 해당 과제의 제출 정보 가져오기 (제출 순서로 정렬, status 컬럼 포함)
-        const { data: homeworks, error: homeworksError } = await supabase
-          .from("homeworks")
-          .select("user_id, url, created_at, status")
-          .eq("assignment_id", assignment.id)
-          .order("created_at", { ascending: true }); // 제출 순서로 정렬
+        try {
+          // 해당 과제의 제출 정보 가져오기 (제출 순서로 정렬, status 컬럼 포함)
+          const { data: homeworks, error: homeworksError } = await supabase
+            .from("homeworks")
+            .select("user_id, url, created_at, status")
+            .eq("assignment_id", assignment.id)
+            .order("created_at", { ascending: true }); // 제출 순서로 정렬
 
-        if (homeworksError) {
-          console.error(
-            `과제 ${assignment.id} 제출 정보 조회 실패:`,
-            homeworksError,
-          );
+          if (homeworksError) {
+            if (isAbortError(homeworksError)) continue;
+            console.error(
+              `과제 ${assignment.id} 제출 정보 조회 실패:`,
+              homeworksError,
+            );
+            setSubmissionsByAssignment((prev) => ({
+              ...prev,
+              [assignment.id]: [],
+            }));
+            continue;
+          }
+
+          if (!homeworks || homeworks.length === 0) {
+            setSubmissionsByAssignment((prev) => ({
+              ...prev,
+              [assignment.id]: [],
+            }));
+            continue;
+          }
+
+          // 각 제출의 사용자 정보 가져오기
+          const userIds = homeworks.map((h) => h.user_id);
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, name")
+            .in("id", userIds);
+
+          if (profilesError && !isAbortError(profilesError)) {
+            console.error(`프로필 정보 조회 실패:`, profilesError);
+          }
+
+          // 제출 정보와 사용자 정보 결합
+          const submissionUsers: SubmissionUser[] = homeworks.map((homework) => {
+            const profile = profiles?.find((p) => p.id === homework.user_id);
+            return {
+              userId: homework.user_id,
+              userName: profile?.name || "이름 없음",
+              submittedAt: new Date(homework.created_at).toLocaleString("ko-KR", {
+                timeZone: "Asia/Seoul",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              url: homework.url,
+            };
+          });
+
+          setSubmissionsByAssignment((prev) => ({
+            ...prev,
+            [assignment.id]: submissionUsers,
+          }));
+
+          // 상태 정보를 submissionStatuses에 설정 (복합 키 = CheckedList 조회와 일치)
+          const statuses: Record<string, SubmissionStatus> = {};
+          homeworks.forEach((homework) => {
+            const key = submissionStatusKey(homework.user_id, assignment.id);
+            statuses[key] = normalizeDbStatus(homework.status);
+          });
+          setSubmissionStatuses((prev) => ({ ...prev, ...statuses }));
+        } catch (error) {
+          // 탭 전환 등으로 요청이 취소된 경우 — 기존 데이터 유지, visibility 시 재조회
+          if (isAbortError(error)) continue;
+          console.error(`과제 ${assignment.id} 제출 정보 가져오기 오류:`, error);
           setSubmissionsByAssignment((prev) => ({
             ...prev,
             [assignment.id]: [],
           }));
-          continue;
-        }
-
-        if (!homeworks || homeworks.length === 0) {
-          setSubmissionsByAssignment((prev) => ({
-            ...prev,
-            [assignment.id]: [],
-          }));
+        } finally {
           setIsLoadingSubmissions((prev) => ({
             ...prev,
             [assignment.id]: false,
           }));
-          continue;
         }
-
-        // 각 제출의 사용자 정보 가져오기
-        const userIds = homeworks.map((h) => h.user_id);
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, name")
-          .in("id", userIds);
-
-        if (profilesError) {
-          console.error(`프로필 정보 조회 실패:`, profilesError);
-        }
-
-        // 제출 정보와 사용자 정보 결합
-        const submissionUsers: SubmissionUser[] = homeworks.map((homework) => {
-          const profile = profiles?.find((p) => p.id === homework.user_id);
-          return {
-            userId: homework.user_id,
-            userName: profile?.name || "이름 없음",
-            submittedAt: new Date(homework.created_at).toLocaleString("ko-KR", {
-              timeZone: "Asia/Seoul",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            url: homework.url,
-          };
-        });
-
-        setSubmissionsByAssignment((prev) => ({
-          ...prev,
-          [assignment.id]: submissionUsers,
-        }));
-
-        // 상태 정보를 submissionStatuses에 설정 (복합 키 = CheckedList 조회와 일치)
-        const statuses: Record<string, SubmissionStatus> = {};
-        homeworks.forEach((homework) => {
-          // DB에서 가져온 status로 표시 (없거나 값이 없으면 검토중)
-          const key = submissionStatusKey(homework.user_id, assignment.id);
-          statuses[key] = normalizeDbStatus(homework.status);
-        });
-        setSubmissionStatuses((prev) => ({ ...prev, ...statuses }));
-      } catch (error) {
-        console.error(`과제 ${assignment.id} 제출 정보 가져오기 오류:`, error);
-        setSubmissionsByAssignment((prev) => ({
-          ...prev,
-          [assignment.id]: [],
-        }));
-      } finally {
-        setIsLoadingSubmissions((prev) => ({
-          ...prev,
-          [assignment.id]: false,
-        }));
       }
-    }
-  }, [assignmentIds, supabase, isAdmin, isCheckingAdmin]);
+    },
+    [assignmentIds, supabase, isAdmin, isCheckingAdmin],
+  );
 
   // 관리자 권한은 전역 세션에서 관리하므로 별도 확인 불필요
 
@@ -238,93 +253,27 @@ export default function AssignmentList({
     assignments.length,
   ]);
 
-  // 특정 과제의 제출 정보만 다시 불러오는 함수
-  const refreshAssignmentSubmissions = useCallback(
-    async (assignmentId: string) => {
+  // 탭 복귀 시 중단됐을 수 있는 제출 정보를 다시 불러옴 (현재 페이지만)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
       if (!isAdmin || isCheckingAdmin) return;
 
-      setIsLoadingSubmissions((prev) => ({ ...prev, [assignmentId]: true }));
+      const page = currentPageRef.current;
+      const pageAssignments = assignmentsRef.current.slice(
+        (page - 1) * itemsPerPage,
+        page * itemsPerPage,
+      );
+      if (pageAssignments.length === 0) return;
 
-      try {
-        // 해당 과제의 제출 정보 가져오기 (status 컬럼 포함)
-        const { data: homeworks, error: homeworksError } = await supabase
-          .from("homeworks")
-          .select("user_id, url, created_at, status")
-          .eq("assignment_id", assignmentId)
-          .order("created_at", { ascending: true });
+      void fetchSubmissions(pageAssignments);
+    };
 
-        if (homeworksError) {
-          console.error(
-            `과제 ${assignmentId} 제출 정보 조회 실패:`,
-            homeworksError,
-          );
-          return;
-        }
-
-        if (!homeworks || homeworks.length === 0) {
-          setSubmissionsByAssignment((prev) => ({
-            ...prev,
-            [assignmentId]: [],
-          }));
-          setIsLoadingSubmissions((prev) => ({
-            ...prev,
-            [assignmentId]: false,
-          }));
-          return;
-        }
-
-        // 각 제출의 사용자 정보 가져오기
-        const userIds = homeworks.map((h) => h.user_id);
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, name")
-          .in("id", userIds);
-
-        if (profilesError) {
-          console.error(`프로필 정보 조회 실패:`, profilesError);
-        }
-
-        // 제출 정보와 사용자 정보 결합
-        const submissionUsers: SubmissionUser[] = homeworks.map((homework) => {
-          const profile = profiles?.find((p) => p.id === homework.user_id);
-          return {
-            userId: homework.user_id,
-            userName: profile?.name || "이름 없음",
-            submittedAt: new Date(homework.created_at).toLocaleString("ko-KR", {
-              timeZone: "Asia/Seoul",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            url: homework.url,
-          };
-        });
-
-        setSubmissionsByAssignment((prev) => ({
-          ...prev,
-          [assignmentId]: submissionUsers,
-        }));
-
-        // 상태 정보 업데이트 (복합 키 = CheckedList 조회와 일치)
-        const statuses: Record<string, SubmissionStatus> = {};
-        homeworks.forEach((homework) => {
-          const key = submissionStatusKey(homework.user_id, assignmentId);
-          statuses[key] = normalizeDbStatus(homework.status);
-        });
-        setSubmissionStatuses((prev) => ({ ...prev, ...statuses }));
-      } catch (error) {
-        console.error(`과제 ${assignmentId} 제출 정보 가져오기 오류:`, error);
-      } finally {
-        setIsLoadingSubmissions((prev) => ({
-          ...prev,
-          [assignmentId]: false,
-        }));
-      }
-    },
-    [supabase, isAdmin, isCheckingAdmin],
-  );
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchSubmissions, isAdmin, isCheckingAdmin, itemsPerPage]);
 
   // 제출 상태를 서버 API를 통해 DB에 저장 (관리자 검증 + RLS/서비스롤)
   const updateSubmissionStatus = useCallback(
@@ -357,11 +306,12 @@ export default function AssignmentList({
           return;
         }
 
+        // 낙관적 업데이트로 이미 반영된 상태를 서버 성공 후 확정.
+        // 제출자·URL·제출일시는 변하지 않으므로 목록 전체 재조회는 생략(깜빡임 방지)
         setSubmissionStatuses((prev) => ({
           ...prev,
           [key]: status,
         }));
-        await refreshAssignmentSubmissions(assignmentId);
       } catch (error) {
         console.error("상태 업데이트 중 오류:", error);
         setSubmissionStatuses((prev) => ({
@@ -371,7 +321,7 @@ export default function AssignmentList({
         alert("상태 저장 중 오류가 발생했습니다.");
       }
     },
-    [submissionStatuses, refreshAssignmentSubmissions],
+    [submissionStatuses],
   );
 
   // 날짜와 시간을 포맷팅하는 함수
@@ -391,30 +341,52 @@ export default function AssignmentList({
   const endIndex = startIndex + itemsPerPage;
   const currentAssignments = assignments.slice(startIndex, endIndex);
 
-  // 페이지 변경 핸들러
+  // 페이지 변경 핸들러 (스크롤 위치 유지)
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      // 페이지 변경 시 스크롤을 맨 위로 이동
-      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   // assignments 변경 시 페이지 설정 (포커스 과제가 있으면 해당 페이지로)
   useEffect(() => {
-    if (!focusAssignmentId || assignments.length === 0) {
+    if (assignments.length === 0) {
       setCurrentPage(1);
       return;
     }
 
-    const targetIndex = assignments.findIndex((a) => a.id === focusAssignmentId);
-    if (targetIndex === -1) {
-      setCurrentPage(1);
-      return;
+    const maxPage = Math.max(1, Math.ceil(assignments.length / itemsPerPage));
+
+    if (focusAssignmentId) {
+      const targetIndex = assignments.findIndex(
+        (a) => a.id === focusAssignmentId,
+      );
+      if (targetIndex !== -1) {
+        setCurrentPage(targetIndex + 1);
+        return;
+      }
     }
 
-    setCurrentPage(targetIndex + 1);
-  }, [assignmentIds, focusAssignmentId, assignments]);
+    // URL 포커스가 없거나 목록에 없을 때 — 현재 페이지가 범위를 벗어나면 보정
+    setCurrentPage((prev) => Math.min(prev, maxPage));
+  }, [assignmentIds, focusAssignmentId, assignments, itemsPerPage]);
+
+  // 현재 페이지의 과제 ID를 URL(assignment 파라미터)에 반영
+  // → 수정 버튼(전체 페이지 이동) 후 뒤로가기 시 원래 보던 페이지로 복원
+  //   (서버 재요청 없이 history만 갱신하여 스크롤·재렌더 부작용 방지)
+  useEffect(() => {
+    if (typeof window === "undefined" || assignments.length === 0) return;
+
+    const currentAssignment = assignments[currentPage - 1];
+    if (!currentAssignment) return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("assignment") === currentAssignment.id) return;
+
+    url.searchParams.set("assignment", currentAssignment.id);
+    // Next 라우터 내부 상태(state) 유지를 위해 기존 state를 그대로 전달
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [currentPage, assignments]);
 
   // 포커스 과제가 화면에 그려진 뒤 스크롤·강조
   useEffect(() => {
