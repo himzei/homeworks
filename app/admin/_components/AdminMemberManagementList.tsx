@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, Loader2, UserMinus, X } from "lucide-react";
+import { Check, Loader2, UserCheck, UserMinus, X } from "lucide-react";
 
 import { Button } from "@/app/_components/ui/button";
 import { isUnsetMemberGroupName } from "@/lib/admin/members-list-query";
@@ -44,8 +44,15 @@ type AdminMemberManagementListProps = {
   emptyMessage?: string;
 };
 
+type MemberAction =
+  | "approve"
+  | "reject"
+  | "withdraw"
+  | "reactivate"
+  | "updateGroup";
+
 /**
- * 전체 회원 목록 — 승인·거절·탈퇴(휴면)·과정 변경
+ * 전체 회원 목록 — 승인·거절·탈퇴(휴면)·활성화·과정 변경
  */
 export default function AdminMemberManagementList({
   members,
@@ -54,9 +61,7 @@ export default function AdminMemberManagementList({
 }: AdminMemberManagementListProps) {
   const router = useRouter();
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<
-    "approve" | "reject" | "withdraw" | "updateGroup" | null
-  >(null);
+  const [busyAction, setBusyAction] = useState<MemberAction | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [groupDraftByUserId, setGroupDraftByUserId] = useState<
     Record<string, string>
@@ -68,17 +73,34 @@ export default function AdminMemberManagementList({
 
   const handleAction = async (
     userId: string,
-    action: "approve" | "reject" | "withdraw",
+    action: "approve" | "reject" | "withdraw" | "reactivate",
   ) => {
     const member = members.find((row) => row.id === userId);
     const memberName = member?.name ?? "회원";
 
-    const confirmMessage =
-      action === "approve"
-        ? `"${memberName}" 님의 가입을 승인할까요?`
-        : action === "reject"
-          ? `"${memberName}" 님의 가입을 거절할까요?`
-          : `"${memberName}" 님을 탈퇴(휴면) 처리할까요?\n과정이 미분류로 바뀌며 모든 화면에서 숨겨집니다.`;
+    // 활성화 시 드롭다운에 선택된 과정(또는 현재 과정)을 함께 반영
+    const selectedGroupValue =
+      groupDraftByUserId[userId] ??
+      (isUnsetMemberGroupName(member?.groupName)
+        ? ""
+        : (member?.groupName ?? ""));
+
+    let confirmMessage = "";
+    if (action === "approve") {
+      confirmMessage = `"${memberName}" 님의 가입을 승인할까요?`;
+    } else if (action === "reject") {
+      confirmMessage = `"${memberName}" 님의 가입을 거절할까요?`;
+    } else if (action === "withdraw") {
+      confirmMessage = `"${memberName}" 님을 탈퇴(휴면) 처리할까요?\n과정이 미분류로 바뀌며 모든 화면에서 숨겨집니다.`;
+    } else {
+      const groupLabel = selectedGroupValue
+        ? (courseOptions.find((option) => option.value === selectedGroupValue)
+            ?.label ?? selectedGroupValue)
+        : "미분류";
+      confirmMessage = selectedGroupValue
+        ? `"${memberName}" 님을 활성 상태로 되돌릴까요?\n과정: ${groupLabel}`
+        : `"${memberName}" 님을 활성 상태로 되돌릴까요?\n과정이 미분류입니다. 활성화 후 과정을 지정해 주세요.`;
+    }
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -87,10 +109,20 @@ export default function AdminMemberManagementList({
     setErrorMessage(null);
 
     try {
+      const requestBody: {
+        userId: string;
+        action: typeof action;
+        groupName?: string | null;
+      } = { userId, action };
+
+      if (action === "reactivate") {
+        requestBody.groupName = selectedGroupValue || null;
+      }
+
       const response = await fetch("/api/admin/member-management", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, action }),
+        body: JSON.stringify(requestBody),
       });
 
       const payload = (await response.json().catch(() => ({}))) as {
@@ -100,6 +132,10 @@ export default function AdminMemberManagementList({
       if (!response.ok) {
         setErrorMessage(payload.error ?? "처리에 실패했습니다.");
         return;
+      }
+
+      if (action === "reactivate") {
+        clearGroupDraft(userId);
       }
 
       router.refresh();
@@ -194,6 +230,7 @@ export default function AdminMemberManagementList({
           const isPending =
             member.approvalStatus === PROFILE_APPROVAL_STATUS.pending;
           const canWithdraw = !member.isDormant && !isPending;
+          const canReactivate = member.isDormant;
           const currentGroupValue = isUnsetMemberGroupName(member.groupName)
             ? ""
             : (member.groupName ?? "");
@@ -334,12 +371,29 @@ export default function AdminMemberManagementList({
                     onClick={() => void handleAction(member.id, "withdraw")}
                     className="border-zinc-300 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                   >
-                    {isBusy ? (
+                    {isBusy && busyAction === "withdraw" ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : (
                       <UserMinus className="size-4" />
                     )}
                     탈퇴
+                  </Button>
+                ) : null}
+
+                {canReactivate ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isBusy}
+                    onClick={() => void handleAction(member.id, "reactivate")}
+                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                  >
+                    {isBusy && busyAction === "reactivate" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <UserCheck className="size-4" />
+                    )}
+                    활성화
                   </Button>
                 ) : null}
               </div>

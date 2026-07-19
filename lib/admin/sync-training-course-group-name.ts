@@ -11,6 +11,8 @@ const GROUP_NAME_REFERENCE_TABLES = [
   "honor_badge_sections",
   "honor_badges",
   "student_final_evaluations",
+  "peer_evaluation_projects",
+  "company_inquiry_posts",
 ] as const;
 
 export async function syncTrainingCourseGroupName(

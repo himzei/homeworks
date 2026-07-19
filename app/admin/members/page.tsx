@@ -22,7 +22,7 @@ export const revalidate = 0;
 
 export const metadata = {
   title: "회원 관리",
-  description: "전체 회원 조회 및 승인·탈퇴(휴면) 처리",
+  description: "전체 회원 조회 및 승인·탈퇴(휴면)·활성화 처리",
 };
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -169,8 +169,8 @@ export default async function AdminMembersPage({
           회원 관리
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          전체 회원을 확인하고 가입 승인·탈퇴(휴면)를 처리합니다. 기수별 필터와
-          이름·연락처 검색을 사용할 수 있습니다. 페이지당{" "}
+          전체 회원을 확인하고 가입 승인·탈퇴(휴면)·활성화를 처리합니다. 기수별
+          필터와 이름·연락처 검색을 사용할 수 있습니다. 페이지당{" "}
           {MEMBERS_LIST_PAGE_SIZE}명씩 표시합니다.
         </p>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">

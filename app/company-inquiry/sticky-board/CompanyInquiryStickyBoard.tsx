@@ -20,6 +20,7 @@ type CompanyInquiryPostRow = {
   note_color: string;
   rotate_deg: number;
   created_at: string;
+  group_name: string | null;
 };
 
 type Props = {
@@ -27,10 +28,15 @@ type Props = {
   currentUserId: string;
   /** 실명 작성 시 사용할 이름 (profiles.name) */
   currentUserName: string;
+  /** 작성 시 저장할 기수(과정명). 없으면 작성 불가 */
+  writeGroupName: string | null;
+  /** 현재 보고 있는 기수 라벨 (안내 문구용) */
+  cohortLabel: string | null;
+  isAdmin: boolean;
 };
 
 const POST_SELECT_FIELDS =
-  "id, author_id, author_name, is_anonymous, content, note_color, rotate_deg, created_at";
+  "id, author_id, author_name, is_anonymous, content, note_color, rotate_deg, created_at, group_name";
 
 const NOTE_COLORS: { key: string; className: string }[] = [
   { key: "yellow", className: "bg-[#FFF6A6] text-zinc-900" },
@@ -102,6 +108,9 @@ export default function CompanyInquiryStickyBoard({
   initialPosts,
   currentUserId,
   currentUserName,
+  writeGroupName,
+  cohortLabel,
+  isAdmin,
 }: Props) {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
@@ -119,12 +128,24 @@ export default function CompanyInquiryStickyBoard({
     null,
   );
 
+  // 관리자가 "전체"를 보고 있으면 작성 대상 기수가 없음
+  const canWrite = Boolean(writeGroupName);
+
   const postCountLabel = useMemo(() => {
     const count = posts.length;
     return `${count}개`;
   }, [posts.length]);
 
   const handleSubmit = async () => {
+    if (!writeGroupName) {
+      setErrorMessage(
+        isAdmin
+          ? "작성하려면 위에서 과정을 먼저 선택해 주세요."
+          : "소속 기수가 없어 작성할 수 없습니다. 프로필에서 과정을 설정해 주세요.",
+      );
+      return;
+    }
+
     const validationError = validatePostContent(content);
     if (validationError) {
       setErrorMessage(validationError);
@@ -157,6 +178,8 @@ export default function CompanyInquiryStickyBoard({
         author_name: isAnonymous ? null : currentUserName,
         note_color: selectedColor,
         rotate_deg: rotateDeg,
+        // 기수 스냅샷 — 해당 기수 회원만 조회·작성
+        group_name: writeGroupName,
       };
 
       const { data, error } = await supabase
@@ -228,8 +251,20 @@ export default function CompanyInquiryStickyBoard({
             </h1>
             <p className="text-sm text-white/70 leading-relaxed">
               문의 내용을 남기면 포스트잇으로 게시판에 붙습니다.{" "}
-              <span className="text-white/85">익명/실명 선택</span>이 가능합니다.
+              <span className="text-white/85">익명/실명 선택</span>이 가능하며,{" "}
+              <span className="text-white/85">같은 기수 글만</span> 보이거나 작성할 수
+              있습니다.
             </p>
+            {cohortLabel ? (
+              <p className="text-sm text-white/80">
+                현재 보기:{" "}
+                <span className="font-medium text-white">{cohortLabel}</span>
+              </p>
+            ) : isAdmin ? (
+              <p className="text-sm text-amber-200/90">
+                전체 기수 글입니다. 작성하려면 위에서 과정을 선택해 주세요.
+              </p>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 flex-col items-stretch sm:items-end gap-1">
@@ -290,16 +325,16 @@ export default function CompanyInquiryStickyBoard({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="기업/기관 문의 내용을 적어주세요. (최대 400자)"
-              className="min-h-28 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-white/30"
+              className="min-h-28 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-white/30 disabled:opacity-50"
               maxLength={400}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canWrite}
             />
 
             <div className="flex sm:flex-col gap-2 justify-end">
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !canWrite}
                 className="w-full sm:w-32"
               >
                 {isSubmitting ? "붙이는 중..." : "포스트잇 붙이기"}

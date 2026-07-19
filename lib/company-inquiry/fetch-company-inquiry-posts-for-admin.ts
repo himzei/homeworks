@@ -11,6 +11,7 @@ export type CompanyInquiryAdminPost = {
   authorId: string;
   /** 관리자만 보는 실제 작성자 이름 */
   authorRealName: string;
+  /** 글에 저장된 기수(과정명). 없으면 작성자 프로필 기수로 폴백 */
   authorGroupName: string | null;
 };
 
@@ -21,6 +22,7 @@ type PostRow = {
   is_anonymous: boolean;
   content: string;
   created_at: string;
+  group_name: string | null;
 };
 
 type ProfileRow = {
@@ -35,7 +37,9 @@ export async function fetchCompanyInquiryPostsForAdmin(
 ): Promise<CompanyInquiryAdminPost[]> {
   const { data: posts, error: postsError } = await supabase
     .from("company_inquiry_posts")
-    .select("id, author_id, author_name, is_anonymous, content, created_at")
+    .select(
+      "id, author_id, author_name, is_anonymous, content, created_at, group_name",
+    )
     .order("created_at", { ascending: false });
 
   if (postsError) {
@@ -71,7 +75,8 @@ export async function fetchCompanyInquiryPostsForAdmin(
       createdAt: row.created_at,
       authorId: row.author_id,
       authorRealName: profile?.name?.trim() || "이름 없음",
-      authorGroupName: profile?.group_name ?? null,
+      // 글 작성 시점 기수를 우선 사용
+      authorGroupName: row.group_name ?? profile?.group_name ?? null,
     };
   });
 }

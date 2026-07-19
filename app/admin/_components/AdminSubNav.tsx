@@ -23,6 +23,11 @@ const ADMIN_NAV_ITEMS = [
     exact: false,
   },
   {
+    href: "/admin/peer-evaluations",
+    label: "동료평가",
+    exact: false,
+  },
+  {
     href: "/admin/surveys",
     label: "설문조사",
     exact: false,

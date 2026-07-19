@@ -4,10 +4,16 @@ import { normalizeMemberGroupName } from "@/lib/admin/members-list-query";
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
-const ALLOWED_ACTIONS = ["approve", "reject", "withdraw", "updateGroup"] as const;
+const ALLOWED_ACTIONS = [
+  "approve",
+  "reject",
+  "withdraw",
+  "reactivate",
+  "updateGroup",
+] as const;
 
 /**
- * 관리자 전용 — 회원 승인·거절·탈퇴(휴면) 처리
+ * 관리자 전용 — 회원 승인·거절·탈퇴(휴면)·활성화 처리
  */
 export async function POST(request: Request) {
   try {
@@ -38,7 +44,7 @@ export async function POST(request: Request) {
     const { userId, action, groupName } = body as {
       userId?: string;
       action?: (typeof ALLOWED_ACTIONS)[number];
-      /** updateGroup 전용 — null 또는 빈 문자열이면 미분류 */
+      /** updateGroup / reactivate — null 또는 빈 문자열이면 미분류 */
       groupName?: string | null;
     };
 
@@ -53,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "action은 approve, reject, withdraw, updateGroup 중 하나여야 합니다.",
+            "action은 approve, reject, withdraw, reactivate, updateGroup 중 하나여야 합니다.",
         },
         { status: 400 },
       );
@@ -180,6 +186,79 @@ export async function POST(request: Request) {
       });
     }
 
+    if (action === "reactivate") {
+      if (!target.is_dormant) {
+        return NextResponse.json(
+          { error: "이미 활성 상태인 회원입니다." },
+          { status: 400 },
+        );
+      }
+
+      // 활성화 시 과정 지정(선택). 없으면 기존 값 유지(보통 미분류)
+      let nextGroupName = normalizeMemberGroupName(target.group_name);
+      if (groupName !== undefined) {
+        if (groupName !== null && typeof groupName !== "string") {
+          return NextResponse.json(
+            { error: "과정명 형식이 올바르지 않습니다." },
+            { status: 400 },
+          );
+        }
+
+        nextGroupName = normalizeMemberGroupName(groupName);
+
+        if (nextGroupName) {
+          const { data: course, error: courseError } = await supabase
+            .from("training_courses")
+            .select("name")
+            .eq("name", nextGroupName)
+            .eq("is_active", true)
+            .maybeSingle();
+
+          if (courseError) {
+            console.error("과정 검증 조회 실패:", courseError);
+            return NextResponse.json(
+              { error: "과정 정보를 확인하지 못했습니다." },
+              { status: 500 },
+            );
+          }
+
+          if (!course) {
+            return NextResponse.json(
+              { error: "선택한 과정을 찾을 수 없습니다." },
+              { status: 400 },
+            );
+          }
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          is_dormant: false,
+          group_name: nextGroupName,
+          // 휴면 해제 시 서비스 이용 가능하도록 승인 상태도 맞춤
+          approval_status: PROFILE_APPROVAL_STATUS.approved,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.error("휴면 해제(활성화) 실패:", updateError);
+        return NextResponse.json(
+          { error: updateError.message ?? "활성화에 실패했습니다." },
+          { status: 400 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        userId,
+        isDormant: false,
+        groupName: nextGroupName,
+        approvalStatus: PROFILE_APPROVAL_STATUS.approved,
+        memberName: target.name,
+      });
+    }
+
     const nextStatus =
       action === "approve"
         ? PROFILE_APPROVAL_STATUS.approved
@@ -189,7 +268,6 @@ export async function POST(request: Request) {
       .from("profiles")
       .update({
         approval_status: nextStatus,
-        // 승인 시 휴면 해제는 하지 않음 — 탈퇴 후 재가입은 별도 절차
       })
       .eq("id", userId);
 

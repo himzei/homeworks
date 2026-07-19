@@ -74,6 +74,7 @@ export const COMMUNITY_NAV_ITEM: HeaderNavItem = {
     { href: "/ladder", label: "사다리게임", authRequired: true },
     { href: "/vote", label: "투표", authRequired: true },
     { href: "/company-inquiry", label: "기업(문의)", authRequired: true },
+    { href: "/peer-evaluation", label: "동료평가", authRequired: true },
   ],
 };
 
