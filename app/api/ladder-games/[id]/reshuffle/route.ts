@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
-import { buildLadder } from "@/lib/ladder";
-import { ladderRowToRecord, type LadderGameRow } from "@/lib/ladder-db";
+import { buildLadderRespectingExclusions } from "@/lib/ladder";
+import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import {
+  LADDER_GAME_SELECT,
+  ladderRowToRecord,
+  type LadderGameRow,
+} from "@/lib/ladder-db";
 
-/** 사다리 가로줄만 다시 섞기 */
+/** 사다리 가로줄만 다시 섞기 (기수 공통 금지 규칙 반영) */
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -17,9 +22,7 @@ export async function POST(
 
   const { data: existing, error: fetchError } = await supabase
     .from("ladder_games")
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -37,15 +40,32 @@ export async function POST(
     return NextResponse.json({ error: "already_played" }, { status: 400 });
   }
 
-  const { rungs, diagonalRungs } = buildLadder(row.participant_count);
+  const current = ladderRowToRecord(row);
+  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+    groupName: current.groupName,
+    participantNames: current.participantNames,
+    gameLevelPairs: current.exclusionPairs,
+  });
+
+  const ladder = buildLadderRespectingExclusions(
+    row.participant_count,
+    current.participantNames,
+    current.resultItems,
+    exclusionPairs,
+  );
+
+  if (!ladder) {
+    return NextResponse.json(
+      { error: "exclusion_unsatisfiable" },
+      { status: 400 },
+    );
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from("ladder_games")
-    .update({ rungs, diagonal_rungs: diagonalRungs })
+    .update({ rungs: ladder.rungs, diagonal_rungs: ladder.diagonalRungs })
     .eq("id", id)
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .single();
 
   if (updateError || !updated) {
@@ -53,7 +73,8 @@ export async function POST(
     return NextResponse.json({ error: "unknown" }, { status: 500 });
   }
 
+  const record = ladderRowToRecord(updated as LadderGameRow);
   return NextResponse.json({
-    game: ladderRowToRecord(updated as LadderGameRow),
+    game: { ...record, exclusionPairs },
   });
 }

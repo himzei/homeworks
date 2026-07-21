@@ -6,11 +6,17 @@ import {
   LADDER_ROW_COUNT,
   MAX_PARTICIPANTS,
   MIN_PARTICIPANTS,
-  buildLadder,
+  buildLadderRespectingExclusions,
   type CreateLadderGameInput,
+  type LadderGameRecord,
 } from "@/lib/ladder";
+import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
 import { fetchAuthorCourseNameByUserId } from "@/lib/fetch-author-course-names";
-import { ladderRowToRecord, type LadderGameRow } from "@/lib/ladder-db";
+import {
+  LADDER_GAME_SELECT,
+  ladderRowToRecord,
+  type LadderGameRow,
+} from "@/lib/ladder-db";
 
 function parseCreateBody(body: unknown): CreateLadderGameInput | null {
   if (!body || typeof body !== "object") return null;
@@ -28,7 +34,28 @@ function parseCreateBody(body: unknown): CreateLadderGameInput | null {
     ? raw.resultItems.filter((v): v is string => typeof v === "string")
     : undefined;
 
-  return { title, participantCount, participantNames, resultItems };
+  const groupName =
+    typeof raw.groupName === "string" ? raw.groupName.trim() || null : undefined;
+
+  return {
+    title,
+    participantCount,
+    participantNames,
+    resultItems,
+    groupName,
+  };
+}
+
+async function withEffectiveExclusions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  record: LadderGameRecord,
+): Promise<LadderGameRecord> {
+  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+    groupName: record.groupName,
+    participantNames: record.participantNames,
+    gameLevelPairs: record.exclusionPairs,
+  });
+  return { ...record, exclusionPairs };
 }
 
 /** 목록 조회 (최신순) */
@@ -38,9 +65,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("ladder_games")
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -54,16 +79,19 @@ export async function GET() {
     rows.map((row) => row.author_user_id),
   );
 
-  const games = rows.map((row) => {
-    const record = ladderRowToRecord(row);
-    const authorCourseName =
-      (row.author_user_id
-        ? courseNameByUserId.get(row.author_user_id)
-        : null) ?? undefined;
-    return authorCourseName
-      ? { ...record, authorCourseName }
-      : record;
-  });
+  const games = await Promise.all(
+    rows.map(async (row) => {
+      let record = ladderRowToRecord(row);
+      record = await withEffectiveExclusions(supabase, record);
+      const authorCourseName =
+        (row.author_user_id
+          ? courseNameByUserId.get(row.author_user_id)
+          : null) ?? undefined;
+      return authorCourseName
+        ? { ...record, authorCourseName }
+        : record;
+    }),
+  );
 
   return NextResponse.json({ games });
 }
@@ -107,8 +135,25 @@ export async function POST(request: Request) {
     parsed.resultItems?.length === participantCount
       ? parsed.resultItems
       : emptyArray;
+  const groupName = parsed.groupName?.trim() || null;
 
-  const { rungs, diagonalRungs } = buildLadder(participantCount);
+  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+    groupName,
+    participantNames,
+  });
+
+  const ladder = buildLadderRespectingExclusions(
+    participantCount,
+    participantNames,
+    resultItems,
+    exclusionPairs,
+  );
+  if (!ladder) {
+    return NextResponse.json(
+      { error: "exclusion_unsatisfiable" },
+      { status: 400 },
+    );
+  }
 
   const { data: created, error } = await supabase
     .from("ladder_games")
@@ -117,15 +162,15 @@ export async function POST(request: Request) {
       participant_count: participantCount,
       participant_names: participantNames,
       result_items: resultItems,
-      rungs,
-      diagonal_rungs: diagonalRungs,
+      rungs: ladder.rungs,
+      diagonal_rungs: ladder.diagonalRungs,
       row_count: LADDER_ROW_COUNT,
       author_user_id: user.id,
       author_name: authorName,
+      exclusion_pairs: [],
+      group_name: groupName,
     })
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .single();
 
   if (error || !created) {
@@ -133,8 +178,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unknown" }, { status: 500 });
   }
 
-  return NextResponse.json(
-    { game: ladderRowToRecord(created as LadderGameRow) },
-    { status: 201 },
+  const record = await withEffectiveExclusions(
+    supabase,
+    ladderRowToRecord(created as LadderGameRow),
   );
+
+  return NextResponse.json({ game: record }, { status: 201 });
 }

@@ -14,6 +14,8 @@ import {
   MIN_PARTICIPANTS,
   SELECTABLE_LADDER_GROUPS,
   createLadderGame,
+  toSelectableLadderGroups,
+  type SelectableLadderGroup,
 } from "@/lib/ladder";
 
 const DEFAULT_PARTICIPANT_COUNT = 4;
@@ -62,8 +64,15 @@ export default function LadderGameForm() {
   const [selectedGroupValue, setSelectedGroupValue] = useState<string>("");
   const [loadedNames, setLoadedNames] = useState<string[]>([]);
   const [loadedGroupLabel, setLoadedGroupLabel] = useState<string | null>(null);
+  /** 참가자를 불러온 기수 원본 과정명 (사다리 group_name 저장용) */
+  const [loadedGroupName, setLoadedGroupName] = useState<string | null>(null);
   const [isLoadingGroup, setIsLoadingGroup] = useState(false);
   const [groupNotice, setGroupNotice] = useState<string | null>(null);
+  // DB 과정 목록 (실패 시 정적 폴백)
+  const [allLadderGroups, setAllLadderGroups] = useState<
+    SelectableLadderGroup[]
+  >(SELECTABLE_LADDER_GROUPS);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
   /**
    * 로그인 사용자의 소속 기수.
@@ -73,18 +82,63 @@ export default function LadderGameForm() {
   const userGroupName =
     typeof profile?.group_name === "string" ? profile.group_name : "";
 
+  /** training_courses 활성 과정 → 사다리 기수 콤보 (폴백: constants) */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLadderGroups() {
+      setIsLoadingGroups(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("training_courses")
+          .select("name")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: false })
+          .order("created_at", { ascending: false });
+
+        if (cancelled) return;
+
+        if (error || !data?.length) {
+          if (error) {
+            console.error("사다리 기수 목록 조회 오류:", error);
+          }
+          setAllLadderGroups(SELECTABLE_LADDER_GROUPS);
+          return;
+        }
+
+        // DB 과정 + 정적 폴백(16·17기 등) 병합 — DB에 아직 없는 기수도 선택 가능
+        const mergedNames = [
+          ...data.map((row) => row.name),
+          ...SELECTABLE_LADDER_GROUPS.map((group) => group.value),
+        ];
+        setAllLadderGroups(toSelectableLadderGroups(mergedNames));
+      } catch (error) {
+        if (!cancelled) {
+          console.error("사다리 기수 목록 조회 실패:", error);
+          setAllLadderGroups(SELECTABLE_LADDER_GROUPS);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingGroups(false);
+      }
+    }
+
+    void loadLadderGroups();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /**
    * 콤보박스에 노출할 기수 목록.
    * - 관리자: 모든 기수 선택 가능
    * - 회원: 본인이 속한 기수만 (없으면 빈 목록)
    */
   const availableGroups = useMemo(() => {
-    if (isAdmin) return SELECTABLE_LADDER_GROUPS;
+    if (isAdmin) return allLadderGroups;
     if (!userGroupName) return [];
-    return SELECTABLE_LADDER_GROUPS.filter(
-      (option) => option.value === userGroupName,
-    );
-  }, [isAdmin, userGroupName]);
+    return allLadderGroups.filter((option) => option.value === userGroupName);
+  }, [allLadderGroups, isAdmin, userGroupName]);
 
   /**
    * 회원이고 선택 가능한 기수가 단 1개(=본인 기수) 라면 자동 선택.
@@ -114,7 +168,7 @@ export default function LadderGameForm() {
 
   /** 콤보박스를 사용할 수 없는 안내 문구 (없으면 정상 동작) */
   const groupPickerDisabledNotice = useMemo(() => {
-    if (isSessionLoading) return null;
+    if (isSessionLoading || isLoadingGroups) return null;
     if (isAdmin) return null;
     if (!profile) return "로그인하면 본인 기수에서 참가자를 불러올 수 있어요.";
     if (!userGroupName) return "프로필에 기수가 설정되어 있지 않습니다.";
@@ -125,13 +179,17 @@ export default function LadderGameForm() {
   }, [
     availableGroups.length,
     isAdmin,
+    isLoadingGroups,
     isSessionLoading,
     profile,
     userGroupName,
   ]);
 
   const isGroupPickerDisabled =
-    isSessionLoading || isLoadingGroup || availableGroups.length === 0;
+    isSessionLoading ||
+    isLoadingGroups ||
+    isLoadingGroup ||
+    availableGroups.length === 0;
 
   const handleCountChange = useCallback(
     (rawValue: string) => {
@@ -140,6 +198,8 @@ export default function LadderGameForm() {
         setParticipantCount(0);
         // 인원수를 비우면 미리보기 명단·결과 항목 모두 비움 (혼동 방지)
         setLoadedNames((prev) => (prev.length > 0 ? [] : prev));
+        setLoadedGroupLabel(null);
+        setLoadedGroupName(null);
         setResultItems([]);
         return;
       }
@@ -183,7 +243,7 @@ export default function LadderGameForm() {
    * - 학생 수가 인원수보다 적으면: 인원수를 학생 수에 맞춰 자동 축소
    */
   const handleLoadFromGroup = useCallback(async () => {
-    const picked = SELECTABLE_LADDER_GROUPS.find(
+    const picked = allLadderGroups.find(
       (option) => option.value === selectedGroupValue,
     );
     if (!picked) return;
@@ -200,6 +260,7 @@ export default function LadderGameForm() {
       if (studentNames.length === 0) {
         setLoadedNames([]);
         setLoadedGroupLabel(null);
+        setLoadedGroupName(null);
         setGroupNotice(`"${picked.shortLabel}" 기수에 등록된 학생이 없습니다.`);
         return;
       }
@@ -213,6 +274,7 @@ export default function LadderGameForm() {
       const normalized = normalizeStringArrayToCount(studentNames, targetCount);
       setLoadedNames(normalized);
       setLoadedGroupLabel(picked.shortLabel);
+      setLoadedGroupName(picked.value);
       setParticipantCount(targetCount);
       // 인원수가 바뀌었으면 결과 항목 길이도 함께 동기화
       setResultItems((prev) => normalizeStringArrayToCount(prev, targetCount));
@@ -238,11 +300,12 @@ export default function LadderGameForm() {
     } finally {
       setIsLoadingGroup(false);
     }
-  }, [isLoadingGroup, participantCount, selectedGroupValue]);
+  }, [allLadderGroups, isLoadingGroup, participantCount, selectedGroupValue]);
 
   const handleClearLoaded = useCallback(() => {
     setLoadedNames([]);
     setLoadedGroupLabel(null);
+    setLoadedGroupName(null);
     setGroupNotice(null);
   }, []);
 
@@ -280,6 +343,7 @@ export default function LadderGameForm() {
           participantCount,
           participantNames: initialNames,
           resultItems: initialResults,
+          groupName: loadedNames.length > 0 ? loadedGroupName : null,
         });
         router.push(`/ladder/${created.id}`);
       } catch {
@@ -287,7 +351,15 @@ export default function LadderGameForm() {
         setIsSubmitting(false);
       }
     },
-    [isSubmitting, loadedNames, participantCount, resultItems, router, title],
+    [
+      isSubmitting,
+      loadedGroupName,
+      loadedNames,
+      participantCount,
+      resultItems,
+      router,
+      title,
+    ],
   );
 
   const isCountValid =
@@ -374,7 +446,7 @@ export default function LadderGameForm() {
             className="h-9 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-sm text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">
-              {isSessionLoading
+              {isSessionLoading || isLoadingGroups
                 ? "기수 정보 확인 중..."
                 : availableGroups.length === 0
                   ? "선택 가능한 기수 없음"

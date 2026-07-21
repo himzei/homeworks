@@ -63,6 +63,11 @@ const ADMIN_NAV_ITEMS = [
     exact: false,
   },
   {
+    href: "/admin/ladder",
+    label: "사다리 규칙",
+    exact: false,
+  },
+  {
     href: "/admin/courses",
     label: "과정 관리",
     exact: false,

@@ -86,6 +86,8 @@ export default function PeerEvaluationForm({
 
   const [savingId, setSavingId] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  /** 제출 완료 카드에서 점수 수정을 위해 펼친 대상 */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
 
   const completedCount = useMemo(
@@ -146,6 +148,8 @@ export default function PeerEvaluationForm({
           comment: result.rating!.comment,
         },
       }));
+      // 제출/수정 후 점수 입력란 다시 숨김
+      setEditingId(null);
     } catch (error) {
       console.error("동료평가 저장 예외:", error);
       setErrorById((prev) => ({
@@ -188,6 +192,7 @@ export default function PeerEvaluationForm({
         delete next[evaluateeId];
         return next;
       });
+      setEditingId((current) => (current === evaluateeId ? null : current));
     } catch (error) {
       console.error("동료평가 제출 취소 예외:", error);
       setErrorById((prev) => ({
@@ -248,6 +253,8 @@ export default function PeerEvaluationForm({
             const isCanceling = cancelingId === mate.id;
             const isBusy = isSaving || isCanceling;
             const errorMessage = errorById[mate.id];
+            // 제출 완료 카드는 점수를 숨기고, '수정'을 눌렀을 때만 표시
+            const showScoreForm = !saved || editingId === mate.id;
 
             return (
               <li
@@ -266,7 +273,7 @@ export default function PeerEvaluationForm({
                     {saved ? (
                       <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950/40 dark:text-green-300">
                         <Check className="size-3.5" aria-hidden />
-                        제출됨 (평균 {saved.score}점)
+                        제출됨
                       </span>
                     ) : (
                       <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
@@ -274,115 +281,161 @@ export default function PeerEvaluationForm({
                       </span>
                     )}
                   </div>
-                </div>
 
-                <div
-                  className="mt-3 grid w-full gap-2"
-                  style={{
-                    // 항목 개수만큼 동일 너비로 균등 분할
-                    gridTemplateColumns: `repeat(${Math.max(criteria.length, 1)}, minmax(0, 1fr))`,
-                  }}
-                >
-                  {criteria.map((criterion) => (
-                    <label
-                      key={criterion.id}
-                      className="flex min-w-0 flex-col gap-1.5 text-sm"
-                    >
-                      <span className="truncate text-zinc-700 dark:text-zinc-300">
-                        {criterion.label}
-                      </span>
-                      <select
-                        value={
-                          draft.criterionScores[criterion.id] ??
-                          Math.min(7, criterion.maxScore)
-                        }
-                        disabled={!isOpen || isBusy}
-                        onChange={(e) => {
-                          const nextScore = Number(e.target.value);
-                          setDrafts((prev) => ({
-                            ...prev,
-                            [mate.id]: {
-                              comment: prev[mate.id]?.comment ?? "",
-                              criterionScores: {
-                                ...(prev[mate.id]?.criterionScores ??
-                                  buildDefaultScores(project)),
-                                [criterion.id]: nextScore,
-                              },
-                            },
-                          }));
-                        }}
-                        className="h-9 w-full rounded-md border border-zinc-300 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                      >
-                        {Array.from(
-                          {
-                            length:
-                              criterion.maxScore - PEER_EVALUATION_MIN_SCORE + 1,
-                          },
-                          (_, index) => PEER_EVALUATION_MIN_SCORE + index,
-                        ).map((value) => (
-                          <option key={value} value={value}>
-                            {value}점
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <label className="block flex-1 text-sm">
-                    <span className="mb-1 block text-zinc-600 dark:text-zinc-400">
-                      코멘트 (선택, 관리자만 확인)
-                    </span>
-                    <input
-                      type="text"
-                      value={draft.comment}
-                      maxLength={500}
-                      disabled={!isOpen || isBusy}
-                      onChange={(e) => {
-                        const nextComment = e.target.value;
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [mate.id]: {
-                            criterionScores:
-                              prev[mate.id]?.criterionScores ??
-                              buildDefaultScores(project),
-                            comment: nextComment,
-                          },
-                        }));
-                      }}
-                      placeholder="간단한 피드백"
-                      className="h-9 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                  </label>
-
-                  {isOpen ? (
-                    <div className="flex shrink-0 flex-wrap gap-2">
+                  {saved && isOpen && !showScoreForm ? (
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
-                        onClick={() => handleSave(mate.id)}
+                        size="sm"
+                        variant="outline"
                         disabled={isBusy}
+                        onClick={() => setEditingId(mate.id)}
                       >
-                        {isSaving
-                          ? "저장 중..."
-                          : saved
-                            ? "수정 저장"
-                            : "제출"}
+                        수정
                       </Button>
-                      {saved ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => handleCancelSubmission(mate.id)}
-                          disabled={isBusy}
-                          className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
-                        >
-                          {isCanceling ? "취소 중..." : "제출 취소"}
-                        </Button>
-                      ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={isBusy}
+                        onClick={() => handleCancelSubmission(mate.id)}
+                        className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                      >
+                        {isCanceling ? "취소 중..." : "제출 취소"}
+                      </Button>
                     </div>
                   ) : null}
+
+                  {saved && !isOpen ? (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      점수는 제출 후 카드에 표시되지 않습니다.
+                    </p>
+                  ) : null}
                 </div>
+
+                {showScoreForm ? (
+                  <>
+                    <div
+                      className="mt-3 grid w-full gap-2"
+                      style={{
+                        // 항목 개수만큼 동일 너비로 균등 분할
+                        gridTemplateColumns: `repeat(${Math.max(criteria.length, 1)}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {criteria.map((criterion) => (
+                        <label
+                          key={criterion.id}
+                          className="flex min-w-0 flex-col gap-1.5 text-sm"
+                        >
+                          <span className="truncate text-zinc-700 dark:text-zinc-300">
+                            {criterion.label}
+                          </span>
+                          <select
+                            value={
+                              draft.criterionScores[criterion.id] ??
+                              Math.min(7, criterion.maxScore)
+                            }
+                            disabled={!isOpen || isBusy}
+                            onChange={(e) => {
+                              const nextScore = Number(e.target.value);
+                              setDrafts((prev) => ({
+                                ...prev,
+                                [mate.id]: {
+                                  comment: prev[mate.id]?.comment ?? "",
+                                  criterionScores: {
+                                    ...(prev[mate.id]?.criterionScores ??
+                                      buildDefaultScores(project)),
+                                    [criterion.id]: nextScore,
+                                  },
+                                },
+                              }));
+                            }}
+                            className="h-9 w-full rounded-md border border-zinc-300 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                          >
+                            {Array.from(
+                              {
+                                length:
+                                  criterion.maxScore -
+                                  PEER_EVALUATION_MIN_SCORE +
+                                  1,
+                              },
+                              (_, index) => PEER_EVALUATION_MIN_SCORE + index,
+                            ).map((value) => (
+                              <option key={value} value={value}>
+                                {value}점
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <label className="block flex-1 text-sm">
+                        <span className="mb-1 block text-zinc-600 dark:text-zinc-400">
+                          코멘트 (선택, 관리자만 확인)
+                        </span>
+                        <input
+                          type="text"
+                          value={draft.comment}
+                          maxLength={500}
+                          disabled={!isOpen || isBusy}
+                          onChange={(e) => {
+                            const nextComment = e.target.value;
+                            setDrafts((prev) => ({
+                              ...prev,
+                              [mate.id]: {
+                                criterionScores:
+                                  prev[mate.id]?.criterionScores ??
+                                  buildDefaultScores(project),
+                                comment: nextComment,
+                              },
+                            }));
+                          }}
+                          placeholder="간단한 피드백"
+                          className="h-9 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        />
+                      </label>
+
+                      {isOpen ? (
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            onClick={() => handleSave(mate.id)}
+                            disabled={isBusy}
+                          >
+                            {isSaving
+                              ? "저장 중..."
+                              : saved
+                                ? "수정 저장"
+                                : "제출"}
+                          </Button>
+                          {saved ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setEditingId(null)}
+                                disabled={isBusy}
+                              >
+                                닫기
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleCancelSubmission(mate.id)}
+                                disabled={isBusy}
+                                className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                              >
+                                {isCanceling ? "취소 중..." : "제출 취소"}
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
 
                 {errorMessage ? (
                   <p className="mt-2 text-sm text-red-600 dark:text-red-400">

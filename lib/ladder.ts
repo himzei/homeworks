@@ -5,6 +5,10 @@
  */
 
 import { GROUP_OPTIONS } from "@/lib/constants";
+import {
+  formatShortGroupLabel,
+  parseCohortNumberFromGroupName,
+} from "@/lib/fetch-group-options";
 
 /** 콤보박스에서 사용하는 기수 옵션 (짧은 라벨 + 원본 라벨) */
 export type SelectableLadderGroup = {
@@ -13,18 +17,51 @@ export type SelectableLadderGroup = {
   shortLabel: string;
 };
 
+/** 기수 옵션을 최신 기수 우선으로 정렬 */
+function sortLadderGroupsByCohortDesc(
+  groups: SelectableLadderGroup[],
+): SelectableLadderGroup[] {
+  return groups.toSorted((groupA, groupB) => {
+    const cohortA = parseCohortNumberFromGroupName(groupA.value);
+    const cohortB = parseCohortNumberFromGroupName(groupB.value);
+    if (cohortA !== null && cohortB !== null && cohortB !== cohortA) {
+      return cohortB - cohortA;
+    }
+    if (cohortA !== null && cohortB === null) return -1;
+    if (cohortA === null && cohortB !== null) return 1;
+    return groupA.value.localeCompare(groupB.value, "ko");
+  });
+}
+
+/** group_name 목록 → 사다리 콤보박스 옵션 */
+export function toSelectableLadderGroups(
+  groupNames: string[],
+): SelectableLadderGroup[] {
+  const uniqueNames = [...new Set(
+    groupNames
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0),
+  )];
+  const groups = uniqueNames.map((name) => ({
+    value: name,
+    fullLabel: name,
+    shortLabel: formatShortGroupLabel(name),
+  }));
+  return sortLadderGroupsByCohortDesc(groups);
+}
+
 /**
- * 사다리 콤보박스용 기수 목록.
+ * 사다리 콤보박스용 기수 목록 (정적 폴백).
  * - 빈 옵션 제외
  * - shortLabel: "13기 / 14기 / 15기" 처럼 첫 토큰만
+ * - 운영에서는 LadderGameForm 이 training_courses 를 우선 조회
  */
-export const SELECTABLE_LADDER_GROUPS: SelectableLadderGroup[] = GROUP_OPTIONS
-  .filter((option) => option.value)
-  .map((option) => ({
-    value: option.value,
-    fullLabel: option.label,
-    shortLabel: option.value.split(" ")[0] || option.label,
-  }));
+export const SELECTABLE_LADDER_GROUPS: SelectableLadderGroup[] =
+  toSelectableLadderGroups(
+    GROUP_OPTIONS.filter((option) => option.value).map(
+      (option) => option.value,
+    ),
+  );
 
 /** 사다리 한 줄(가로 연결) - leftCol 과 leftCol+1 을 잇는다 (양방향) */
 export type LadderRung = {
@@ -45,6 +82,15 @@ export type DiagonalRung = {
   fromCol: number;
   toCol: number;
   direction: 1 | -1;
+};
+
+/**
+ * 같은 결과를 받지 않아야 하는 참가자 쌍 (관리자 설정).
+ * - nameA / nameB: 참가자 이름( trim 기준 일치 )
+ */
+export type LadderExclusionPair = {
+  nameA: string;
+  nameB: string;
 };
 
 /** 단일 사다리게임 레코드 (게시글) */
@@ -70,7 +116,14 @@ export type LadderGameRecord = {
    * - 값이 있으면 결과 고정 → 참가자·결과 수정 / 사다리 다시 섞기 불가
    */
   playedAt?: number | null;
+  /** 같은 결과 금지 쌍 (응답 시 기수 규칙 반영된 실효 쌍일 수 있음) */
+  exclusionPairs?: LadderExclusionPair[];
+  /** 참가자를 불러온 기수(과정명). 기수 공통 금지 규칙 적용에 사용 */
+  groupName?: string | null;
 };
+
+/** 제외 쌍을 만족하는 사다리를 찾을 때 최대 시도 횟수 */
+export const LADDER_EXCLUSION_MAX_ATTEMPTS = 300;
 
 /** 사다리 행(높이) 개수 - 클수록 세로로 길어지고 가로줄 배치 공간이 늘어남 */
 export const LADDER_ROW_COUNT = 32;
@@ -332,6 +385,172 @@ export function traceLadderPath(
 }
 
 // =====================
+// 같은 결과 금지 (exclusion pairs)
+// =====================
+
+/** 제외 쌍 정규화: trim, 동일인 제거, 순서 무관 중복 제거 */
+export function normalizeExclusionPairs(
+  pairs: LadderExclusionPair[],
+): LadderExclusionPair[] {
+  const seen = new Set<string>();
+  const normalized: LadderExclusionPair[] = [];
+
+  for (const pair of pairs) {
+    const nameA = pair.nameA.trim();
+    const nameB = pair.nameB.trim();
+    if (!nameA || !nameB || nameA === nameB) continue;
+
+    // 순서 무관 키 (가나다순)
+    const key =
+      nameA < nameB ? `${nameA}\0${nameB}` : `${nameB}\0${nameA}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ nameA, nameB });
+  }
+
+  return normalized;
+}
+
+/**
+ * 요청 body 등에서 제외 쌍 배열 파싱.
+ * - 잘못된 항목은 건너뜀
+ */
+export function parseExclusionPairsInput(
+  value: unknown,
+): LadderExclusionPair[] | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return null;
+
+  const pairs: LadderExclusionPair[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Record<string, unknown>;
+    const nameA = typeof raw.nameA === "string" ? raw.nameA : "";
+    const nameB = typeof raw.nameB === "string" ? raw.nameB : "";
+    pairs.push({ nameA, nameB });
+  }
+  return normalizeExclusionPairs(pairs);
+}
+
+/** 참가자 이름 → 결과 문자열 맵 (trim 이름 키) */
+export function resolveParticipantResultMap(
+  participantNames: string[],
+  resultItems: string[],
+  rungs: LadderRung[],
+  diagonalRungs: DiagonalRung[],
+  rowCount: number,
+): Map<string, string> {
+  const resultByName = new Map<string, string>();
+  const count = Math.min(participantNames.length, resultItems.length);
+
+  for (let startColumn = 0; startColumn < count; startColumn += 1) {
+    const name = participantNames[startColumn]?.trim();
+    if (!name) continue;
+    const endColumn = traceLadderPath(
+      rungs,
+      diagonalRungs,
+      rowCount,
+      startColumn,
+    );
+    resultByName.set(name, (resultItems[endColumn] ?? "").trim());
+  }
+
+  return resultByName;
+}
+
+/**
+ * 제외 쌍이 현재 사다리 배정에서 같은 결과를 받는지 검사.
+ * - 이름이 참가자 목록에 없으면 해당 쌍은 무시
+ * - 둘 다 결과가 같고(빈 문자열 포함)면 위반
+ */
+export function findExclusionViolations(
+  participantNames: string[],
+  resultItems: string[],
+  rungs: LadderRung[],
+  diagonalRungs: DiagonalRung[],
+  rowCount: number,
+  exclusionPairs: LadderExclusionPair[],
+): LadderExclusionPair[] {
+  if (exclusionPairs.length === 0) return [];
+
+  const resultByName = resolveParticipantResultMap(
+    participantNames,
+    resultItems,
+    rungs,
+    diagonalRungs,
+    rowCount,
+  );
+
+  const violations: LadderExclusionPair[] = [];
+  for (const pair of exclusionPairs) {
+    const resultA = resultByName.get(pair.nameA.trim());
+    const resultB = resultByName.get(pair.nameB.trim());
+    // 둘 다 참가자에 있을 때만 검사
+    if (resultA === undefined || resultB === undefined) continue;
+    if (resultA === resultB) {
+      violations.push(pair);
+    }
+  }
+  return violations;
+}
+
+export function hasExclusionViolation(
+  participantNames: string[],
+  resultItems: string[],
+  rungs: LadderRung[],
+  diagonalRungs: DiagonalRung[],
+  rowCount: number,
+  exclusionPairs: LadderExclusionPair[],
+): boolean {
+  return (
+    findExclusionViolations(
+      participantNames,
+      resultItems,
+      rungs,
+      diagonalRungs,
+      rowCount,
+      exclusionPairs,
+    ).length > 0
+  );
+}
+
+/**
+ * 제외 쌍을 만족하는 사다리 가로줄 생성.
+ * - 쌍이 없으면 일반 buildLadder 1회
+ * - 최대 시도 후에도 못 찾으면 null (결과 분포상 불가능할 수 있음)
+ */
+export function buildLadderRespectingExclusions(
+  participantCount: number,
+  participantNames: string[],
+  resultItems: string[],
+  exclusionPairs: LadderExclusionPair[],
+  maxAttempts: number = LADDER_EXCLUSION_MAX_ATTEMPTS,
+): { rungs: LadderRung[]; diagonalRungs: DiagonalRung[] } | null {
+  const pairs = normalizeExclusionPairs(exclusionPairs);
+  if (pairs.length === 0) {
+    return buildLadder(participantCount);
+  }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const ladder = buildLadder(participantCount);
+    if (
+      !hasExclusionViolation(
+        participantNames,
+        resultItems,
+        ladder.rungs,
+        ladder.diagonalRungs,
+        LADDER_ROW_COUNT,
+        pairs,
+      )
+    ) {
+      return ladder;
+    }
+  }
+
+  return null;
+}
+
+// =====================
 // DB API 클라이언트
 // =====================
 
@@ -368,6 +587,10 @@ export type CreateLadderGameInput = {
   /** 선택: 미지정 시 빈 문자열 배열로 채워짐 (상세에서 편집) */
   participantNames?: string[];
   resultItems?: string[];
+  /** 참가자를 불러온 기수(과정명) */
+  groupName?: string | null;
+  /** @deprecated 기수 공통 규칙으로 이전. 호환용으로만 유지 */
+  exclusionPairs?: LadderExclusionPair[];
 };
 
 /** 새 사다리게임 생성 (사다리 가로줄 + 대각선 가로줄도 함께 생성) */
@@ -385,13 +608,17 @@ export async function createLadderGame(
 }
 
 export type UpdateLadderGameInput = Partial<
-  Pick<LadderGameRecord, "title" | "participantNames" | "resultItems">
+  Pick<
+    LadderGameRecord,
+    "title" | "participantNames" | "resultItems" | "groupName"
+  >
 >;
 
 /**
  * 사다리게임 부분 업데이트.
  * - participantCount(인원수)는 생성 시 결정되며 여기선 변경 불가
  * - 길이가 다른 배열이 들어오면 무시(방어)
+ * - 기수 공통 금지 규칙이 있으면 서버에서 사다리를 다시 맞춤
  */
 export async function updateLadderGame(
   id: string,
@@ -407,7 +634,11 @@ export async function updateLadderGame(
     );
     return data.game;
   } catch (error) {
-    if (error === "not_found" || error === "already_played") return null;
+    // 제외 조건 불만족은 UI에서 별도 안내
+    if (error === "exclusion_unsatisfiable") throw error;
+    if (error === "not_found" || error === "already_played") {
+      return null;
+    }
     throw error;
   }
 }
@@ -415,6 +646,7 @@ export async function updateLadderGame(
 /**
  * 기존 사다리의 가로줄만 다시 섞기 (재추첨).
  * - 이미 게임이 시작된(`playedAt` 존재) 사다리는 결과 고정이므로 변경 거부
+ * - 제외 쌍이 있으면 조건을 만족할 때까지 재생성
  */
 export async function reshuffleLadderGame(
   id: string,
@@ -426,7 +658,10 @@ export async function reshuffleLadderGame(
     );
     return data.game;
   } catch (error) {
-    if (error === "not_found" || error === "already_played") return null;
+    if (error === "exclusion_unsatisfiable") throw error;
+    if (error === "not_found" || error === "already_played") {
+      return null;
+    }
     throw error;
   }
 }
@@ -434,6 +669,7 @@ export async function reshuffleLadderGame(
 /**
  * 사다리를 "게임 시작됨" 상태로 표시 (결과 고정).
  * - 이미 표시된 경우 그대로 반환 (멱등)
+ * - 제외 쌍 위반 시 서버에서 사다리를 다시 맞춘 뒤 시작
  */
 export async function markLadderGameAsPlayed(
   id: string,
@@ -445,6 +681,7 @@ export async function markLadderGameAsPlayed(
     );
     return data.game;
   } catch (error) {
+    if (error === "exclusion_unsatisfiable") throw error;
     if (error === "not_found") return null;
     throw error;
   }

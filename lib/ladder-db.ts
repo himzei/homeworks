@@ -4,9 +4,14 @@
 
 import type {
   DiagonalRung,
+  LadderExclusionPair,
   LadderGameRecord,
   LadderRung,
 } from "@/lib/ladder";
+
+/** API select 공통 컬럼 목록 */
+export const LADDER_GAME_SELECT =
+  "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at,exclusion_pairs,group_name";
 
 export type LadderGameRow = {
   id: string;
@@ -21,6 +26,8 @@ export type LadderGameRow = {
   author_name: string;
   created_at: string;
   played_at: string | null;
+  exclusion_pairs?: unknown;
+  group_name?: string | null;
 };
 
 export function toEpochMs(value: string | null): number | null {
@@ -57,6 +64,20 @@ function parseDiagonalRungs(value: unknown): DiagonalRung[] {
   );
 }
 
+function parseExclusionPairs(value: unknown): LadderExclusionPair[] {
+  if (!Array.isArray(value)) return [];
+  const pairs: LadderExclusionPair[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Record<string, unknown>;
+    const nameA = typeof raw.nameA === "string" ? raw.nameA.trim() : "";
+    const nameB = typeof raw.nameB === "string" ? raw.nameB.trim() : "";
+    if (!nameA || !nameB || nameA === nameB) continue;
+    pairs.push({ nameA, nameB });
+  }
+  return pairs;
+}
+
 export function ladderRowToRecord(row: LadderGameRow): LadderGameRecord {
   return {
     id: row.id,
@@ -71,5 +92,7 @@ export function ladderRowToRecord(row: LadderGameRow): LadderGameRecord {
     authorName: row.author_name,
     createdAt: toEpochMs(row.created_at) ?? Date.now(),
     playedAt: toEpochMs(row.played_at),
+    exclusionPairs: parseExclusionPairs(row.exclusion_pairs),
+    groupName: row.group_name?.trim() ? row.group_name.trim() : null,
   };
 }

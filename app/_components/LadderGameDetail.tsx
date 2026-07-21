@@ -31,6 +31,7 @@ import {
   type LadderGameRecord,
   type LadderValidationError,
 } from "@/lib/ladder";
+import { formatShortGroupLabel } from "@/lib/fetch-group-options";
 
 type LadderGameDetailProps = {
   gameId: string;
@@ -40,6 +41,9 @@ type EditingDraft = {
   participantNames: string[];
   resultItems: string[];
 };
+
+const EXCLUSION_UNSATISFIABLE_MESSAGE =
+  "같은 결과 금지 조건을 만족하는 사다리를 만들지 못했습니다. 결과 항목에 서로 다른 값이 충분한지 확인해 주세요.";
 
 function describeError(error: LadderValidationError): string {
   switch (error.kind) {
@@ -67,6 +71,7 @@ function isLadderEmpty(game: LadderGameRecord): boolean {
  * - DB 단건 조회 (모든 회원이 동일한 데이터 조회)
  * - 수정 모드: 위쪽(참가자) / 아래쪽(결과 항목)을 인라인 input 으로 편집
  * - 비어있는 새 사다리는 자동으로 수정 모드 진입
+ * - 기수 공통 금지 규칙은 백그라운드에서 적용 (상세 화면에는 표시하지 않음)
  * - 가로줄 재추첨 / 삭제 지원
  */
 export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
@@ -111,7 +116,9 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
         }
       } catch {
         if (!cancelled) {
-          setLoadError("사다리를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setLoadError(
+            "사다리를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          );
           setGame(null);
         }
       } finally {
@@ -169,13 +176,19 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
         resultItems: trimmedResults,
       });
       if (!updated) {
-        setEditError("저장에 실패했습니다. 이미 게임이 시작되었을 수 있습니다.");
+        setEditError(
+          "저장에 실패했습니다. 이미 게임이 시작되었을 수 있습니다.",
+        );
         return;
       }
       setGame(updated);
       setEditingDraft(null);
       setEditError(null);
-    } catch {
+    } catch (error) {
+      if (error === "exclusion_unsatisfiable") {
+        setEditError(EXCLUSION_UNSATISFIABLE_MESSAGE);
+        return;
+      }
       setEditError("저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
     }
   }, [editingDraft, game]);
@@ -236,7 +249,11 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
         if (updated) {
           setGame({ ...updated });
         }
-      } catch {
+      } catch (error) {
+        if (error === "exclusion_unsatisfiable") {
+          window.alert(EXCLUSION_UNSATISFIABLE_MESSAGE);
+          return;
+        }
         window.alert("이름 저장에 실패했습니다. 다시 시도해 주세요.");
       }
     },
@@ -251,7 +268,11 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
       if (updated) {
         setGame({ ...updated });
       }
-    } catch {
+    } catch (error) {
+      if (error === "exclusion_unsatisfiable") {
+        window.alert(EXCLUSION_UNSATISFIABLE_MESSAGE);
+        return;
+      }
       window.alert("사다리 다시 섞기에 실패했습니다.");
     }
   }, [game]);
@@ -266,7 +287,11 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
       if (updated) {
         setGame({ ...updated });
       }
-    } catch {
+    } catch (error) {
+      if (error === "exclusion_unsatisfiable") {
+        window.alert(EXCLUSION_UNSATISFIABLE_MESSAGE);
+        return;
+      }
       window.alert("참가자 섞기에 실패했습니다.");
     }
   }, [game]);
@@ -281,7 +306,11 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
       if (updated) {
         setGame({ ...updated });
       }
-    } catch {
+    } catch (error) {
+      if (error === "exclusion_unsatisfiable") {
+        window.alert(EXCLUSION_UNSATISFIABLE_MESSAGE);
+        return;
+      }
       window.alert("결과 섞기에 실패했습니다.");
     }
   }, [game]);
@@ -299,7 +328,11 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
       if (updated) {
         setGame({ ...updated });
       }
-    } catch {
+    } catch (error) {
+      if (error === "exclusion_unsatisfiable") {
+        window.alert(EXCLUSION_UNSATISFIABLE_MESSAGE);
+        return;
+      }
       window.alert("게임 시작 저장에 실패했습니다.");
     }
   }, [game]);
@@ -383,6 +416,9 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
         </h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           참가자 {game.participantCount}명
+          {game.groupName
+            ? ` · ${formatShortGroupLabel(game.groupName)}`
+            : null}
         </p>
       </header>
 
@@ -502,11 +538,7 @@ export default function LadderGameDetail({ gameId }: LadderGameDetailProps) {
               <Save className="size-4" aria-hidden />
               저장
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleCancelEdit}
-            >
+            <Button type="button" variant="ghost" onClick={handleCancelEdit}>
               <X className="size-4" aria-hidden />
               취소
             </Button>

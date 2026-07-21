@@ -2,9 +2,18 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
-import { ladderRowToRecord, type LadderGameRow } from "@/lib/ladder-db";
+import {
+  buildLadderRespectingExclusions,
+  hasExclusionViolation,
+} from "@/lib/ladder";
+import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import {
+  LADDER_GAME_SELECT,
+  ladderRowToRecord,
+  type LadderGameRow,
+} from "@/lib/ladder-db";
 
-/** 게임 시작(결과 고정) — 멱등 */
+/** 게임 시작(결과 고정) — 멱등. 기수 금지 규칙 위반 시 사다리를 다시 맞춘 뒤 시작 */
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -16,9 +25,7 @@ export async function POST(
 
   const { data: existing, error: fetchError } = await supabase
     .from("ladder_games")
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -33,16 +40,59 @@ export async function POST(
 
   const row = existing as LadderGameRow;
   if (row.played_at) {
-    return NextResponse.json({ game: ladderRowToRecord(row) });
+    const record = ladderRowToRecord(row);
+    const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+      groupName: record.groupName,
+      participantNames: record.participantNames,
+      gameLevelPairs: record.exclusionPairs,
+    });
+    return NextResponse.json({ game: { ...record, exclusionPairs } });
+  }
+
+  const current = ladderRowToRecord(row);
+  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+    groupName: current.groupName,
+    participantNames: current.participantNames,
+    gameLevelPairs: current.exclusionPairs,
+  });
+
+  const updatePayload: Record<string, unknown> = {
+    played_at: new Date().toISOString(),
+  };
+
+  // 시작 직전에 제외 조건이 깨져 있으면 사다리를 다시 생성
+  if (
+    exclusionPairs.length > 0 &&
+    hasExclusionViolation(
+      current.participantNames,
+      current.resultItems,
+      current.rungs,
+      current.diagonalRungs ?? [],
+      current.rowCount,
+      exclusionPairs,
+    )
+  ) {
+    const ladder = buildLadderRespectingExclusions(
+      row.participant_count,
+      current.participantNames,
+      current.resultItems,
+      exclusionPairs,
+    );
+    if (!ladder) {
+      return NextResponse.json(
+        { error: "exclusion_unsatisfiable" },
+        { status: 400 },
+      );
+    }
+    updatePayload.rungs = ladder.rungs;
+    updatePayload.diagonal_rungs = ladder.diagonalRungs;
   }
 
   const { data: updated, error: updateError } = await supabase
     .from("ladder_games")
-    .update({ played_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq("id", id)
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .single();
 
   if (updateError || !updated) {
@@ -51,6 +101,9 @@ export async function POST(
   }
 
   return NextResponse.json({
-    game: ladderRowToRecord(updated as LadderGameRow),
+    game: {
+      ...ladderRowToRecord(updated as LadderGameRow),
+      exclusionPairs,
+    },
   });
 }

@@ -2,8 +2,17 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
-import type { UpdateLadderGameInput } from "@/lib/ladder";
-import { ladderRowToRecord, type LadderGameRow } from "@/lib/ladder-db";
+import {
+  buildLadderRespectingExclusions,
+  type LadderGameRecord,
+  type UpdateLadderGameInput,
+} from "@/lib/ladder";
+import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import {
+  LADDER_GAME_SELECT,
+  ladderRowToRecord,
+  type LadderGameRow,
+} from "@/lib/ladder-db";
 
 function notFound() {
   return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -28,8 +37,29 @@ function parsePatchBody(body: unknown): UpdateLadderGameInput | null {
       (v): v is string => typeof v === "string",
     );
   }
+  if (raw.groupName !== undefined) {
+    if (raw.groupName === null) {
+      patch.groupName = null;
+    } else if (typeof raw.groupName === "string") {
+      patch.groupName = raw.groupName.trim() || null;
+    } else {
+      return null;
+    }
+  }
 
   return patch;
+}
+
+async function withEffectiveExclusions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  record: LadderGameRecord,
+): Promise<LadderGameRecord> {
+  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+    groupName: record.groupName,
+    participantNames: record.participantNames,
+    gameLevelPairs: record.exclusionPairs,
+  });
+  return { ...record, exclusionPairs };
 }
 
 /** 단건 조회 */
@@ -44,9 +74,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("ladder_games")
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -57,12 +85,15 @@ export async function GET(
 
   if (!data) return notFound();
 
-  return NextResponse.json({
-    game: ladderRowToRecord(data as LadderGameRow),
-  });
+  const record = await withEffectiveExclusions(
+    supabase,
+    ladderRowToRecord(data as LadderGameRow),
+  );
+
+  return NextResponse.json({ game: record });
 }
 
-/** 부분 수정 (참가자·결과·제목) */
+/** 부분 수정 (참가자·결과·제목·기수) */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -86,9 +117,7 @@ export async function PATCH(
 
   const { data: existing, error: fetchError } = await supabase
     .from("ladder_games")
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -103,24 +132,70 @@ export async function PATCH(
     return NextResponse.json({ error: "already_played" }, { status: 400 });
   }
 
+  const current = ladderRowToRecord(row);
   const updatePayload: Record<string, unknown> = {};
 
   if (patch.title !== undefined) {
     updatePayload.title = patch.title.trim() || "이름 없는 사다리";
   }
-  if (
+
+  const nextNames =
     patch.participantNames &&
     patch.participantNames.length === row.participant_count
-  ) {
-    updatePayload.participant_names = patch.participantNames;
+      ? patch.participantNames
+      : current.participantNames;
+  if (patch.participantNames && nextNames === patch.participantNames) {
+    updatePayload.participant_names = nextNames;
   }
-  if (patch.resultItems && patch.resultItems.length === row.participant_count) {
-    updatePayload.result_items = patch.resultItems;
+
+  const nextResults =
+    patch.resultItems && patch.resultItems.length === row.participant_count
+      ? patch.resultItems
+      : current.resultItems;
+  if (patch.resultItems && nextResults === patch.resultItems) {
+    updatePayload.result_items = nextResults;
+  }
+
+  const nextGroupName =
+    patch.groupName !== undefined ? patch.groupName : current.groupName;
+  if (patch.groupName !== undefined) {
+    updatePayload.group_name = nextGroupName;
+  }
+
+  // 기수 금지 규칙이 있으면 이름·결과·기수 변경 시 사다리 재생성
+  const shouldConsiderRebuild =
+    patch.participantNames !== undefined ||
+    patch.resultItems !== undefined ||
+    patch.groupName !== undefined;
+
+  if (shouldConsiderRebuild) {
+    const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
+      groupName: nextGroupName,
+      participantNames: nextNames,
+      gameLevelPairs: current.exclusionPairs,
+    });
+
+    if (exclusionPairs.length > 0) {
+      const ladder = buildLadderRespectingExclusions(
+        row.participant_count,
+        nextNames,
+        nextResults,
+        exclusionPairs,
+      );
+      if (!ladder) {
+        return NextResponse.json(
+          { error: "exclusion_unsatisfiable" },
+          { status: 400 },
+        );
+      }
+      updatePayload.rungs = ladder.rungs;
+      updatePayload.diagonal_rungs = ladder.diagonalRungs;
+    }
   }
 
   if (Object.keys(updatePayload).length === 0) {
     return NextResponse.json({
-      game: ladderRowToRecord(row),
+      game: await withEffectiveExclusions(supabase, current),
     });
   }
 
@@ -128,9 +203,7 @@ export async function PATCH(
     .from("ladder_games")
     .update(updatePayload)
     .eq("id", id)
-    .select(
-      "id,title,participant_count,participant_names,result_items,rungs,diagonal_rungs,row_count,author_user_id,author_name,created_at,played_at",
-    )
+    .select(LADDER_GAME_SELECT)
     .single();
 
   if (updateError || !updated) {
@@ -139,7 +212,10 @@ export async function PATCH(
   }
 
   return NextResponse.json({
-    game: ladderRowToRecord(updated as LadderGameRow),
+    game: await withEffectiveExclusions(
+      supabase,
+      ladderRowToRecord(updated as LadderGameRow),
+    ),
   });
 }
 
