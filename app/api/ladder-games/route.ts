@@ -8,9 +8,11 @@ import {
   MIN_PARTICIPANTS,
   buildLadderRespectingExclusions,
   type CreateLadderGameInput,
-  type LadderGameRecord,
 } from "@/lib/ladder";
-import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import {
+  resolveEffectiveLadderConstraints,
+  withEffectiveLadderConstraints,
+} from "@/lib/ladder-effective-constraints";
 import { fetchAuthorCourseNameByUserId } from "@/lib/fetch-author-course-names";
 import {
   LADDER_GAME_SELECT,
@@ -46,18 +48,6 @@ function parseCreateBody(body: unknown): CreateLadderGameInput | null {
   };
 }
 
-async function withEffectiveExclusions(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  record: LadderGameRecord,
-): Promise<LadderGameRecord> {
-  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-    groupName: record.groupName,
-    participantNames: record.participantNames,
-    gameLevelPairs: record.exclusionPairs,
-  });
-  return { ...record, exclusionPairs };
-}
-
 /** 목록 조회 (최신순) */
 export async function GET() {
   const supabase = await createClient();
@@ -81,8 +71,10 @@ export async function GET() {
 
   const games = await Promise.all(
     rows.map(async (row) => {
-      let record = ladderRowToRecord(row);
-      record = await withEffectiveExclusions(supabase, record);
+      let record = await withEffectiveLadderConstraints(
+        supabase,
+        ladderRowToRecord(row),
+      );
       const authorCourseName =
         (row.author_user_id
           ? courseNameByUserId.get(row.author_user_id)
@@ -137,16 +129,18 @@ export async function POST(request: Request) {
       : emptyArray;
   const groupName = parsed.groupName?.trim() || null;
 
-  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-    groupName,
-    participantNames,
-  });
+  const { exclusionPairs, forcedLargestTeamNames } =
+    await resolveEffectiveLadderConstraints(supabase, {
+      groupName,
+      participantNames,
+    });
 
   const ladder = buildLadderRespectingExclusions(
     participantCount,
     participantNames,
     resultItems,
     exclusionPairs,
+    forcedLargestTeamNames,
   );
   if (!ladder) {
     return NextResponse.json(
@@ -178,7 +172,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unknown" }, { status: 500 });
   }
 
-  const record = await withEffectiveExclusions(
+  const record = await withEffectiveLadderConstraints(
     supabase,
     ladderRowToRecord(created as LadderGameRow),
   );

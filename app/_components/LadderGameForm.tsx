@@ -346,8 +346,14 @@ export default function LadderGameForm() {
           groupName: loadedNames.length > 0 ? loadedGroupName : null,
         });
         router.push(`/ladder/${created.id}`);
-      } catch {
-        setErrorMessage("저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
+      } catch (error) {
+        if (error === "exclusion_unsatisfiable") {
+          setErrorMessage(
+            "같은 결과 금지·5인 조 고정 조건을 만족하는 사다리를 만들지 못했습니다. 결과 칸에 가장 큰 조(예: 5명)가 있는지 확인해 주세요.",
+          );
+        } else {
+          setErrorMessage("저장 중 문제가 발생했습니다. 다시 시도해 주세요.");
+        }
         setIsSubmitting(false);
       }
     },

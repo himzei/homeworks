@@ -3,14 +3,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
 import { buildLadderRespectingExclusions } from "@/lib/ladder";
-import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import { resolveEffectiveLadderConstraints } from "@/lib/ladder-effective-constraints";
 import {
   LADDER_GAME_SELECT,
   ladderRowToRecord,
   type LadderGameRow,
 } from "@/lib/ladder-db";
 
-/** 사다리 가로줄만 다시 섞기 (기수 공통 금지 규칙 반영) */
+/** 사다리 가로줄만 다시 섞기 (기수 공통 금지·5인 조 고정 반영) */
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -41,17 +41,19 @@ export async function POST(
   }
 
   const current = ladderRowToRecord(row);
-  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-    groupName: current.groupName,
-    participantNames: current.participantNames,
-    gameLevelPairs: current.exclusionPairs,
-  });
+  const { exclusionPairs, forcedLargestTeamNames } =
+    await resolveEffectiveLadderConstraints(supabase, {
+      groupName: current.groupName,
+      participantNames: current.participantNames,
+      gameLevelPairs: current.exclusionPairs,
+    });
 
   const ladder = buildLadderRespectingExclusions(
     row.participant_count,
     current.participantNames,
     current.resultItems,
     exclusionPairs,
+    forcedLargestTeamNames,
   );
 
   if (!ladder) {
@@ -75,6 +77,6 @@ export async function POST(
 
   const record = ladderRowToRecord(updated as LadderGameRow);
   return NextResponse.json({
-    game: { ...record, exclusionPairs },
+    game: { ...record, exclusionPairs, forcedLargestTeamNames },
   });
 }

@@ -5,15 +5,16 @@ import { requireApprovedMember } from "@/lib/auth/require-approved-member";
 import {
   buildLadderRespectingExclusions,
   hasExclusionViolation,
+  hasForcedLargestTeamViolation,
 } from "@/lib/ladder";
-import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import { resolveEffectiveLadderConstraints } from "@/lib/ladder-effective-constraints";
 import {
   LADDER_GAME_SELECT,
   ladderRowToRecord,
   type LadderGameRow,
 } from "@/lib/ladder-db";
 
-/** 게임 시작(결과 고정) — 멱등. 기수 금지 규칙 위반 시 사다리를 다시 맞춘 뒤 시작 */
+/** 게임 시작(결과 고정) — 멱등. 기수 규칙 위반 시 사다리를 다시 맞춘 뒤 시작 */
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -41,42 +42,57 @@ export async function POST(
   const row = existing as LadderGameRow;
   if (row.played_at) {
     const record = ladderRowToRecord(row);
-    const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-      groupName: record.groupName,
-      participantNames: record.participantNames,
-      gameLevelPairs: record.exclusionPairs,
+    const { exclusionPairs, forcedLargestTeamNames } =
+      await resolveEffectiveLadderConstraints(supabase, {
+        groupName: record.groupName,
+        participantNames: record.participantNames,
+        gameLevelPairs: record.exclusionPairs,
+      });
+    return NextResponse.json({
+      game: { ...record, exclusionPairs, forcedLargestTeamNames },
     });
-    return NextResponse.json({ game: { ...record, exclusionPairs } });
   }
 
   const current = ladderRowToRecord(row);
-  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-    groupName: current.groupName,
-    participantNames: current.participantNames,
-    gameLevelPairs: current.exclusionPairs,
-  });
+  const { exclusionPairs, forcedLargestTeamNames } =
+    await resolveEffectiveLadderConstraints(supabase, {
+      groupName: current.groupName,
+      participantNames: current.participantNames,
+      gameLevelPairs: current.exclusionPairs,
+    });
 
   const updatePayload: Record<string, unknown> = {
     played_at: new Date().toISOString(),
   };
 
-  // 시작 직전에 제외 조건이 깨져 있으면 사다리를 다시 생성
-  if (
-    exclusionPairs.length > 0 &&
-    hasExclusionViolation(
-      current.participantNames,
-      current.resultItems,
-      current.rungs,
-      current.diagonalRungs ?? [],
-      current.rowCount,
-      exclusionPairs,
-    )
-  ) {
+  const needsRebuild =
+    (exclusionPairs.length > 0 &&
+      hasExclusionViolation(
+        current.participantNames,
+        current.resultItems,
+        current.rungs,
+        current.diagonalRungs ?? [],
+        current.rowCount,
+        exclusionPairs,
+      )) ||
+    (forcedLargestTeamNames.length > 0 &&
+      hasForcedLargestTeamViolation(
+        current.participantNames,
+        current.resultItems,
+        current.rungs,
+        current.diagonalRungs ?? [],
+        current.rowCount,
+        forcedLargestTeamNames,
+      ));
+
+  // 시작 직전에 배정 조건이 깨져 있으면 사다리를 다시 생성
+  if (needsRebuild) {
     const ladder = buildLadderRespectingExclusions(
       row.participant_count,
       current.participantNames,
       current.resultItems,
       exclusionPairs,
+      forcedLargestTeamNames,
     );
     if (!ladder) {
       return NextResponse.json(
@@ -104,6 +120,7 @@ export async function POST(
     game: {
       ...ladderRowToRecord(updated as LadderGameRow),
       exclusionPairs,
+      forcedLargestTeamNames,
     },
   });
 }

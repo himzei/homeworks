@@ -43,7 +43,7 @@ type EditingDraft = {
 };
 
 const EXCLUSION_UNSATISFIABLE_MESSAGE =
-  "같은 결과 금지 조건을 만족하는 사다리를 만들지 못했습니다. 결과 항목에 서로 다른 값이 충분한지 확인해 주세요.";
+  "같은 결과 금지·5인 조 고정 조건을 만족하는 사다리를 만들지 못했습니다. 결과 칸에 가장 큰 조(예: 5명)가 있는지, 고정 학생이 그 슬롯 수 이하인지 확인해 주세요.";
 
 function describeError(error: LadderValidationError): string {
   switch (error.kind) {

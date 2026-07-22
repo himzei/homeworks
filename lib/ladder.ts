@@ -118,7 +118,12 @@ export type LadderGameRecord = {
   playedAt?: number | null;
   /** 같은 결과 금지 쌍 (응답 시 기수 규칙 반영된 실효 쌍일 수 있음) */
   exclusionPairs?: LadderExclusionPair[];
-  /** 참가자를 불러온 기수(과정명). 기수 공통 금지 규칙 적용에 사용 */
+  /**
+   * 가장 인원이 많은 결과(5인 조 등)에 반드시 배정될 학생 이름.
+   * 응답 시 기수 규칙 중 참가자에 있는 이름만 포함될 수 있음.
+   */
+  forcedLargestTeamNames?: string[];
+  /** 참가자를 불러온 기수(과정명). 기수 공통 금지·5인 조 고정 규칙 적용에 사용 */
   groupName?: string | null;
 };
 
@@ -515,8 +520,149 @@ export function hasExclusionViolation(
 }
 
 /**
- * 제외 쌍을 만족하는 사다리 가로줄 생성.
- * - 쌍이 없으면 일반 buildLadder 1회
+ * 결과 라벨 중 가장 많이 등장한 값들(5인 조 등)을 찾음.
+ * - 빈 문자열은 무시
+ * - 모든 라벨 등장 횟수가 같으면(균등 분배) 빈 배열 — 고정 대상 없음
+ */
+export function findLargestTeamResultLabels(resultItems: string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const item of resultItems) {
+    const label = item.trim();
+    if (!label) continue;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+
+  if (counts.size === 0) return [];
+
+  let maxCount = 0;
+  let minCount = Number.POSITIVE_INFINITY;
+  for (const count of counts.values()) {
+    if (count > maxCount) maxCount = count;
+    if (count < minCount) minCount = count;
+  }
+
+  // 모든 조 인원이 같으면 "더 큰 조"가 없음
+  if (maxCount === minCount) return [];
+
+  return [...counts.entries()]
+    .filter(([, count]) => count === maxCount)
+    .map(([label]) => label);
+}
+
+/** 가장 큰 조의 슬롯 수(동률이면 그중 한 조의 크기) */
+export function getLargestTeamSlotCount(resultItems: string[]): number {
+  const labels = findLargestTeamResultLabels(resultItems);
+  if (labels.length === 0) return 0;
+
+  let count = 0;
+  const target = labels[0];
+  for (const item of resultItems) {
+    if (item.trim() === target) count += 1;
+  }
+  return count;
+}
+
+/** 5인 조 고정 이름 정규화: trim, 빈값·중복 제거 */
+export function normalizeForcedLargestTeamNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const raw of names) {
+    const name = raw.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    normalized.push(name);
+  }
+  return normalized;
+}
+
+/**
+ * 5인 조(가장 큰 결과 라벨) 고정 위반 검사.
+ * - 참가자에 없는 이름은 무시
+ * - 가장 큰 조 라벨을 못 찾으면(균등 분배) 고정 규칙 자체를 적용하지 않음
+ */
+export function findForcedLargestTeamViolations(
+  participantNames: string[],
+  resultItems: string[],
+  rungs: LadderRung[],
+  diagonalRungs: DiagonalRung[],
+  rowCount: number,
+  forcedNames: string[],
+): string[] {
+  const names = normalizeForcedLargestTeamNames(forcedNames);
+  if (names.length === 0) return [];
+
+  const largestLabels = findLargestTeamResultLabels(resultItems);
+  if (largestLabels.length === 0) return [];
+
+  const largestSet = new Set(largestLabels);
+  const resultByName = resolveParticipantResultMap(
+    participantNames,
+    resultItems,
+    rungs,
+    diagonalRungs,
+    rowCount,
+  );
+
+  const violations: string[] = [];
+  for (const name of names) {
+    const result = resultByName.get(name);
+    // 참가자에 없으면 무시
+    if (result === undefined) continue;
+    if (!largestSet.has(result)) {
+      violations.push(name);
+    }
+  }
+  return violations;
+}
+
+export function hasForcedLargestTeamViolation(
+  participantNames: string[],
+  resultItems: string[],
+  rungs: LadderRung[],
+  diagonalRungs: DiagonalRung[],
+  rowCount: number,
+  forcedNames: string[],
+): boolean {
+  return (
+    findForcedLargestTeamViolations(
+      participantNames,
+      resultItems,
+      rungs,
+      diagonalRungs,
+      rowCount,
+      forcedNames,
+    ).length > 0
+  );
+}
+
+/**
+ * 고정 인원이 가장 큰 조 슬롯보다 많으면 불가능.
+ * - 가장 큰 조가 아직 없으면(빈 칸·균등) 고정은 나중에 적용 → true
+ */
+export function canSatisfyForcedLargestTeam(
+  resultItems: string[],
+  forcedNames: string[],
+  participantNames: string[],
+): boolean {
+  const participantSet = new Set(
+    participantNames.map((name) => name.trim()).filter(Boolean),
+  );
+  const activeForced = normalizeForcedLargestTeamNames(forcedNames).filter(
+    (name) => participantSet.has(name),
+  );
+  if (activeForced.length === 0) return true;
+
+  const largestLabels = findLargestTeamResultLabels(resultItems);
+  // 결과 칸이 비어 있거나 균등이면 지금은 검사하지 않음 (결과 입력 후 섞기·시작 시 적용)
+  if (largestLabels.length === 0) return true;
+
+  const slotCount = getLargestTeamSlotCount(resultItems);
+  return activeForced.length <= slotCount;
+}
+
+/**
+ * 제외 쌍·5인 조 고정을 만족하는 사다리 가로줄 생성.
+ * - 제약 없으면 일반 buildLadder 1회
  * - 최대 시도 후에도 못 찾으면 null (결과 분포상 불가능할 수 있음)
  */
 export function buildLadderRespectingExclusions(
@@ -524,16 +670,24 @@ export function buildLadderRespectingExclusions(
   participantNames: string[],
   resultItems: string[],
   exclusionPairs: LadderExclusionPair[],
+  forcedLargestTeamNames: string[] = [],
   maxAttempts: number = LADDER_EXCLUSION_MAX_ATTEMPTS,
 ): { rungs: LadderRung[]; diagonalRungs: DiagonalRung[] } | null {
   const pairs = normalizeExclusionPairs(exclusionPairs);
-  if (pairs.length === 0) {
+  const forcedNames = normalizeForcedLargestTeamNames(forcedLargestTeamNames);
+
+  if (pairs.length === 0 && forcedNames.length === 0) {
     return buildLadder(participantCount);
+  }
+
+  if (!canSatisfyForcedLargestTeam(resultItems, forcedNames, participantNames)) {
+    return null;
   }
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const ladder = buildLadder(participantCount);
-    if (
+    const okExclusion =
+      pairs.length === 0 ||
       !hasExclusionViolation(
         participantNames,
         resultItems,
@@ -541,8 +695,20 @@ export function buildLadderRespectingExclusions(
         ladder.diagonalRungs,
         LADDER_ROW_COUNT,
         pairs,
-      )
-    ) {
+      );
+    if (!okExclusion) continue;
+
+    const okForced =
+      forcedNames.length === 0 ||
+      !hasForcedLargestTeamViolation(
+        participantNames,
+        resultItems,
+        ladder.rungs,
+        ladder.diagonalRungs,
+        LADDER_ROW_COUNT,
+        forcedNames,
+      );
+    if (okForced) {
       return ladder;
     }
   }

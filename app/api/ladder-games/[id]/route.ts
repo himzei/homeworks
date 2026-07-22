@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
 import {
   buildLadderRespectingExclusions,
-  type LadderGameRecord,
   type UpdateLadderGameInput,
 } from "@/lib/ladder";
-import { resolveEffectiveExclusionPairs } from "@/lib/ladder-group-exclusions";
+import {
+  resolveEffectiveLadderConstraints,
+  withEffectiveLadderConstraints,
+} from "@/lib/ladder-effective-constraints";
 import {
   LADDER_GAME_SELECT,
   ladderRowToRecord,
@@ -50,18 +52,6 @@ function parsePatchBody(body: unknown): UpdateLadderGameInput | null {
   return patch;
 }
 
-async function withEffectiveExclusions(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  record: LadderGameRecord,
-): Promise<LadderGameRecord> {
-  const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-    groupName: record.groupName,
-    participantNames: record.participantNames,
-    gameLevelPairs: record.exclusionPairs,
-  });
-  return { ...record, exclusionPairs };
-}
-
 /** 단건 조회 */
 export async function GET(
   _request: Request,
@@ -85,7 +75,7 @@ export async function GET(
 
   if (!data) return notFound();
 
-  const record = await withEffectiveExclusions(
+  const record = await withEffectiveLadderConstraints(
     supabase,
     ladderRowToRecord(data as LadderGameRow),
   );
@@ -162,25 +152,27 @@ export async function PATCH(
     updatePayload.group_name = nextGroupName;
   }
 
-  // 기수 금지 규칙이 있으면 이름·결과·기수 변경 시 사다리 재생성
+  // 기수 금지·5인 조 고정이 있으면 이름·결과·기수 변경 시 사다리 재생성
   const shouldConsiderRebuild =
     patch.participantNames !== undefined ||
     patch.resultItems !== undefined ||
     patch.groupName !== undefined;
 
   if (shouldConsiderRebuild) {
-    const exclusionPairs = await resolveEffectiveExclusionPairs(supabase, {
-      groupName: nextGroupName,
-      participantNames: nextNames,
-      gameLevelPairs: current.exclusionPairs,
-    });
+    const { exclusionPairs, forcedLargestTeamNames } =
+      await resolveEffectiveLadderConstraints(supabase, {
+        groupName: nextGroupName,
+        participantNames: nextNames,
+        gameLevelPairs: current.exclusionPairs,
+      });
 
-    if (exclusionPairs.length > 0) {
+    if (exclusionPairs.length > 0 || forcedLargestTeamNames.length > 0) {
       const ladder = buildLadderRespectingExclusions(
         row.participant_count,
         nextNames,
         nextResults,
         exclusionPairs,
+        forcedLargestTeamNames,
       );
       if (!ladder) {
         return NextResponse.json(
@@ -195,7 +187,7 @@ export async function PATCH(
 
   if (Object.keys(updatePayload).length === 0) {
     return NextResponse.json({
-      game: await withEffectiveExclusions(supabase, current),
+      game: await withEffectiveLadderConstraints(supabase, current),
     });
   }
 
@@ -212,7 +204,7 @@ export async function PATCH(
   }
 
   return NextResponse.json({
-    game: await withEffectiveExclusions(
+    game: await withEffectiveLadderConstraints(
       supabase,
       ladderRowToRecord(updated as LadderGameRow),
     ),

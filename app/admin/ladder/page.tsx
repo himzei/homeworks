@@ -4,19 +4,21 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import GroupTabsLoader from "../_components/GroupTabsLoader";
 import LadderExclusionRulesPanel from "../_components/LadderExclusionRulesPanel";
+import LadderForcedLargestRulesPanel from "../_components/LadderForcedLargestRulesPanel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "사다리 금지 규칙",
-  description: "기수별 사다리게임 같은 결과 금지 규칙을 관리합니다.",
+  title: "사다리 규칙",
+  description:
+    "기수별 사다리게임 같은 결과 금지·5인 조 고정 규칙을 관리합니다.",
 };
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 /**
- * 관리자 — 사다리 기수 공통 같은 결과 금지 규칙
+ * 관리자 — 사다리 기수 공통 배정 규칙
  */
 export default async function AdminLadderPage({
   searchParams,
@@ -56,7 +58,10 @@ export default async function AdminLadderPage({
         </Suspense>
       </div>
 
-      <LadderExclusionRulesPanel selectedGroup={filterGroup} />
+      <div className="space-y-10">
+        <LadderForcedLargestRulesPanel selectedGroup={filterGroup} />
+        <LadderExclusionRulesPanel selectedGroup={filterGroup} />
+      </div>
     </>
   );
 }
