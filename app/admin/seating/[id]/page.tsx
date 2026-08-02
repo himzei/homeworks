@@ -39,13 +39,11 @@ type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-/** 작성일 포매터 */
+/** 작성일 포매터 (날짜만 표시) */
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "long",
   day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
 });
 
 export async function generateMetadata({

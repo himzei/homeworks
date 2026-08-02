@@ -14,6 +14,9 @@ export const HOW_WORK_PATH = "/how-work";
 /** 그룹 GitHub 안내 페이지 */
 export const GROUP_GITHUB_PATH = "/group-github";
 
+/** 도커(컨테이너 리눅스 명령어) 안내 페이지 */
+export const DOCKER_PATH = "/docker";
+
 /** 사용방법 드롭다운 하위 메뉴 */
 export const USAGE_GUIDE_NAV_ITEM: HeaderNavItem = {
   label: "사용방법",
@@ -21,6 +24,7 @@ export const USAGE_GUIDE_NAV_ITEM: HeaderNavItem = {
     { href: GIT_HOW_PATH, label: "깃이란?" },
     { href: HOW_WORK_PATH, label: "과제제출방법" },
     { href: GROUP_GITHUB_PATH, label: "그룹 깃허브" },
+    { href: DOCKER_PATH, label: "도커" },
   ],
 };
 
