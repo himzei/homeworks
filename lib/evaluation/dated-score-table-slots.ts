@@ -8,12 +8,12 @@ export type DatedScoreTableSlot = DatedScoreItem & {
   isEmpty: boolean;
 };
 
-/** 평가 항목을 고정 칸 수로 맞춤. 초과분은 잘라 내고, 부족분은 빈 칸으로 채움 */
+/** 평가 항목을 고정 칸 수로 맞춤. 부족분만 빈 칸으로 채우고, 초과분은 모두 표시 */
 export function padDatedScoreItemsToSlots(
   items: DatedScoreItem[],
   slotCount: number = DATED_EVALUATION_SLOT_COUNT,
 ): DatedScoreTableSlot[] {
-  const filledSlots: DatedScoreTableSlot[] = items.slice(0, slotCount).map((item) => ({
+  const filledSlots: DatedScoreTableSlot[] = items.map((item) => ({
     ...item,
     isEmpty: false,
   }));

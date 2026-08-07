@@ -42,6 +42,7 @@ export type LearningStatusTeamProject = {
   teamNumber: number;
   topic: string;
   githubUrl: string;
+  deployUrl: string;
   projectEvaluationDate: string | null;
   pptFileName: string | null;
   hasPptAttachment: boolean;
@@ -205,6 +206,7 @@ function buildTeamProject(
     teamNumber,
     topic: project?.topic.trim() ?? "",
     githubUrl: project?.githubUrl.trim() ?? "",
+    deployUrl: project?.deployUrl.trim() ?? "",
     projectEvaluationDate: snapshot.projectEvaluationDate,
     pptFileName: project?.pptFileName ?? null,
     hasPptAttachment: !!project?.pptStoragePath,

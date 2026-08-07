@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import {
   assertTeamAttachmentFileSize,
   buildTeamAttachmentStorageFileName,
+  createEmptyTeamProjectInfo,
   isAllowedTeamAttachmentFileName,
   normalizeGithubUrl,
+  normalizeHttpUrl,
   parseTeamProjectsFromJson,
   TEAM_ATTACHMENT_HINT,
   teamProjectsMapToJson,
@@ -81,6 +83,7 @@ export async function POST(request: Request, context: RouteContext) {
     // 한글 주석: 부분 저장을 지원하기 위해 formData에 해당 키가 존재하는지 확인한다.
     const hasTopic = formData.has("topic");
     const hasGithubUrl = formData.has("githubUrl");
+    const hasDeployUrl = formData.has("deployUrl");
     const hasEvaluationsJson = formData.has("evaluationsJson");
     const hasRemovePpt = formData.has("removePpt");
     const hasPptFile = formData.has("pptFile");
@@ -109,6 +112,13 @@ export async function POST(request: Request, context: RouteContext) {
             : "",
         )
       : null;
+    const deployUrl = hasDeployUrl
+      ? normalizeHttpUrl(
+          typeof formData.get("deployUrl") === "string"
+            ? formData.get("deployUrl")!.toString()
+            : "",
+        )
+      : null;
     const evaluationsInput = hasEvaluationsJson
       ? parseEvaluationsInput(formData.get("evaluationsJson"))
       : null;
@@ -129,14 +139,8 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const allProjects = parseTeamProjectsFromJson(existing.team_projects);
-    const current: TeamProjectInfo = allProjects[teamNumber] ?? {
-      topic: "",
-      feedbackComments: [],
-      githubUrl: "",
-      pptStoragePath: null,
-      pptFileName: null,
-      evaluations: {},
-    };
+    const current: TeamProjectInfo =
+      allProjects[teamNumber] ?? createEmptyTeamProjectInfo();
 
     let pptStoragePath = current.pptStoragePath;
     let pptFileName = current.pptFileName;
@@ -193,6 +197,7 @@ export async function POST(request: Request, context: RouteContext) {
       topic: topic ?? current.topic,
       feedbackComments: current.feedbackComments,
       githubUrl: githubUrl ?? current.githubUrl,
+      deployUrl: deployUrl ?? current.deployUrl,
       pptStoragePath,
       pptFileName,
       evaluations: evaluationsInput ?? current.evaluations ?? {},

@@ -237,10 +237,12 @@ function TeamProjectBlock({
   const hasWorkAssignments = workAssignmentMembers.length > 0;
   const hasTopic = !!project.topic;
   const hasGithubUrl = !!project.githubUrl;
+  const hasDeployUrl = !!project.deployUrl;
   const hasEvaluationDate = !!project.projectEvaluationDate;
   const hasAnyProjectInfo =
     hasTopic ||
     hasGithubUrl ||
+    hasDeployUrl ||
     hasEvaluationDate ||
     hasWorkAssignments ||
     project.hasPptAttachment;
@@ -269,7 +271,7 @@ function TeamProjectBlock({
             ? formatProjectEvaluationDate(project.projectEvaluationDate!)
             : "미정"}
         </ProjectInfoItem>
-        <ProjectInfoItem label="프로젝트 주소" className="sm:col-span-2">
+        <ProjectInfoItem label="코드 GitHub 주소" className="sm:col-span-2">
           {hasGithubUrl ? (
             <a
               href={normalizeExternalUrl(project.githubUrl)}
@@ -278,6 +280,21 @@ function TeamProjectBlock({
               className="inline-flex items-center gap-1 break-all text-blue-600 hover:underline dark:text-blue-400"
             >
               {project.githubUrl}
+              <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+            </a>
+          ) : (
+            "미입력"
+          )}
+        </ProjectInfoItem>
+        <ProjectInfoItem label="팀 배포주소" className="sm:col-span-2">
+          {hasDeployUrl ? (
+            <a
+              href={normalizeExternalUrl(project.deployUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 break-all text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {project.deployUrl}
               <ExternalLink className="size-3.5 shrink-0" aria-hidden />
             </a>
           ) : (

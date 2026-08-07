@@ -5,7 +5,12 @@ import { ChevronDown, ChevronUp, FileDown, Loader2, Printer, Save } from "lucide
 
 import { useAdmin } from "@/lib/auth/SessionProvider";
 import { isAbortError } from "@/lib/errors/is-abort-error";
-import { buildProjectTableColumns } from "@/lib/evaluation/build-project-table-columns";
+import {
+  buildProjectInfoBlocks,
+  buildProjectTableColumns,
+  normalizeProjectExternalUrl,
+  type ProjectTableInfoContent,
+} from "@/lib/evaluation/build-project-table-columns";
 import {
   DATED_EVALUATION_SLOT_COUNT,
   padDatedScoreItemsToSlots,
@@ -139,6 +144,7 @@ function DatedScoreTableSection({
   theme,
   fitContent = false,
   fixedSlotCount,
+  maxTotalScore,
 }: {
   title: string;
   ariaLabel: string;
@@ -149,12 +155,16 @@ function DatedScoreTableSection({
   fitContent?: boolean;
   /** 설정 시 평가 항목 칸을 고정 개수로 표시(빈 칸은 비움) */
   fixedSlotCount?: number;
+  /** 만점(분모). 없으면 evaluation.maxTotalScore 사용 */
+  maxTotalScore?: number;
 }) {
   const filledItemCount = evaluation.items.length;
   const slots = fixedSlotCount
     ? padDatedScoreItemsToSlots(evaluation.items, fixedSlotCount)
     : evaluation.items.map((item) => ({ ...item, isEmpty: false }));
   const showTable = fixedSlotCount ? true : filledItemCount > 0;
+  const resolvedMaxTotal =
+    maxTotalScore ?? evaluation.maxTotalScore ?? null;
 
   return (
     <section
@@ -179,7 +189,14 @@ function DatedScoreTableSection({
         </h3>
         <p className={cn("text-sm tabular-nums", theme.headerText)}>
           합계{" "}
-          <span className="font-bold text-base">{evaluation.totalScore}</span>점
+          <span className="font-bold text-base">{evaluation.totalScore}</span>
+          {resolvedMaxTotal != null && resolvedMaxTotal > 0 ? (
+            <>
+              <span className="mx-0.5 opacity-70">/</span>
+              <span className="font-bold text-base">{resolvedMaxTotal}</span>
+            </>
+          ) : null}
+          점
           <span className="text-xs font-normal opacity-80 ml-1">
             ({filledItemCount}건)
           </span>
@@ -209,7 +226,7 @@ function DatedScoreTableSection({
                   <th
                     key={slot.key}
                     className={cn(
-                      "px-2 py-2 font-medium text-center align-bottom border-r whitespace-nowrap",
+                      "px-2 py-2 font-medium text-center align-middle border-r whitespace-nowrap",
                       fitContent ? "min-w-0" : "min-w-[72px]",
                       theme.headerText,
                       theme.cellBorder,
@@ -220,21 +237,9 @@ function DatedScoreTableSection({
                     {slot.isEmpty ? (
                       <span className="block min-h-[2rem]" aria-hidden />
                     ) : (
-                      <>
-                        <span className="block tabular-nums text-[12px] whitespace-nowrap">
-                          {slot.dateLabel}
-                        </span>
-                        <span
-                          className={cn(
-                            "mt-0.5 block text-[10px] font-normal opacity-80 leading-tight",
-                            fitContent
-                              ? "max-w-[88px] truncate"
-                              : "line-clamp-2",
-                          )}
-                        >
-                          {slot.title}
-                        </span>
-                      </>
+                      <span className="block tabular-nums text-[12px] whitespace-nowrap">
+                        {slot.dateLabel}
+                      </span>
                     )}
                   </th>
                 ))}
@@ -252,21 +257,40 @@ function DatedScoreTableSection({
             </thead>
             <tbody>
               <tr className="bg-white/80 dark:bg-zinc-900/50">
-                {slots.map((slot) => (
-                  <td
-                    key={`score-${slot.key}`}
-                    className={cn(
-                      "px-2 py-3 text-center font-bold text-base tabular-nums border-r",
-                      theme.cellBorder,
-                      slot.isEmpty
-                        ? "text-transparent"
-                        : "text-black dark:text-zinc-50",
-                    )}
-                    aria-label={slot.isEmpty ? undefined : `${slot.title} 점수`}
-                  >
-                    {slot.isEmpty ? "\u00a0" : slot.score}
-                  </td>
-                ))}
+                {slots.map((slot) => {
+                  const commentText = slot.comment?.trim() || "";
+                  return (
+                    <td
+                      key={`score-${slot.key}`}
+                      className={cn(
+                        "border-r px-2 py-3 text-center tabular-nums",
+                        theme.cellBorder,
+                        slot.isEmpty
+                          ? "text-transparent"
+                          : "text-black dark:text-zinc-50",
+                      )}
+                      aria-label={
+                        slot.isEmpty ? undefined : `${slot.title} 점수`
+                      }
+                      title={commentText || undefined}
+                    >
+                      {slot.isEmpty ? (
+                        "\u00a0"
+                      ) : (
+                        <span className="inline-flex flex-col items-center gap-1 leading-none">
+                          <span className="text-base font-bold">
+                            {slot.score}
+                          </span>
+                          {commentText ? (
+                            <span className="max-w-[6.5rem] whitespace-pre-wrap text-[10px] font-normal leading-snug text-zinc-600 dark:text-zinc-400">
+                              {commentText}
+                            </span>
+                          ) : null}
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
                 <td
                   className={cn(
                     "px-2 py-3 text-center font-bold text-base tabular-nums",
@@ -275,7 +299,17 @@ function DatedScoreTableSection({
                     theme.totalText,
                   )}
                 >
-                  {evaluation.totalScore}
+                  {resolvedMaxTotal != null && resolvedMaxTotal > 0 ? (
+                    <>
+                      {evaluation.totalScore}
+                      <span className="mx-0.5 text-sm font-semibold opacity-70">
+                        /
+                      </span>
+                      {resolvedMaxTotal}
+                    </>
+                  ) : (
+                    evaluation.totalScore
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -293,10 +327,12 @@ function HomeworkEvaluationSection({
 }) {
   const evaluation: StudentDatedScoreEvaluation = {
     totalScore: homework.totalScore,
+    maxTotalScore: homework.maxTotalScore,
     items: homework.items.map((item) => ({
       key: item.assignmentId,
       dateLabel: item.dateLabel,
-      title: item.title,
+      // 한글 주석: 추가 필드만 구분 표시 (본과정 섹션)
+      title: item.isExtraField ? `[추가] ${item.title}` : item.title,
       score: item.score,
     })),
   };
@@ -323,28 +359,187 @@ function FoundationEvaluationSection({
       title="기초과정 평가"
       ariaLabel="기초과정 평가"
       evaluation={foundation}
-      emptyMessage="기초과정(사전) 과제·시험 항목이 없습니다."
+      emptyMessage="기초과정 과제·시험 항목이 없습니다."
       theme={FOUNDATION_TABLE_THEME}
       fixedSlotCount={DATED_EVALUATION_SLOT_COUNT}
     />
   );
 }
 
-/** 추가 평가 필드(시험) — 과제평가 아래 */
+/** 시험·미니프로젝트 — 평가 항목을 세로(행)로 배치 */
 function ExamEvaluationSection({
   exam,
 }: {
   exam: StudentDatedScoreEvaluation;
 }) {
+  const theme = EXAM_TABLE_THEME;
+  // 등급(A~F) 항목은 점수 합산에서 제외
+  const numericTotal = exam.items.reduce((sum, item) => {
+    if (item.grade?.trim()) return sum;
+    return sum + item.score;
+  }, 0);
+  const hasNumericItem = exam.items.some((item) => !item.grade?.trim());
+
   return (
-    <DatedScoreTableSection
-      title="시험 평가"
-      ariaLabel="시험 평가"
-      evaluation={exam}
-      emptyMessage="등록된 추가 시험 항목이 없습니다."
-      theme={EXAM_TABLE_THEME}
-      fixedSlotCount={DATED_EVALUATION_SLOT_COUNT}
-    />
+    <section
+      className={cn(
+        "overflow-hidden rounded-lg border",
+        theme.border,
+        theme.borderDark,
+        theme.bg,
+      )}
+      aria-label="시험평가 및 미니프로젝트평가"
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2",
+          theme.border,
+          theme.borderDark,
+        )}
+      >
+        <h3 className={cn("text-sm font-semibold", theme.headerText)}>
+          시험평가 및 미니프로젝트평가
+        </h3>
+        <p className={cn("text-sm tabular-nums", theme.headerText)}>
+          {hasNumericItem ? (
+            <>
+              합계{" "}
+              <span className="text-base font-bold">{numericTotal}</span>점
+              <span className="ml-1 text-xs font-normal opacity-80">
+                ({exam.items.length}건)
+              </span>
+            </>
+          ) : (
+            <span className="text-xs font-normal opacity-80">
+              {exam.items.length}건
+            </span>
+          )}
+        </p>
+      </div>
+
+      {exam.items.length === 0 ? (
+        <p className="px-3 py-4 text-xs text-zinc-600 dark:text-zinc-400">
+          등록된 추가 시험 항목이 없습니다.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[32rem] border-collapse text-sm">
+            <thead>
+              <tr className={theme.headerBg}>
+                <th
+                  className={cn(
+                    "w-[7.5rem] border-r px-3 py-2 text-left text-xs font-medium whitespace-nowrap",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  평가일
+                </th>
+                <th
+                  className={cn(
+                    "border-r px-3 py-2 text-left text-xs font-medium",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  평가 항목
+                </th>
+                <th
+                  className={cn(
+                    "min-w-[10rem] border-r px-3 py-2 text-left text-xs font-medium",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  코멘트
+                </th>
+                <th
+                  className={cn(
+                    "w-[5.5rem] border-r px-3 py-2 text-center text-xs font-medium whitespace-nowrap",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  등수
+                </th>
+                <th
+                  className={cn(
+                    "w-[5.5rem] px-3 py-2 text-center text-xs font-medium whitespace-nowrap",
+                    theme.headerText,
+                  )}
+                >
+                  등급/점수
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {exam.items.map((item) => {
+                const commentText = item.comment?.trim() || "";
+                const gradeLabel = item.grade?.trim().toUpperCase() || null;
+                const rankLabel = formatPeerRankLabel(
+                  item.rank ?? null,
+                  item.rankedStudentCount ?? 0,
+                );
+                return (
+                  <tr
+                    key={item.key}
+                    className="border-t border-amber-100 bg-white/80 dark:border-amber-900/40 dark:bg-zinc-900/50"
+                  >
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 text-xs tabular-nums text-zinc-700 dark:text-zinc-300",
+                        theme.cellBorder,
+                      )}
+                    >
+                      {item.dateLabel}
+                    </td>
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 font-medium text-zinc-900 dark:text-zinc-50",
+                        theme.cellBorder,
+                      )}
+                    >
+                      {item.title}
+                    </td>
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 text-xs leading-snug whitespace-pre-wrap text-zinc-600 dark:text-zinc-400",
+                        theme.cellBorder,
+                      )}
+                    >
+                      {commentText || (
+                        <span className="text-zinc-400 dark:text-zinc-500">
+                          -
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 text-center text-xs font-semibold tabular-nums text-zinc-700 dark:text-zinc-300",
+                        theme.cellBorder,
+                      )}
+                    >
+                      {rankLabel ?? (
+                        <span className="font-normal text-zinc-400 dark:text-zinc-500">
+                          -
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-base font-bold whitespace-nowrap text-black dark:text-zinc-50">
+                      {gradeLabel ? (
+                        gradeLabel
+                      ) : (
+                        <span className="tabular-nums">{item.score}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -364,7 +559,7 @@ function formatPeerRankLabel(
   return `${rank}/${rankedStudentCount}위`;
 }
 
-/** 동료평가 — 학생이 받은 점수의 프로젝트별 평균 + 기수 내 등수 */
+/** 동료평가 — 프로젝트별 받은 점수를 세로(행)로 배치 */
 function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
   const theme = PEER_TABLE_THEME;
   const overallRankLabel = formatPeerRankLabel(
@@ -375,7 +570,7 @@ function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
   return (
     <section
       className={cn(
-        "rounded-lg border overflow-hidden",
+        "overflow-hidden rounded-lg border",
         theme.border,
         theme.borderDark,
         theme.bg,
@@ -384,7 +579,7 @@ function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
     >
       <div
         className={cn(
-          "flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b",
+          "flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2",
           theme.border,
           theme.borderDark,
         )}
@@ -394,7 +589,7 @@ function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
         </h3>
         <p className={cn("text-sm tabular-nums", theme.headerText)}>
           평균{" "}
-          <span className="font-bold text-base">
+          <span className="text-base font-bold">
             {peer.averageScore ?? "-"}
           </span>
           {peer.averageScore !== null ? "점" : null}
@@ -415,88 +610,109 @@ function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-xs">
+          <table className="w-full min-w-[28rem] border-collapse text-sm">
             <thead>
               <tr className={theme.headerBg}>
-                {peer.items.map((item) => (
-                  <th
-                    key={item.key}
-                    className={cn(
-                      "min-w-[7.5rem] border-r px-2 py-2 text-center align-bottom font-medium whitespace-nowrap",
-                      theme.headerText,
-                      theme.cellBorder,
-                    )}
-                    title={item.title}
-                  >
-                    <span className="block whitespace-nowrap text-[12px] tabular-nums">
-                      {item.dateLabel}
-                    </span>
-                    <span className="mt-0.5 block line-clamp-2 text-[10px] font-normal leading-tight opacity-80">
-                      {item.title} ({item.ratingCount}명)
-                    </span>
-                  </th>
-                ))}
                 <th
                   className={cn(
-                    "px-2 py-2 text-center font-semibold",
-                    EVALUATION_TOTAL_COLUMN_CLASS,
-                    theme.headerBg,
+                    "w-[7.5rem] border-r px-3 py-2 text-left text-xs font-medium whitespace-nowrap",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  평가일
+                </th>
+                <th
+                  className={cn(
+                    "border-r px-3 py-2 text-left text-xs font-medium",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  프로젝트
+                </th>
+                <th
+                  className={cn(
+                    "w-[4.5rem] border-r px-3 py-2 text-center text-xs font-medium whitespace-nowrap",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  평가인원
+                </th>
+                <th
+                  className={cn(
+                    "w-[5.5rem] border-r px-3 py-2 text-center text-xs font-medium whitespace-nowrap",
+                    theme.headerText,
+                    theme.cellBorder,
+                  )}
+                >
+                  등수
+                </th>
+                <th
+                  className={cn(
+                    "w-[4.5rem] px-3 py-2 text-center text-xs font-medium",
                     theme.headerText,
                   )}
                 >
-                  평균
+                  점수
                 </th>
               </tr>
             </thead>
             <tbody>
-              <tr className="bg-white/80 dark:bg-zinc-900/50">
-                {peer.items.map((item) => {
-                  const itemRankLabel = formatPeerRankLabel(
-                    item.rank,
-                    item.rankedStudentCount,
-                  );
+              {peer.items.map((item) => {
+                const itemRankLabel = formatPeerRankLabel(
+                  item.rank,
+                  item.rankedStudentCount,
+                );
 
-                  return (
+                return (
+                  <tr
+                    key={item.key}
+                    className="border-t border-rose-100 bg-white/80 dark:border-rose-900/40 dark:bg-zinc-900/50"
+                  >
                     <td
-                      key={`score-${item.key}`}
                       className={cn(
-                        "border-r px-2 py-3 text-center font-bold text-base tabular-nums text-black dark:text-zinc-50",
+                        "border-r px-3 py-2.5 text-xs tabular-nums text-zinc-700 dark:text-zinc-300",
                         theme.cellBorder,
                       )}
-                      aria-label={`${item.title} 점수`}
-                      title={
-                        itemRankLabel
-                          ? `${item.score}점 · ${itemRankLabel}`
-                          : `${item.score}점`
-                      }
                     >
-                      <span className="inline-flex items-baseline justify-center gap-1.5 whitespace-nowrap leading-none">
-                        <span>{item.score}</span>
-                        {itemRankLabel ? (
-                          <span
-                            className={cn(
-                              "text-[11px] font-semibold",
-                              theme.headerText,
-                            )}
-                          >
-                            {itemRankLabel}
-                          </span>
-                        ) : null}
-                      </span>
+                      {item.dateLabel}
                     </td>
-                  );
-                })}
-                <td
-                  className={cn(
-                    "px-2 py-3 text-center font-bold text-base tabular-nums",
-                    EVALUATION_TOTAL_COLUMN_CLASS,
-                    theme.totalBg,
-                    theme.totalText,
-                  )}
-                >
-                  {peer.averageScore ?? "-"}
-                </td>
-              </tr>
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 font-medium text-zinc-900 dark:text-zinc-50",
+                        theme.cellBorder,
+                      )}
+                    >
+                      {item.title}
+                    </td>
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 text-center text-xs tabular-nums text-zinc-600 dark:text-zinc-400",
+                        theme.cellBorder,
+                      )}
+                    >
+                      {item.ratingCount}명
+                    </td>
+                    <td
+                      className={cn(
+                        "border-r px-3 py-2.5 text-center text-xs font-semibold tabular-nums",
+                        theme.headerText,
+                        theme.cellBorder,
+                      )}
+                    >
+                      {itemRankLabel ?? "-"}
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-center text-base font-bold tabular-nums text-black dark:text-zinc-50"
+                      aria-label={`${item.title} 점수`}
+                    >
+                      {item.score}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -505,14 +721,68 @@ function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
   );
 }
 
-/** 프로젝트 평가 — 날짜·항목·세부점수 모두 가로 1행 */
+/** 프로젝트 평가 — 정보 칸(주제·업무분장 / GitHub·배포) */
+function ProjectInfoBlock({ info }: { info: ProjectTableInfoContent }) {
+  const githubUrl = info.githubUrl.trim();
+  const deployUrl = info.deployUrl.trim();
+
+  return (
+    <div className="space-y-1 px-3 py-2.5 text-[11px] leading-snug text-black dark:text-zinc-50">
+      {info.dateLabel ? (
+        <p className="text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400">
+          {info.dateLabel}
+        </p>
+      ) : null}
+      {/* 한글 주석: 1행 — 주제 · 업무분장 */}
+      <p className="whitespace-normal break-keep">
+        <span className="font-medium">{info.topic}</span>
+        <span className="mx-1.5 text-zinc-400 dark:text-zinc-500">·</span>
+        <span className="text-zinc-700 dark:text-zinc-300">
+          {info.workAssignment}
+        </span>
+      </p>
+      {/* 한글 주석: 2행 — GitHub · 팀 배포주소 */}
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 break-all">
+        {githubUrl ? (
+          <a
+            href={normalizeProjectExternalUrl(githubUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-700 underline underline-offset-2 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-200"
+          >
+            {githubUrl}
+          </a>
+        ) : (
+          <span className="text-zinc-400 dark:text-zinc-500">GitHub —</span>
+        )}
+        <span className="text-zinc-400 dark:text-zinc-500">·</span>
+        {deployUrl ? (
+          <a
+            href={normalizeProjectExternalUrl(deployUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-700 underline underline-offset-2 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-200"
+          >
+            {deployUrl}
+          </a>
+        ) : (
+          <span className="text-zinc-400 dark:text-zinc-500">배포 —</span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** 프로젝트 평가 — 정보 2행 + 점수 표(합계 포함) */
 function ProjectEvaluationSection({
   project,
 }: {
   project: StudentProjectEvaluation;
 }) {
   const theme = PROJECT_TABLE_THEME;
+  const infoBlocks = buildProjectInfoBlocks(project.items);
   const columns = buildProjectTableColumns(project.items, project.totalScore);
+  const hasContent = infoBlocks.length > 0 || columns.length > 0;
 
   return (
     <section
@@ -543,93 +813,75 @@ function ProjectEvaluationSection({
         </p>
       </div>
 
-      {columns.length === 0 ? (
+      {!hasContent ? (
         <p className="px-3 py-4 text-xs text-zinc-600 dark:text-zinc-400">
           등록된 프로젝트·팀 평가 항목이 없습니다.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="text-xs border-collapse w-full min-w-max">
-            <thead>
-              <tr className={theme.headerBg}>
-                {columns.map((column) => (
-                  <th
-                    key={column.key}
-                    className={cn(
-                      "px-2 py-2 font-medium text-center align-bottom border-r whitespace-nowrap",
-                      column.isGrandTotal
-                        ? cn(EVALUATION_TOTAL_COLUMN_CLASS, theme.totalBg)
-                        : cn(
-                            "min-w-[72px]",
-                            column.cellMode === "topic" && "min-w-[10rem]",
-                          ),
-                      theme.headerText,
-                      theme.cellBorder,
-                    )}
-                    title={
-                      column.headerSubtitle === "합계" && column.headerTitle
-                        ? column.headerTitle
-                        : `${column.dateLabel} · ${column.headerTitle}`
-                    }
-                  >
-                    {column.dateLabel ? (
-                      <span className="block tabular-nums text-[12px]">
-                        {column.dateLabel}
-                      </span>
-                    ) : null}
-                    <span
-                      className={cn(
-                        "block font-medium",
-                        column.dateLabel ? "mt-0.5 text-[11px]" : "text-[12px]",
-                      )}
-                    >
-                      {column.headerTitle}
-                    </span>
-                    <span className="mt-0.5 block text-[10px] font-normal opacity-80">
-                      {column.headerSubtitle}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="bg-white/80 dark:bg-zinc-900/50">
-                {columns.map((column) => (
-                  <td
-                    key={`score-${column.key}`}
-                    className={cn(
-                      "px-2 py-3 border-r align-middle",
-                      theme.cellBorder,
-                      column.isGrandTotal
-                        ? cn(
-                            EVALUATION_TOTAL_COLUMN_CLASS,
-                            "text-center tabular-nums font-bold text-base",
-                            theme.totalBg,
-                            theme.totalText,
-                          )
-                        : column.cellMode === "topic"
-                          ? "min-w-[12rem] max-w-[20rem] text-center text-[11px] leading-snug font-normal text-black dark:text-zinc-50 whitespace-pre-line"
-                          : column.cellMode === "text"
-                            ? "min-w-[5rem] max-w-[10rem] text-center text-[11px] leading-snug font-normal text-black dark:text-zinc-50 whitespace-pre-line"
-                            : cn(
-                                "text-center tabular-nums font-medium text-base text-black dark:text-zinc-50",
-                                column.isTotalColumn &&
-                                  column.cellMode === "score" &&
-                                  "font-semibold",
-                              ),
-                    )}
-                  >
-                    {column.cellMode === "topic"
-                      ? column.topicText
-                      : column.cellMode === "text"
-                        ? column.textValue
-                        : column.score}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <>
+          {infoBlocks.map((info) => (
+            <div
+              key={info.key}
+              className={cn("border-b", theme.border, theme.borderDark)}
+            >
+              <ProjectInfoBlock info={info} />
+            </div>
+          ))}
+          {columns.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-0 border-collapse text-xs table-fixed">
+                <thead>
+                  <tr className={theme.headerBg}>
+                    {columns.map((column) => (
+                      <th
+                        key={column.key}
+                        className={cn(
+                          "px-2 py-2 text-center align-middle font-medium border-r whitespace-nowrap",
+                          column.isGrandTotal
+                            ? cn(EVALUATION_TOTAL_COLUMN_CLASS, theme.totalBg)
+                            : "w-auto",
+                          theme.headerText,
+                          theme.cellBorder,
+                        )}
+                      >
+                        <span className="block text-[12px]">
+                          {column.dateLabel
+                            ? `${column.dateLabel} · ${column.headerTitle}`
+                            : column.headerTitle}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-white/80 dark:bg-zinc-900/50">
+                    {columns.map((column) => (
+                      <td
+                        key={`score-${column.key}`}
+                        className={cn(
+                          "border-r px-2 py-3 text-center align-middle tabular-nums text-base font-medium text-black dark:text-zinc-50",
+                          theme.cellBorder,
+                          column.isGrandTotal &&
+                            cn(
+                              EVALUATION_TOTAL_COLUMN_CLASS,
+                              "font-bold",
+                              theme.totalBg,
+                              theme.totalText,
+                            ),
+                          column.isTotalColumn &&
+                            !column.isGrandTotal &&
+                            "font-semibold",
+                        )}
+                      >
+                        {column.score}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );
@@ -853,20 +1105,6 @@ export default function FinalEvaluationTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/30 px-4 py-3 text-xs text-blue-900 dark:text-blue-200 leading-relaxed">
-        <p>
-          <strong>기초과정</strong>·<strong>과제</strong>·<strong>시험</strong>·
-          <strong>프로젝트</strong>는 날짜별 가로 표이며, 팀 프로젝트는 5개 세부
-          항목 점수가 함께 표시됩니다. <strong>동료평가</strong>는 학생이 받은
-          점수의 평균이며 학생 화면에는 공개되지 않습니다. 상담 내용은
-          상담일지를 불러올 수 있으며, 교수 최종 평가는 아래에서 작성 후
-          저장하세요. 학생별 <strong>PDF</strong> 또는{" "}
-          <strong>모든 학생 출력</strong>을 누르면 새 탭에 A4
-          미리보기가 열립니다. 상단 <strong>PDF로 저장 (인쇄)</strong> 버튼을
-          눌러 PDF로 저장하세요.
-        </p>
-      </div>
-
       {saveMessage ? (
         <p
           className={cn(
@@ -937,9 +1175,30 @@ export default function FinalEvaluationTab({
                       {row.studentName}
                     </span>
                     <div className="flex flex-wrap gap-2 flex-1 text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
-                      <span>기초 {row.metrics.foundation.totalScore}</span>
-                      <span>시험 {row.metrics.exam.totalScore}</span>
-                      <span>과제 {row.metrics.homework.totalScore}</span>
+                      <span>
+                        기초 {row.metrics.foundation.totalScore}
+                        {row.metrics.foundation.maxTotalScore
+                          ? `/${row.metrics.foundation.maxTotalScore}`
+                          : ""}
+                      </span>
+                      <span>
+                        시험{" "}
+                        {row.metrics.exam.items.some((item) =>
+                          item.grade?.trim(),
+                        )
+                          ? row.metrics.exam.items
+                              .map(
+                                (item) =>
+                                  item.grade?.trim().toUpperCase() ||
+                                  String(item.score),
+                              )
+                              .join(" · ") || "-"
+                          : row.metrics.exam.totalScore}
+                      </span>
+                      <span>
+                        과제 {row.metrics.homework.totalScore}/
+                        {row.metrics.homework.maxTotalScore}
+                      </span>
                       <span>프로젝트 {row.metrics.project.totalScore}</span>
                       <span title="동료평가 평균 점수 · 기수 내 등수">
                         동료 {formatPeerScoreWithRank(row.metrics.peer)}
@@ -971,19 +1230,13 @@ export default function FinalEvaluationTab({
 
                 {isExpanded ? (
                   <div className="border-t border-zinc-200 dark:border-zinc-700 px-4 py-4 space-y-4">
-                    {/* 기초과정 · 과제평가를 넓은 화면에서 2열로 배치 */}
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                      <div className="min-w-0">
-                        <FoundationEvaluationSection
-                          foundation={row.metrics.foundation}
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <HomeworkEvaluationSection
-                          homework={row.metrics.homework}
-                        />
-                      </div>
-                    </div>
+                    <FoundationEvaluationSection
+                      foundation={row.metrics.foundation}
+                    />
+
+                    <HomeworkEvaluationSection
+                      homework={row.metrics.homework}
+                    />
 
                     <ExamEvaluationSection exam={row.metrics.exam} />
 

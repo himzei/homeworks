@@ -58,6 +58,31 @@ export function getHomeworkScoreMax(phase: HomeworkScorePhase): number {
   return allowed[allowed.length - 1];
 }
 
+/**
+ * 최종평가 만점(분모) — 하루(항목) 단위
+ * - 기초과정: 2점 (승인 기준)
+ * - 본과정: 4점 (승인 기준)
+ */
+export const HOMEWORK_FULL_SCORE_PER_DAY_BY_PHASE = {
+  foundation: 2,
+  main: 4,
+} as const;
+
+export function getHomeworkFullScorePerDay(
+  phase: HomeworkScorePhase,
+): number {
+  return HOMEWORK_FULL_SCORE_PER_DAY_BY_PHASE[phase];
+}
+
+/** 항목 수 × 하루 만점 */
+export function computeHomeworkSectionMaxScore(
+  itemCount: number,
+  phase: HomeworkScorePhase,
+): number {
+  if (itemCount <= 0) return 0;
+  return itemCount * getHomeworkFullScorePerDay(phase);
+}
+
 /** DB status → 화면 점수 */
 export function evaluationStatusToScore(
   status: EvaluationStatus | string | null | undefined,

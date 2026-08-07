@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** PostgREST in() URL 길이 제한 대비 — ID 목록을 나눠 조회 후 병합 */
 const DEFAULT_IN_CHUNK_SIZE = 150;
+/** PostgREST 기본 max rows(1000) 대비 페이지 크기 */
+const DEFAULT_PAGE_SIZE = 1000;
 
 type ChunkedInExtraFilter = {
   column: string;
@@ -39,21 +41,36 @@ export async function fetchRowsWithChunkedInFilter<
 
   for (let offset = 0; offset < uniqueValues.length; offset += chunkSize) {
     const chunk = uniqueValues.slice(offset, offset + chunkSize);
-    let query = supabase.from(table).select(select).in(filterColumn, chunk);
+    let pageFrom = 0;
 
-    if (extraInFilter && extraInFilter.values.length > 0) {
-      query = query.in(extraInFilter.column, extraInFilter.values);
-    }
+    // 한글 주석: 청크당 결과가 1000건을 넘을 수 있어 range로 전부 가져온다
+    while (true) {
+      let query = supabase
+        .from(table)
+        .select(select)
+        .in(filterColumn, chunk)
+        .range(pageFrom, pageFrom + DEFAULT_PAGE_SIZE - 1);
 
-    const { data, error } = await query;
+      if (extraInFilter && extraInFilter.values.length > 0) {
+        query = query.in(extraInFilter.column, extraInFilter.values);
+      }
 
-    if (error) {
-      console.error(`[${table}] chunked in(${filterColumn}) 조회 오류:`, error);
-      continue;
-    }
+      const { data, error } = await query;
 
-    if (data?.length) {
-      mergedRows.push(...(data as unknown as T[]));
+      if (error) {
+        console.error(`[${table}] chunked in(${filterColumn}) 조회 오류:`, error);
+        break;
+      }
+
+      const pageRows = (data ?? []) as unknown as T[];
+      if (pageRows.length > 0) {
+        mergedRows.push(...pageRows);
+      }
+
+      if (pageRows.length < DEFAULT_PAGE_SIZE) {
+        break;
+      }
+      pageFrom += DEFAULT_PAGE_SIZE;
     }
   }
 

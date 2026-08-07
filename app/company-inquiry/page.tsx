@@ -56,8 +56,10 @@ export default async function CompanyInquiryPage({
     .select(
       "id, author_id, author_name, is_anonymous, content, note_color, rotate_deg, created_at, group_name",
     )
-    .order("created_at", { ascending: false })
-    .limit(60);
+    .order("created_at", { ascending: false });
+
+  // 특정 기수만 볼 때는 최근 60개, 전체(기수별 분리)는 더 넓게 조회
+  postsQuery = postsQuery.limit(filterGroup ? 60 : 300);
 
   if (filterGroup) {
     postsQuery = postsQuery.eq("group_name", filterGroup);

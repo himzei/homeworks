@@ -6,6 +6,7 @@ import { classifyExamEducationPhase } from "@/lib/evaluation/classify-exam-educa
 import {
   evaluationStatusToScore,
   resolveHomeworkScorePhase,
+  computeHomeworkSectionMaxScore,
   type HomeworkScorePhase,
 } from "@/lib/evaluation/scoring";
 import {
@@ -14,6 +15,7 @@ import {
   type StudentPeerEvaluation,
 } from "@/lib/evaluation/fetch-cohort-peer-evaluation-scores";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
+import { fetchRowsWithChunkedInFilter } from "@/lib/supabase/chunked-in-filter";
 import {
   teamEvaluationToScoreDetails,
   type ProjectScoreDetail,
@@ -32,11 +34,15 @@ export type HomeworkEvaluationItem = {
   score: number;
   phase: HomeworkScorePhase;
   phaseLabel: string;
+  /** /admin/evaluation 추가 필드에서 온 점수 */
+  isExtraField?: boolean;
 };
 
 /** 과제평가 (사전·본교육과 별도) */
 export type StudentHomeworkEvaluation = {
   totalScore: number;
+  /** 만점(분모) — 본과정 항목 수 × 4 */
+  maxTotalScore: number;
   items: HomeworkEvaluationItem[];
 };
 
@@ -46,10 +52,20 @@ export type DatedScoreItem = {
   dateLabel: string;
   title: string;
   score: number;
+  /** 시험·미니프로젝트 관리자 코멘트 (없으면 생략) */
+  comment?: string | null;
+  /** 시험·미니프로젝트 등급 A/B/C/D/F */
+  grade?: string | null;
+  /** 해당 평가 항목 기수 내 등수 (미평가면 null) */
+  rank?: number | null;
+  /** 등수 산정 대상 학생 수 */
+  rankedStudentCount?: number;
 };
 
 export type StudentDatedScoreEvaluation = {
   totalScore: number;
+  /** 만점(분모). 기초과정·과제평가 등에서 사용 */
+  maxTotalScore?: number;
   items: DatedScoreItem[];
 };
 
@@ -65,7 +81,7 @@ export type StudentFinalEvaluationMetrics = {
   projectDetail: string;
   /** 과제평가 — 과제별 날짜·점수 */
   homework: StudentHomeworkEvaluation;
-  /** 기초과정 평가 — 기초 과제 + 사전 시험 (날짜별 가로 표) */
+  /** 기초과정 평가 — 기초 과제·추가필드 + 사전 시험 */
   foundation: StudentDatedScoreEvaluation;
   /** 시험 평가 — 추가 평가 필드(본교육 시험), 과제평가 아래 표시 */
   exam: StudentDatedScoreEvaluation;
@@ -87,6 +103,10 @@ export type ProjectEvaluationItem = {
   teamRoleLabel?: string;
   /** 팀 프로젝트: 업무 분장(역할) */
   workAssignment?: string;
+  /** 팀 프로젝트: GitHub 주소 */
+  githubUrl?: string;
+  /** 팀 프로젝트: 배포 주소 */
+  deployUrl?: string;
 };
 
 export type StudentProjectEvaluation = {
@@ -103,6 +123,8 @@ type TeamProjectStudentEntry = {
   details: ProjectScoreDetail[];
   teamRoleLabel: string;
   workAssignment: string;
+  githubUrl: string;
+  deployUrl: string;
 };
 
 export type ConsultationLogPreview = {
@@ -240,66 +262,223 @@ function buildHomeworkItemsForStudent(
   });
 }
 
-/** 과제평가 — 본과정 과제만 (기초과정은 기초과정 평가 섹션) */
+function hasDateLabel(dateLabel: string): boolean {
+  const trimmed = dateLabel.trim();
+  return trimmed.length > 0 && trimmed !== "날짜미정";
+}
+
+function sortHomeworkEvaluationItems(
+  items: HomeworkEvaluationItem[],
+): HomeworkEvaluationItem[] {
+  return [...items].sort((itemA, itemB) => {
+    const itemAHasDate = hasDateLabel(itemA.dateLabel);
+    const itemBHasDate = hasDateLabel(itemB.dateLabel);
+    if (!itemAHasDate && itemBHasDate) return 1;
+    if (!itemBHasDate && itemAHasDate) return -1;
+    return itemA.dateLabel.localeCompare(itemB.dateLabel);
+  });
+}
+
+/** 추가 필드(other)를 기초/본과정 phase로 점수 항목 변환 */
+function buildOtherExtraHomeworkItemsForStudent(
+  otherExtraFields: ExtraFieldRow[],
+  mainEducationStartDate: string | null,
+  studentId: string,
+  extraScoreByUserField: Map<string, number>,
+  phaseFilter: HomeworkScorePhase,
+): HomeworkEvaluationItem[] {
+  const items: HomeworkEvaluationItem[] = [];
+
+  for (const field of otherExtraFields) {
+    const phase = resolveHomeworkScorePhase(
+      field.field_date ?? "9999-12-31",
+      mainEducationStartDate,
+    );
+    if (phase !== phaseFilter) continue;
+
+    const mapKey = `${studentId}:${field.id}`;
+    items.push({
+      assignmentId: `extra-${field.id}`,
+      title: (field.title ?? "").trim() || "추가 평가",
+      dateLabel: formatExtraFieldDateLabel(field.field_date),
+      score: extraScoreByUserField.get(mapKey) ?? 0,
+      phase,
+      phaseLabel: phaseToLabel(phase),
+      isExtraField: true,
+    });
+  }
+
+  return items;
+}
+
+/** 과제평가 — 본과정 제출물 과제 + 본과정 추가 필드(other) */
 function buildHomeworkEvaluationForStudent(
   assignments: AssignmentRow[],
   mainEducationStartDate: string | null,
   studentId: string,
   homeworkStatusByUserAssignment: Map<string, string>,
+  otherExtraFields: ExtraFieldRow[],
+  extraScoreByUserField: Map<string, number>,
 ): StudentHomeworkEvaluation {
-  const items = buildHomeworkItemsForStudent(
+  const assignmentItems = buildHomeworkItemsForStudent(
     assignments,
     mainEducationStartDate,
     studentId,
     homeworkStatusByUserAssignment,
   ).filter((item) => item.phase === "main");
 
+  const extraItems = buildOtherExtraHomeworkItemsForStudent(
+    otherExtraFields,
+    mainEducationStartDate,
+    studentId,
+    extraScoreByUserField,
+    "main",
+  );
+
+  const items = sortHomeworkEvaluationItems([
+    ...assignmentItems,
+    ...extraItems,
+  ]);
   const totalScore = items.reduce((sum, item) => sum + item.score, 0);
-  return { totalScore, items };
+  // 한글 주석: 본과정 만점 = 항목 수 × 4점
+  const maxTotalScore = computeHomeworkSectionMaxScore(items.length, "main");
+  return { totalScore, maxTotalScore, items };
 }
 
 function formatExtraFieldDateLabel(fieldDate: string | null): string {
   const trimmed = fieldDate?.trim().slice(0, 10);
-  return trimmed && trimmed.length > 0 ? trimmed : "날짜미정";
+  // 한글 주석: 날짜 없으면 빈 칸 (날짜미정 문구 미사용)
+  return trimmed && trimmed.length > 0 ? trimmed : "";
 }
 
 function sortDatedScoreItems(items: DatedScoreItem[]): DatedScoreItem[] {
   return [...items].sort((a, b) => {
-    if (a.dateLabel === "날짜미정" && b.dateLabel !== "날짜미정") return 1;
-    if (b.dateLabel === "날짜미정" && a.dateLabel !== "날짜미정") return -1;
+    const aHasDate = hasDateLabel(a.dateLabel);
+    const bHasDate = hasDateLabel(b.dateLabel);
+    if (!aHasDate && bHasDate) return 1;
+    if (!bHasDate && aHasDate) return -1;
     return a.dateLabel.localeCompare(b.dateLabel);
   });
 }
 
-/** 추가 평가 필드(시험) — 날짜·제목·점수 가로 표 */
+/** 등수 산정용 점수 — 등급 평가는 등수 제외, 숫자 점수만 대상 */
+function examItemRankValue(item: DatedScoreItem): number | null {
+  // 한글 주석: A~F 등급 항목은 순위 대신 등급만 표시
+  if (item.grade?.trim()) return null;
+  if (item.score > 0) return item.score;
+  return null;
+}
+
+/**
+ * 시험·미니프로젝트 항목별 기수 등수 부여
+ * - 숫자 점수(>0) 항목만 대상 (등급 평가는 제외)
+ * - 동점은 같은 등수, 다음 등수는 건너뜀
+ */
+function assignExamItemRanks(rows: StudentFinalEvaluationRow[]): void {
+  const scoresByItemKey = new Map<
+    string,
+    Array<{ studentId: string; score: number }>
+  >();
+
+  for (const row of rows) {
+    for (const item of row.metrics.exam.items) {
+      const value = examItemRankValue(item);
+      if (value === null) continue;
+      const list = scoresByItemKey.get(item.key) ?? [];
+      list.push({ studentId: row.studentId, score: value });
+      scoresByItemKey.set(item.key, list);
+    }
+  }
+
+  // 한글 주석: 등급 항목은 등수를 명시적으로 비움
+  for (const row of rows) {
+    for (const item of row.metrics.exam.items) {
+      if (item.grade?.trim()) {
+        item.rank = null;
+        item.rankedStudentCount = 0;
+      }
+    }
+  }
+
+  for (const [itemKey, studentScores] of scoresByItemKey) {
+    const sorted = studentScores.toSorted(
+      (entryA, entryB) => entryB.score - entryA.score,
+    );
+    const rankedStudentCount = sorted.length;
+    let previousScore: number | null = null;
+    let previousRank = 0;
+    const rankByStudentId = new Map<string, number>();
+
+    sorted.forEach((entry, index) => {
+      const rank =
+        previousScore !== null && entry.score === previousScore
+          ? previousRank
+          : index + 1;
+      previousScore = entry.score;
+      previousRank = rank;
+      rankByStudentId.set(entry.studentId, rank);
+    });
+
+    for (const row of rows) {
+      const item = row.metrics.exam.items.find(
+        (candidate) => candidate.key === itemKey,
+      );
+      if (!item) continue;
+      // 한글 주석: 같은 항목이라도 등급으로 평가된 학생은 등수 없음
+      if (item.grade?.trim()) {
+        item.rank = null;
+        item.rankedStudentCount = 0;
+        continue;
+      }
+      const rank = rankByStudentId.get(row.studentId) ?? null;
+      item.rank = rank;
+      item.rankedStudentCount = rankedStudentCount;
+    }
+  }
+}
+
+/** 추가 평가 필드(시험) — 날짜·제목·점수·등급 */
 function buildExtraExamEvaluationForStudent(
   examFields: ExtraFieldRow[],
   studentId: string,
   extraScoreByUserField: Map<string, number>,
+  extraCommentByUserField: Map<string, string> = new Map(),
+  extraGradeByUserField: Map<string, string> = new Map(),
 ): StudentDatedScoreEvaluation {
   const items = sortDatedScoreItems(
-    examFields.map((field) => ({
-      key: `exam-${field.id}`,
-      dateLabel: formatExtraFieldDateLabel(field.field_date),
-      title: (field.title ?? "").trim() || "시험",
-      score: extraScoreByUserField.get(`${studentId}:${field.id}`) ?? 0,
-    })),
+    examFields.map((field) => {
+      const mapKey = `${studentId}:${field.id}`;
+      const comment = extraCommentByUserField.get(mapKey)?.trim() || null;
+      const grade = extraGradeByUserField.get(mapKey)?.trim() || null;
+      return {
+        key: `exam-${field.id}`,
+        dateLabel: formatExtraFieldDateLabel(field.field_date),
+        title: (field.title ?? "").trim() || "시험",
+        score: extraScoreByUserField.get(mapKey) ?? 0,
+        comment,
+        grade,
+      };
+    }),
   );
   const totalScore = items.reduce((sum, item) => sum + item.score, 0);
   return { totalScore, items };
 }
 
-/** 기초과정: 기초(사전) 과제 + 사전교육 시험 */
+/** 기초과정: 기초 과제 + 기초 추가 필드 + 사전교육 시험 */
 function buildFoundationEvaluationForStudent(
   assignments: AssignmentRow[],
   mainEducationStartDate: string | null,
   studentId: string,
   homeworkStatusByUserAssignment: Map<string, string>,
+  otherExtraFields: ExtraFieldRow[],
   preExamFields: ExtraFieldRow[],
   extraScoreByUserField: Map<string, number>,
+  extraCommentByUserField: Map<string, string> = new Map(),
+  extraGradeByUserField: Map<string, string> = new Map(),
 ): StudentDatedScoreEvaluation {
   const items: DatedScoreItem[] = [];
 
+  // 한글 주석: 기초과정으로 분류된 제출물 과제
   for (const item of buildHomeworkItemsForStudent(
     assignments,
     mainEducationStartDate,
@@ -315,16 +494,47 @@ function buildFoundationEvaluationForStudent(
     });
   }
 
+  // 한글 주석: 기초과정으로 분류된 추가 평가 필드
+  for (const item of buildOtherExtraHomeworkItemsForStudent(
+    otherExtraFields,
+    mainEducationStartDate,
+    studentId,
+    extraScoreByUserField,
+    "foundation",
+  )) {
+    items.push({
+      key: item.assignmentId,
+      dateLabel: item.dateLabel,
+      title: item.isExtraField ? `[추가] ${item.title}` : item.title,
+      score: item.score,
+    });
+  }
+
+  // 한글 주석: 사전교육 시험 필드
   const preExamItems = buildExtraExamEvaluationForStudent(
     preExamFields,
     studentId,
     extraScoreByUserField,
+    extraCommentByUserField,
+    extraGradeByUserField,
   ).items;
   items.push(...preExamItems);
 
   const sorted = sortDatedScoreItems(items);
   const totalScore = sorted.reduce((sum, item) => sum + item.score, 0);
-  return { totalScore, items: sorted };
+
+  // 한글 주석: 기초 과제·추가필드는 항목당 2점, 사전 시험은 100점 만점
+  let dayUnitCount = 0;
+  let examFieldCount = 0;
+  for (const item of sorted) {
+    if (item.key.startsWith("exam-")) examFieldCount += 1;
+    else dayUnitCount += 1;
+  }
+  const maxTotalScore =
+    computeHomeworkSectionMaxScore(dayUnitCount, "foundation") +
+    examFieldCount * 100;
+
+  return { totalScore, maxTotalScore, items: sorted };
 }
 
 async function fetchExtraFieldsForGroup(
@@ -396,7 +606,7 @@ async function fetchTeamProjectEntriesByStudent(
 
   const evaluationDateLabel = data.project_evaluation_date?.trim()
     ? data.project_evaluation_date.trim().slice(0, 10)
-    : "날짜미정";
+    : "";
 
   const teamProjects = parseTeamProjectsFromJson(data.team_projects);
   for (const [teamKey, project] of Object.entries(teamProjects)) {
@@ -421,6 +631,8 @@ async function fetchTeamProjectEntriesByStudent(
         details: teamEvaluationToScoreDetails(evaluation),
         teamRoleLabel,
         workAssignment: evaluation.workAssignment?.trim() ?? "",
+        githubUrl: project.githubUrl.trim(),
+        deployUrl: project.deployUrl.trim(),
       };
       const list = result.get(profileId) ?? [];
       list.push(entry);
@@ -464,6 +676,8 @@ function buildProjectEvaluationForStudent(
       details: entry.details,
       teamRoleLabel: entry.teamRoleLabel,
       workAssignment: entry.workAssignment,
+      githubUrl: entry.githubUrl,
+      deployUrl: entry.deployUrl,
     });
   }
 
@@ -529,14 +743,33 @@ export async function fetchCohortFinalEvaluationData(
     fetchPeerEvaluationScoresByStudent(supabase, trimmedGroup, studentIds),
   ]);
 
-  const examAndProjectFieldIds = extraFields
-    .filter((field) => {
-      const category = classifyExtraFieldCategory(field.title);
-      return category === "exam" || category === "project";
-    })
-    .map((field) => field.id);
+  const allExtraFieldIds = extraFields.map((field) => field.id);
 
   const assignmentIds = assignments.map((assignment) => assignment.id);
+
+  // 한글 주석: /admin/evaluation에서 저장한 homeworks.status를 최종평가 과제점수로 반영
+  const homeworkStatusPromise =
+    assignmentIds.length > 0
+      ? fetchRowsWithChunkedInFilter<{
+          user_id: string;
+          assignment_id: string;
+          status: string;
+        }>({
+          supabase,
+          table: "homeworks",
+          select: "user_id, assignment_id, status",
+          filterColumn: "user_id",
+          filterValues: studentIds,
+          extraInFilter: {
+            column: "assignment_id",
+            values: assignmentIds,
+          },
+        }).then((rows) => ({ data: rows, error: null as Error | null }))
+      : Promise.resolve({ data: [] as Array<{
+          user_id: string;
+          assignment_id: string;
+          status: string;
+        }>, error: null });
 
   const [
     savedRowsResult,
@@ -551,19 +784,25 @@ export async function fetchCohortFinalEvaluationData(
       )
       .eq("group_name", trimmedGroup)
       .in("student_id", studentIds),
-    assignmentIds.length > 0
-      ? supabase
-          .from("homeworks")
-          .select("user_id, assignment_id, status")
-          .in("assignment_id", assignmentIds)
-          .in("user_id", studentIds)
-      : Promise.resolve({ data: [], error: null }),
-    examAndProjectFieldIds.length > 0
-      ? supabase
-          .from("evaluation_extra_scores")
-          .select("user_id, field_id, score")
-          .in("field_id", examAndProjectFieldIds)
-          .in("user_id", studentIds)
+    homeworkStatusPromise,
+    allExtraFieldIds.length > 0
+      ? fetchRowsWithChunkedInFilter<{
+          user_id: string;
+          field_id: string;
+          score: number | null;
+          comment: string | null;
+          grade: string | null;
+        }>({
+          supabase,
+          table: "evaluation_extra_scores",
+          select: "user_id, field_id, score, comment, grade",
+          filterColumn: "user_id",
+          filterValues: studentIds,
+          extraInFilter: {
+            column: "field_id",
+            values: allExtraFieldIds,
+          },
+        }).then((rows) => ({ data: rows, error: null as Error | null }))
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from("consultation_logs")
@@ -610,11 +849,23 @@ export async function fetchCohortFinalEvaluationData(
   }
 
   const extraScoreByUserField = new Map<string, number>();
+  const extraCommentByUserField = new Map<string, string>();
+  const extraGradeByUserField = new Map<string, string>();
   for (const row of extraScoreRowsResult.data ?? []) {
-    extraScoreByUserField.set(
-      `${row.user_id}:${row.field_id}`,
-      row.score ?? 0,
-    );
+    const mapKey = `${row.user_id}:${row.field_id}`;
+    extraScoreByUserField.set(mapKey, row.score ?? 0);
+    const comment =
+      typeof row.comment === "string" ? row.comment.trim() : "";
+    if (comment) {
+      extraCommentByUserField.set(mapKey, comment);
+    }
+    const grade =
+      typeof (row as { grade?: unknown }).grade === "string"
+        ? ((row as { grade: string }).grade).trim().toUpperCase()
+        : "";
+    if (grade) {
+      extraGradeByUserField.set(mapKey, grade);
+    }
   }
 
   const consultationsByStudent = new Map<string, ConsultationLogPreview[]>();
@@ -632,6 +883,7 @@ export async function fetchCohortFinalEvaluationData(
   const preExamFields: ExtraFieldRow[] = [];
   const mainExamFields: ExtraFieldRow[] = [];
   const projectFields: ExtraFieldRow[] = [];
+  const otherExtraFields: ExtraFieldRow[] = [];
 
   for (const field of extraFields) {
     const category = classifyExtraFieldCategory(field.title);
@@ -645,15 +897,20 @@ export async function fetchCohortFinalEvaluationData(
       else mainExamFields.push(field);
     } else if (category === "project") {
       projectFields.push(field);
+    } else {
+      // 한글 주석: 시험/프로젝트 외 추가 필드 → 과제평가로 반영
+      otherExtraFields.push(field);
     }
   }
 
-  return students.map((student) => {
+  const rows = students.map((student) => {
     const homework = buildHomeworkEvaluationForStudent(
       assignments,
       mainEducationStartDate,
       student.id,
       homeworkStatusByUserAssignment,
+      otherExtraFields,
+      extraScoreByUserField,
     );
 
     const foundation = buildFoundationEvaluationForStudent(
@@ -661,13 +918,18 @@ export async function fetchCohortFinalEvaluationData(
       mainEducationStartDate,
       student.id,
       homeworkStatusByUserAssignment,
+      otherExtraFields,
       preExamFields,
       extraScoreByUserField,
+      extraCommentByUserField,
+      extraGradeByUserField,
     );
     const exam = buildExtraExamEvaluationForStudent(
       mainExamFields,
       student.id,
       extraScoreByUserField,
+      extraCommentByUserField,
+      extraGradeByUserField,
     );
 
     const project = buildProjectEvaluationForStudent(
@@ -684,21 +946,13 @@ export async function fetchCohortFinalEvaluationData(
     const mainEducationScore = exam.totalScore;
     const projectScore = project.totalScore;
 
-    const foundationHomeworkCount = assignments.filter(
-      (assignment) =>
-        resolveHomeworkScorePhase(
-          assignment.start_date,
-          mainEducationStartDate,
-        ) === "foundation",
-    ).length;
-
     const metrics: StudentFinalEvaluationMetrics = {
       preEducationScore,
       mainEducationScore,
       projectScore,
       preEducationDetail:
         foundation.items.length > 0
-          ? `기초과제 ${foundationHomeworkCount}건 + 사전 시험 ${preExamFields.length}건`
+          ? `기초과정 ${foundation.items.length}건`
           : "기초과정 항목 없음",
       mainEducationDetail:
         exam.items.length > 0
@@ -732,4 +986,9 @@ export async function fetchCohortFinalEvaluationData(
       savedUpdatedAt: saved?.updatedAt ?? null,
     };
   });
+
+  // 시험·미니프로젝트 항목별 기수 등수 부여
+  assignExamItemRanks(rows);
+
+  return rows;
 }

@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     }
 
     const rows = await fetchCohortFinalEvaluationData(
-      session.supabase,
+      getServiceRoleClient() ?? session.supabase,
       groupName,
     );
 

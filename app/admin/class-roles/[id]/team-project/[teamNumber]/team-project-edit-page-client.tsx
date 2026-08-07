@@ -56,6 +56,7 @@ export default function TeamProjectEditPageClient({
 }: Props) {
   const [topic, setTopic] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
+  const [deployUrl, setDeployUrl] = useState("");
   const [feedbackComments, setFeedbackComments] = useState<
     TeamProjectFeedbackComment[]
   >([]);
@@ -90,6 +91,7 @@ export default function TeamProjectEditPageClient({
     // 한글 주석: 서버에서 넘어온 초기 데이터를 폼에 주입
     setTopic(initialProject?.topic ?? "");
     setGithubUrl(initialProject?.githubUrl ?? "");
+    setDeployUrl(initialProject?.deployUrl ?? "");
     setFeedbackComments(initialProject?.feedbackComments ?? []);
     setEvaluationsByProfileId(initialProject?.evaluations ?? {});
     setNewFeedbackText("");
@@ -119,6 +121,7 @@ export default function TeamProjectEditPageClient({
     // 한글 주석: 서버 응답을 화면 상태에 반영(부분 저장 포함)
     setTopic(project.topic ?? "");
     setGithubUrl(project.githubUrl ?? "");
+    setDeployUrl(project.deployUrl ?? "");
     setFeedbackComments(project.feedbackComments);
     setExistingPptFileName(project.pptFileName ?? null);
     setRemoveExistingPpt(false);
@@ -440,6 +443,7 @@ export default function TeamProjectEditPageClient({
       if (input.includeTopicGithub) {
         formData.set("topic", topic);
         formData.set("githubUrl", githubUrl);
+        formData.set("deployUrl", deployUrl);
       }
 
       if (input.includeEvaluations) {
@@ -521,7 +525,7 @@ export default function TeamProjectEditPageClient({
               {teamLabel} 프로젝트 정보
             </h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              주제·GitHub·첨부는 저장 버튼으로, 피드백은 댓글처럼 추가합니다.
+              주제·GitHub·배포주소·첨부는 저장 버튼으로, 피드백은 댓글처럼 추가합니다.
             </p>
           </div>
           <Link href={backHref}>
@@ -681,7 +685,7 @@ export default function TeamProjectEditPageClient({
                   저장 중...
                 </>
               ) : (
-                "주제·GitHub 저장"
+                "주제·주소 저장"
               )}
             </Button>
           </div>
@@ -710,6 +714,24 @@ export default function TeamProjectEditPageClient({
             onChange={(event) => setGithubUrl(event.target.value)}
             disabled={isBusy}
             placeholder="https://github.com/organization/repository"
+            className="mt-1.5 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm text-black dark:text-zinc-50 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="team-project-deploy"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            팀 배포주소
+          </label>
+          <input
+            id="team-project-deploy"
+            type="url"
+            value={deployUrl}
+            onChange={(event) => setDeployUrl(event.target.value)}
+            disabled={isBusy}
+            placeholder="https://example.vercel.app"
             className="mt-1.5 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm text-black dark:text-zinc-50 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
           />
         </div>

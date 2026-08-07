@@ -26,6 +26,7 @@ import {
   type EvaluationStatus,
   type HomeworkScorePhase,
 } from "@/lib/evaluation/scoring";
+import { isExamOrMiniProjectFieldTitle } from "@/lib/evaluation/classify-extra-field";
 
 // 과제 데이터 타입 정의
 interface Assignment {
@@ -604,7 +605,11 @@ export default function EvaluationTab({
           ...field,
           field_date: field.field_date ?? null,
         }));
-        setExtraFields(sortExtraFieldsByDisplayDate(normalizedFields));
+        // 한글 주석: 시험·미니프로젝트는 exam-evaluations 전용 — 평가 탭에서 제외
+        const nonExamFields = normalizedFields.filter(
+          (field) => !isExamOrMiniProjectFieldTitle(field.title),
+        );
+        setExtraFields(sortExtraFieldsByDisplayDate(nonExamFields));
       } catch (error) {
         if (isAbortError(error)) return;
         console.error("추가 필드 조회 중 오류:", error);
@@ -785,6 +790,12 @@ export default function EvaluationTab({
     const trimmedTitle = newFieldTitle.trim();
     if (!trimmedTitle) {
       alert("필드 이름을 입력해주세요.");
+      return;
+    }
+    if (isExamOrMiniProjectFieldTitle(trimmedTitle)) {
+      alert(
+        "시험·미니프로젝트 항목은 「시험·미니프로젝트」 메뉴에서 추가해 주세요.",
+      );
       return;
     }
     if (!newFieldDate) {
@@ -1311,7 +1322,7 @@ export default function EvaluationTab({
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleAddExtraField();
               }}
-              placeholder="예: 중간시험, 최종프로젝트 (제목에 시험/프로젝트 포함)"
+              placeholder="예: 추가과제, 최종프로젝트 (시험·미니프로젝트는 전용 메뉴 사용)"
               maxLength={50}
               className="flex-1 min-w-[160px] text-sm px-3 py-1.5 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

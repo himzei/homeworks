@@ -263,6 +263,12 @@ function ClassRoleTeamCard({
                       {team.teamProject.githubUrl}
                     </p>
                   ) : null}
+                  {team.teamProject.deployUrl.trim() ? (
+                    <p className="truncate">
+                      <span className="font-medium text-zinc-500">배포</span>{" "}
+                      {team.teamProject.deployUrl}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -551,6 +557,7 @@ export default function ClassRoleSnapshotDetailArticle({
                   topic: "",
                   feedbackComments: [],
                   githubUrl: "",
+                  deployUrl: "",
                   pptStoragePath: null,
                   pptFileName: null,
                   // 한글 주석: 팀 프로젝트 정보의 evaluations 필드는 필수라 기본값을 넣어준다.

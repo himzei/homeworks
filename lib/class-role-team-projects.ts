@@ -23,6 +23,8 @@ export type TeamProjectRecord = {
   feedback?: string | null;
   feedback_comments?: TeamProjectFeedbackCommentRecord[] | null;
   github_url?: string | null;
+  /** 팀 배포(서비스) 주소 */
+  deploy_url?: string | null;
   ppt_storage_path?: string | null;
   ppt_file_name?: string | null;
   // 한글 주석: 조장/조원별 평가 점수(이미지의 평가표) 저장용
@@ -34,6 +36,8 @@ export type TeamProjectInfo = {
   topic: string;
   feedbackComments: TeamProjectFeedbackComment[];
   githubUrl: string;
+  /** 팀 배포(서비스) 주소 */
+  deployUrl: string;
   pptStoragePath: string | null;
   pptFileName: string | null;
   // 한글 주석: key=profileId, value=평가 점수/피드백
@@ -184,12 +188,29 @@ export function parseTeamProjectsFromJson(
     if (!Number.isFinite(teamNumber) || teamNumber < 1) continue;
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
 
-    const row = value as TeamProjectRecord;
+    const row = value as TeamProjectRecord & {
+      githubUrl?: string | null;
+      deployUrl?: string | null;
+    };
+    // 한글 주석: snake_case·camelCase 모두 허용 (구데이터 호환)
+    const githubUrlRaw =
+      typeof row.github_url === "string"
+        ? row.github_url
+        : typeof row.githubUrl === "string"
+          ? row.githubUrl
+          : "";
+    const deployUrlRaw =
+      typeof row.deploy_url === "string"
+        ? row.deploy_url
+        : typeof row.deployUrl === "string"
+          ? row.deployUrl
+          : "";
+
     result[teamNumber] = {
       topic: typeof row.topic === "string" ? row.topic.trim() : "",
       feedbackComments: parseFeedbackComments(row),
-      githubUrl:
-        typeof row.github_url === "string" ? row.github_url.trim() : "",
+      githubUrl: githubUrlRaw.trim(),
+      deployUrl: deployUrlRaw.trim(),
       pptStoragePath:
         typeof row.ppt_storage_path === "string" && row.ppt_storage_path.trim()
           ? row.ppt_storage_path.trim()
@@ -216,12 +237,22 @@ export function teamProjectsMapToJson(
 
     const topic = project.topic.trim();
     const githubUrl = project.githubUrl.trim();
+    const deployUrl = project.deployUrl.trim();
     const pptPath = project.pptStoragePath?.trim() || null;
     const pptName = project.pptFileName?.trim() || null;
     const hasFeedback = project.feedbackComments.length > 0;
     const hasEvaluations = Object.keys(project.evaluations ?? {}).length > 0;
 
-    if (!topic && !hasFeedback && !githubUrl && !pptPath && !hasEvaluations) continue;
+    if (
+      !topic &&
+      !hasFeedback &&
+      !githubUrl &&
+      !deployUrl &&
+      !pptPath &&
+      !hasEvaluations
+    ) {
+      continue;
+    }
 
     json[String(teamNumber)] = {
       topic: topic || null,
@@ -235,6 +266,7 @@ export function teamProjectsMapToJson(
           }))
         : null,
       github_url: githubUrl || null,
+      deploy_url: deployUrl || null,
       ppt_storage_path: pptPath,
       ppt_file_name: pptName,
       evaluations: hasEvaluations
@@ -325,16 +357,22 @@ export function teamProjectHasContent(project: TeamProjectInfo): boolean {
     project.topic.trim() ||
     project.feedbackComments.length > 0 ||
     project.githubUrl.trim() ||
+    project.deployUrl.trim() ||
     project.pptStoragePath
   );
 }
 
-/** GitHub URL 정규화 (프로필 페이지와 동일 패턴) */
-export function normalizeGithubUrl(raw: string): string {
+/** HTTP(S) URL 정규화 (스킴 없으면 https:// 붙임) */
+export function normalizeHttpUrl(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
+}
+
+/** GitHub URL 정규화 (프로필 페이지와 동일 패턴) */
+export function normalizeGithubUrl(raw: string): string {
+  return normalizeHttpUrl(raw);
 }
 
 /** 첨부 파일 확장자 검사 */
@@ -368,6 +406,19 @@ export function assertTeamAttachmentFileSize(byteSize: number): string | null {
     return "첨부 파일은 50MB 이하만 업로드할 수 있습니다.";
   }
   return null;
+}
+
+/** 빈 조별 프로젝트 기본값 */
+export function createEmptyTeamProjectInfo(): TeamProjectInfo {
+  return {
+    topic: "",
+    feedbackComments: [],
+    githubUrl: "",
+    deployUrl: "",
+    pptStoragePath: null,
+    pptFileName: null,
+    evaluations: {},
+  };
 }
 
 export { MAX_TEAM_ATTACHMENT_BYTES };

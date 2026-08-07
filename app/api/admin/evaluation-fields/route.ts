@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { verifyAdminSession } from "@/lib/admin/verify-admin";
+import {
+  isExamScoringMethod,
+  type ExamScoringMethod,
+} from "@/lib/evaluation/exam-letter-grade";
 import { getServiceRoleClient } from "@/lib/supabase/service-role";
 
 export type EvaluationExtraFieldRow = {
@@ -9,11 +13,12 @@ export type EvaluationExtraFieldRow = {
   group_name: string | null;
   sort_order: number;
   field_date: string | null;
+  scoring_method: ExamScoringMethod | null;
   created_at: string;
 };
 
 const FIELD_SELECT =
-  "id, title, group_name, sort_order, field_date, created_at";
+  "id, title, group_name, sort_order, field_date, scoring_method, created_at";
 
 /** YYYY-MM-DD 형식 검증 */
 function parseFieldDateInput(value: unknown): string | null {
@@ -110,10 +115,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { title, groupName, fieldDate } = body as {
+    const { title, groupName, fieldDate, scoringMethod } = body as {
       title?: string;
       groupName?: string | null;
       fieldDate?: string;
+      scoringMethod?: string;
     };
 
     const trimmedTitle = typeof title === "string" ? title.trim() : "";
@@ -126,6 +132,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    const normalizedScoringMethod: ExamScoringMethod = isExamScoringMethod(
+      scoringMethod,
+    )
+      ? scoringMethod
+      : "score";
 
     const service = getServiceRoleClient() ?? session.supabase;
     if (!service) {
@@ -161,16 +173,17 @@ export async function POST(request: Request) {
         group_name: normalizedGroup,
         sort_order: nextSort,
         field_date: parsedFieldDate,
+        scoring_method: normalizedScoringMethod,
       })
       .select(FIELD_SELECT)
       .single();
 
     if (insertError) {
       console.error("evaluation-fields POST:", insertError);
-      return NextResponse.json(
-        { error: insertError.message ?? "필드 추가에 실패했습니다." },
-        { status: 400 },
-      );
+      const message = insertError.message?.includes("scoring_method")
+        ? "scoring_method 컬럼이 없습니다. Supabase 마이그레이션을 적용해 주세요."
+        : (insertError.message ?? "필드 추가에 실패했습니다.");
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     return NextResponse.json({ field: inserted });

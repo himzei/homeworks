@@ -23,6 +23,16 @@ const ADMIN_NAV_ITEMS = [
     exact: false,
   },
   {
+    href: "/admin/exam-evaluations",
+    label: "시험·미니프로젝트",
+    exact: false,
+  },
+  {
+    href: "/admin/final-evaluations",
+    label: "최종 평가",
+    exact: false,
+  },
+  {
     href: "/admin/peer-evaluations",
     label: "동료평가",
     exact: false,
@@ -70,11 +80,6 @@ const ADMIN_NAV_ITEMS = [
   {
     href: "/admin/courses",
     label: "과정 관리",
-    exact: false,
-  },
-  {
-    href: "/admin/final-evaluations",
-    label: "최종 평가",
     exact: false,
   },
 ] as const;

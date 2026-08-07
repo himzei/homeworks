@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { verifyAdminSession } from "@/lib/admin/verify-admin";
 import {
   appendTeamProjectFeedbackComment,
+  createEmptyTeamProjectInfo,
   deleteTeamProjectFeedbackComment,
   parseTeamProjectsFromJson,
   teamProjectsMapToJson,
@@ -142,14 +143,8 @@ export async function POST(request: Request, context: RouteContext) {
     const authorName = authorProfile?.name?.trim() || "관리자";
     const { allProjects } = loaded;
 
-    const current: TeamProjectInfo = allProjects[teamNumber] ?? {
-      topic: "",
-      feedbackComments: [],
-      githubUrl: "",
-      pptStoragePath: null,
-      pptFileName: null,
-      evaluations: {},
-    };
+    const current: TeamProjectInfo =
+      allProjects[teamNumber] ?? createEmptyTeamProjectInfo();
 
     allProjects[teamNumber] = appendTeamProjectFeedbackComment(current, {
       content,
@@ -230,14 +225,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const { allProjects } = loaded;
-    const current: TeamProjectInfo = allProjects[teamNumber] ?? {
-      topic: "",
-      feedbackComments: [],
-      githubUrl: "",
-      pptStoragePath: null,
-      pptFileName: null,
-      evaluations: {},
-    };
+    const current: TeamProjectInfo =
+      allProjects[teamNumber] ?? createEmptyTeamProjectInfo();
 
     const updated = updateTeamProjectFeedbackComment(
       current,
@@ -313,14 +302,8 @@ export async function DELETE(request: Request, context: RouteContext) {
     }
 
     const { allProjects } = loaded;
-    const current: TeamProjectInfo = allProjects[teamNumber] ?? {
-      topic: "",
-      feedbackComments: [],
-      githubUrl: "",
-      pptStoragePath: null,
-      pptFileName: null,
-      evaluations: {},
-    };
+    const current: TeamProjectInfo =
+      allProjects[teamNumber] ?? createEmptyTeamProjectInfo();
 
     const hasComment = current.feedbackComments.some(
       (comment) => comment.id === commentId,

@@ -162,16 +162,23 @@ export async function fetchStudentEvaluationSummary(
 
     const examFieldIds: string[] = [];
     const projectFieldIds: string[] = [];
+    const otherFieldIds: string[] = [];
 
     for (const field of extraFields) {
       const category = classifyExtraFieldCategory(field.title);
       if (category === "exam") examFieldIds.push(field.id);
       if (category === "project") projectFieldIds.push(field.id);
+      if (category === "other") otherFieldIds.push(field.id);
     }
 
-    const allExtraFieldIds = [...examFieldIds, ...projectFieldIds];
+    const allExtraFieldIds = [
+      ...examFieldIds,
+      ...projectFieldIds,
+      ...otherFieldIds,
+    ];
     let examScore = 0;
     let projectScore = 0;
+    let otherExtraScore = 0;
 
     if (allExtraFieldIds.length > 0) {
       const { data: scoreRows, error: scoreError } = await supabase
@@ -194,11 +201,14 @@ export async function fetchStudentEvaluationSummary(
         for (const fieldId of projectFieldIds) {
           projectScore += scoreByFieldId.get(fieldId) ?? 0;
         }
+        for (const fieldId of otherFieldIds) {
+          otherExtraScore += scoreByFieldId.get(fieldId) ?? 0;
+        }
       }
     }
 
     return {
-      homeworkScore,
+      homeworkScore: homeworkScore + otherExtraScore,
       examScore,
       projectScore,
       homeworkAssignmentCount,

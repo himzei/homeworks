@@ -4,6 +4,10 @@ import { Download, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import { isAbortError } from "@/lib/errors/is-abort-error";
+import {
+  formatShortGroupLabel,
+  parseCohortNumberFromGroupName,
+} from "@/lib/fetch-group-options";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/app/_components/ui/button";
 import {
@@ -35,6 +39,13 @@ type Props = {
   isAdmin: boolean;
 };
 
+type CohortPostSection = {
+  groupKey: string;
+  groupName: string | null;
+  shortLabel: string;
+  posts: CompanyInquiryPostRow[];
+};
+
 const POST_SELECT_FIELDS =
   "id, author_id, author_name, is_anonymous, content, note_color, rotate_deg, created_at, group_name";
 
@@ -44,6 +55,8 @@ const NOTE_COLORS: { key: string; className: string }[] = [
   { key: "green", className: "bg-[#CFF7D6] text-zinc-900" },
   { key: "blue", className: "bg-[#CFE9FF] text-zinc-900" },
 ];
+
+const UNASSIGNED_GROUP_KEY = "__unassigned__";
 
 function pickRandom<T>(list: readonly T[], fallback: T): T {
   if (!list.length) return fallback;
@@ -65,6 +78,51 @@ function formatKoreanTime(isoString: string): string {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+/** 포스트잇을 기수별로 묶고 최신 기수 우선 정렬 */
+function groupPostsByCohort(
+  posts: CompanyInquiryPostRow[],
+): CohortPostSection[] {
+  const sectionByKey = new Map<string, CohortPostSection>();
+
+  for (const post of posts) {
+    const trimmedGroupName = post.group_name?.trim() || null;
+    const groupKey = trimmedGroupName ?? UNASSIGNED_GROUP_KEY;
+    const existing = sectionByKey.get(groupKey);
+
+    if (existing) {
+      existing.posts.push(post);
+      continue;
+    }
+
+    sectionByKey.set(groupKey, {
+      groupKey,
+      groupName: trimmedGroupName,
+      shortLabel: formatShortGroupLabel(trimmedGroupName),
+      posts: [post],
+    });
+  }
+
+  return [...sectionByKey.values()].toSorted((sectionA, sectionB) => {
+    // 미지정은 맨 아래
+    if (sectionA.groupKey === UNASSIGNED_GROUP_KEY) return 1;
+    if (sectionB.groupKey === UNASSIGNED_GROUP_KEY) return -1;
+
+    const cohortA = parseCohortNumberFromGroupName(sectionA.groupName ?? "");
+    const cohortB = parseCohortNumberFromGroupName(sectionB.groupName ?? "");
+
+    if (cohortA !== null && cohortB !== null && cohortB !== cohortA) {
+      return cohortB - cohortA;
+    }
+    if (cohortA !== null && cohortB === null) return -1;
+    if (cohortA === null && cohortB !== null) return 1;
+
+    return (sectionA.groupName ?? "").localeCompare(
+      sectionB.groupName ?? "",
+      "ko",
+    );
   });
 }
 
@@ -131,10 +189,26 @@ export default function CompanyInquiryStickyBoard({
   // 관리자가 "전체"를 보고 있으면 작성 대상 기수가 없음
   const canWrite = Boolean(writeGroupName);
 
+  // 기수 필터 없이 여러 기수 글이 섞인 경우 → 섹션으로 분리
+  const cohortSections = useMemo(() => {
+    if (cohortLabel) return null;
+    return groupPostsByCohort(posts);
+  }, [cohortLabel, posts]);
+
   const postCountLabel = useMemo(() => {
     const count = posts.length;
     return `${count}개`;
   }, [posts.length]);
+
+  const handlePostUpdated = (updated: CompanyInquiryPostRow) => {
+    setPosts((prev) =>
+      prev.map((item) => (item.id === updated.id ? updated : item)),
+    );
+  };
+
+  const handlePostDeleted = (postId: string) => {
+    setPosts((prev) => prev.filter((item) => item.id !== postId));
+  };
 
   const handleSubmit = async () => {
     if (!writeGroupName) {
@@ -262,7 +336,8 @@ export default function CompanyInquiryStickyBoard({
               </p>
             ) : isAdmin ? (
               <p className="text-sm text-amber-200/90">
-                전체 기수 글입니다. 작성하려면 위에서 과정을 선택해 주세요.
+                기수별로 나눠 표시합니다. 작성하려면 위에서 과정을 선택해
+                주세요.
               </p>
             ) : null}
           </div>
@@ -357,11 +432,47 @@ export default function CompanyInquiryStickyBoard({
         >
           <p className="mb-4 text-sm font-medium text-white/80">
             기업(문의) 포스트잇 · {postCountLabel}
+            {cohortSections && cohortSections.length > 1
+              ? ` · ${cohortSections.length}개 기수`
+              : null}
           </p>
 
           {posts.length === 0 ? (
             <div className="text-center py-16 text-white/70">
               아직 붙은 포스트잇이 없습니다. 첫 문의를 남겨보세요.
+            </div>
+          ) : cohortSections ? (
+            <div className="space-y-8">
+              {cohortSections.map((section) => (
+                <div key={section.groupKey} className="space-y-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 pb-2">
+                    <h2 className="text-base font-semibold text-white">
+                      {section.shortLabel}
+                      {section.groupName &&
+                      section.shortLabel !== section.groupName ? (
+                        <span className="ml-2 text-sm font-normal text-white/55">
+                          {section.groupName}
+                        </span>
+                      ) : null}
+                    </h2>
+                    <span className="text-xs tabular-nums text-white/60">
+                      {section.posts.length}개
+                    </span>
+                  </div>
+                  <div className="columns-1 gap-4 overflow-visible pt-1 sm:columns-2 lg:columns-3 [column-fill:_balance]">
+                    {section.posts.map((post) => (
+                      <StickyNote
+                        key={post.id}
+                        post={post}
+                        currentUserId={currentUserId}
+                        currentUserName={currentUserName}
+                        onUpdated={handlePostUpdated}
+                        onDeleted={handlePostDeleted}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 overflow-visible pt-2 [column-fill:_balance]">
@@ -371,14 +482,8 @@ export default function CompanyInquiryStickyBoard({
                   post={post}
                   currentUserId={currentUserId}
                   currentUserName={currentUserName}
-                  onUpdated={(updated) =>
-                    setPosts((prev) =>
-                      prev.map((item) => (item.id === updated.id ? updated : item)),
-                    )
-                  }
-                  onDeleted={(postId) =>
-                    setPosts((prev) => prev.filter((item) => item.id !== postId))
-                  }
+                  onUpdated={handlePostUpdated}
+                  onDeleted={handlePostDeleted}
                 />
               ))}
             </div>
