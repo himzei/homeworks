@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import PeerEvaluationAllCohortsBoard from "@/app/peer-evaluation/_components/PeerEvaluationAllCohortsBoard";
 import PeerEvaluationStudentBoard from "@/app/peer-evaluation/_components/PeerEvaluationStudentBoard";
 import { requireApprovedMember } from "@/lib/auth/require-approved-member";
-import { fetchPeerEvaluationProjectsForMember } from "@/lib/peer-evaluation/fetch-projects";
+import {
+  fetchPeerEvaluationProjectsForAdmin,
+  fetchPeerEvaluationProjectsForMember,
+} from "@/lib/peer-evaluation/fetch-projects";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -21,26 +25,25 @@ export default async function PeerEvaluationPage() {
   const isAdmin = profile.role === "admin";
   const userGroupName = profile.group_name?.trim() || null;
 
-  if (!isAdmin && !userGroupName) {
-    redirect("/profile?group_required=1");
-  }
+  // 관리자는 소속 기수와 무관하게 모든 기수의 동료평가를 확인
+  if (isAdmin) {
+    const allProjects = await fetchPeerEvaluationProjectsForAdmin(
+      supabase,
+      null,
+    );
 
-  // 관리자는 학생 화면에서 기수가 없으면 안내만 표시
-  if (!userGroupName) {
     return (
-      <div className="container mx-auto px-4 py-8 sm:px-8">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          관리자 계정에 소속 기수가 없습니다. 프로젝트 생성·결과 확인은{" "}
-          <a
-            href="/admin/peer-evaluations"
-            className="font-medium text-blue-600 underline"
-          >
-            관리자 동료평가
-          </a>
-          에서 진행해 주세요.
-        </p>
+      <div className="container mx-auto px-4 py-6 sm:px-8 sm:py-10">
+        <PeerEvaluationAllCohortsBoard
+          projects={allProjects}
+          viewerGroupName={userGroupName}
+        />
       </div>
     );
+  }
+
+  if (!userGroupName) {
+    redirect("/profile?group_required=1");
   }
 
   const projects = await fetchPeerEvaluationProjectsForMember(

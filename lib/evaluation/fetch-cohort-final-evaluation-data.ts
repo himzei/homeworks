@@ -8,6 +8,11 @@ import {
   resolveHomeworkScorePhase,
   type HomeworkScorePhase,
 } from "@/lib/evaluation/scoring";
+import {
+  createEmptyPeerEvaluation,
+  fetchPeerEvaluationScoresByStudent,
+  type StudentPeerEvaluation,
+} from "@/lib/evaluation/fetch-cohort-peer-evaluation-scores";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 import {
   teamEvaluationToScoreDetails,
@@ -66,6 +71,8 @@ export type StudentFinalEvaluationMetrics = {
   exam: StudentDatedScoreEvaluation;
   /** 프로젝트 평가 — 추가 필드 + 팀 프로젝트(세부 점수) */
   project: StudentProjectEvaluation;
+  /** 동료평가 — 학생이 받은 점수의 프로젝트별 평균 */
+  peer: StudentPeerEvaluation;
 };
 
 /** 프로젝트 평가 1항목 */
@@ -513,11 +520,13 @@ export async function fetchCohortFinalEvaluationData(
     extraFields,
     mainEducationStartDate,
     teamProjectEntriesByStudent,
+    peerEvaluationByStudent,
   ] = await Promise.all([
     fetchAssignmentsForGroup(supabase, trimmedGroup),
     fetchExtraFieldsForGroup(supabase, trimmedGroup),
     fetchMainEducationStartDate(supabase, trimmedGroup),
     fetchTeamProjectEntriesByStudent(supabase, trimmedGroup),
+    fetchPeerEvaluationScoresByStudent(supabase, trimmedGroup, studentIds),
   ]);
 
   const examAndProjectFieldIds = extraFields
@@ -668,6 +677,9 @@ export async function fetchCohortFinalEvaluationData(
       extraScoreByUserField,
     );
 
+    const peer =
+      peerEvaluationByStudent.get(student.id) ?? createEmptyPeerEvaluation();
+
     const preEducationScore = foundation.totalScore;
     const mainEducationScore = exam.totalScore;
     const projectScore = project.totalScore;
@@ -700,6 +712,7 @@ export async function fetchCohortFinalEvaluationData(
       foundation,
       exam,
       project,
+      peer,
     };
 
     const consultationLogs = consultationsByStudent.get(student.id) ?? [];

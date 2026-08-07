@@ -20,6 +20,7 @@ import type {
   StudentHomeworkEvaluation,
   StudentProjectEvaluation,
 } from "@/lib/evaluation/fetch-cohort-final-evaluation-data";
+import type { StudentPeerEvaluation } from "@/lib/evaluation/fetch-cohort-peer-evaluation-scores";
 import { Button } from "@/app/_components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +69,6 @@ type DatedScoreTableTheme = {
   cellBorder: string;
   totalBg: string;
   totalText: string;
-  footerBorder: string;
 };
 
 const HOMEWORK_TABLE_THEME: DatedScoreTableTheme = {
@@ -80,7 +80,6 @@ const HOMEWORK_TABLE_THEME: DatedScoreTableTheme = {
   cellBorder: "border-emerald-100 dark:border-emerald-900/50",
   totalBg: "bg-emerald-50/80 dark:bg-emerald-950/40",
   totalText: "text-emerald-900 dark:text-emerald-100",
-  footerBorder: "border-emerald-100 dark:border-emerald-900/50",
 };
 
 const FOUNDATION_TABLE_THEME: DatedScoreTableTheme = {
@@ -92,7 +91,6 @@ const FOUNDATION_TABLE_THEME: DatedScoreTableTheme = {
   cellBorder: "border-sky-100 dark:border-sky-900/50",
   totalBg: "bg-sky-50/80 dark:bg-sky-950/40",
   totalText: "text-sky-900 dark:text-sky-100",
-  footerBorder: "border-sky-100 dark:border-sky-900/50",
 };
 
 const PROJECT_TABLE_THEME: DatedScoreTableTheme = {
@@ -104,7 +102,17 @@ const PROJECT_TABLE_THEME: DatedScoreTableTheme = {
   cellBorder: "border-violet-100 dark:border-violet-900/50",
   totalBg: "bg-violet-50/80 dark:bg-violet-950/40",
   totalText: "text-violet-900 dark:text-violet-100",
-  footerBorder: "border-violet-100 dark:border-violet-900/50",
+};
+
+const PEER_TABLE_THEME: DatedScoreTableTheme = {
+  border: "border-rose-200",
+  borderDark: "dark:border-rose-800",
+  bg: "bg-rose-50/40 dark:bg-rose-950/20",
+  headerBg: "bg-rose-100/60 dark:bg-rose-900/30",
+  headerText: "text-rose-900 dark:text-rose-200",
+  cellBorder: "border-rose-100 dark:border-rose-900/50",
+  totalBg: "bg-rose-50/80 dark:bg-rose-950/40",
+  totalText: "text-rose-900 dark:text-rose-100",
 };
 
 const EXAM_TABLE_THEME: DatedScoreTableTheme = {
@@ -116,12 +124,11 @@ const EXAM_TABLE_THEME: DatedScoreTableTheme = {
   cellBorder: "border-amber-100 dark:border-amber-900/50",
   totalBg: "bg-amber-50/80 dark:bg-amber-950/40",
   totalText: "text-amber-900 dark:text-amber-100",
-  footerBorder: "border-amber-100 dark:border-amber-900/50",
 };
 
-/** 가로 평가 표 마지막 합계 열 너비 (시험·과제·기초·프로젝트 공통) */
+/** 가로 평가 표 마지막 합계·평균 열 너비 (시험·과제·기초·프로젝트·동료평가 공통) */
 const EVALUATION_TOTAL_COLUMN_CLASS =
-  "w-[52px] min-w-[52px] max-w-[52px] shrink-0 whitespace-nowrap";
+  "w-[96px] min-w-[96px] max-w-[96px] shrink-0 whitespace-nowrap";
 
 /** 날짜 열 헤더 + 가로 점수 행 */
 function DatedScoreTableSection({
@@ -129,7 +136,6 @@ function DatedScoreTableSection({
   ariaLabel,
   evaluation,
   emptyMessage,
-  footerNote,
   theme,
   fitContent = false,
   fixedSlotCount,
@@ -138,7 +144,6 @@ function DatedScoreTableSection({
   ariaLabel: string;
   evaluation: StudentDatedScoreEvaluation;
   emptyMessage: string;
-  footerNote: string;
   theme: DatedScoreTableTheme;
   /** true면 열 개수·내용에 맞는 너비(전체 폭 채우지 않음) */
   fitContent?: boolean;
@@ -277,14 +282,6 @@ function DatedScoreTableSection({
           </table>
         </div>
       )}
-      <p
-        className={cn(
-          "px-3 py-2 text-[10px] text-zinc-500 dark:text-zinc-400 border-t",
-          theme.footerBorder,
-        )}
-      >
-        {footerNote}
-      </p>
     </section>
   );
 }
@@ -310,7 +307,6 @@ function HomeworkEvaluationSection({
       ariaLabel="과제평가"
       evaluation={evaluation}
       emptyMessage="등록된 본과정 과제가 없습니다."
-      footerNote="본과정 과제만 표시합니다. 0·3·4·5점 (제출물 평가와 동일). 빈 칸은 항목 없음."
       theme={HOMEWORK_TABLE_THEME}
       fixedSlotCount={DATED_EVALUATION_SLOT_COUNT}
     />
@@ -328,7 +324,6 @@ function FoundationEvaluationSection({
       ariaLabel="기초과정 평가"
       evaluation={foundation}
       emptyMessage="기초과정(사전) 과제·시험 항목이 없습니다."
-      footerNote="기초(사전) 과제는 0·1·2·3점, 사전교육 시험은 추가 평가 필드 점수입니다. 빈 칸은 항목 없음."
       theme={FOUNDATION_TABLE_THEME}
       fixedSlotCount={DATED_EVALUATION_SLOT_COUNT}
     />
@@ -347,10 +342,166 @@ function ExamEvaluationSection({
       ariaLabel="시험 평가"
       evaluation={exam}
       emptyMessage="등록된 추가 시험 항목이 없습니다."
-      footerNote="제출물 평가 화면에서 추가한 시험 필드 점수입니다. 날짜는 필드에 설정한 평가일 기준입니다. 빈 칸은 항목 없음."
       theme={EXAM_TABLE_THEME}
       fixedSlotCount={DATED_EVALUATION_SLOT_COUNT}
     />
+  );
+}
+
+/** "8.4 (3/17위)" — 동료평가 평균 점수와 기수 내 등수 */
+function formatPeerScoreWithRank(peer: StudentPeerEvaluation): string {
+  if (peer.averageScore === null) return "-";
+  if (peer.rank === null) return `${peer.averageScore}`;
+  return `${peer.averageScore} (${peer.rank}/${peer.rankedStudentCount}위)`;
+}
+
+/** "3/17위" — 등수 라벨 (없으면 null) */
+function formatPeerRankLabel(
+  rank: number | null,
+  rankedStudentCount: number,
+): string | null {
+  if (rank === null || rankedStudentCount <= 0) return null;
+  return `${rank}/${rankedStudentCount}위`;
+}
+
+/** 동료평가 — 학생이 받은 점수의 프로젝트별 평균 + 기수 내 등수 */
+function PeerEvaluationSection({ peer }: { peer: StudentPeerEvaluation }) {
+  const theme = PEER_TABLE_THEME;
+  const overallRankLabel = formatPeerRankLabel(
+    peer.rank,
+    peer.rankedStudentCount,
+  );
+
+  return (
+    <section
+      className={cn(
+        "rounded-lg border overflow-hidden",
+        theme.border,
+        theme.borderDark,
+        theme.bg,
+      )}
+      aria-label="동료평가"
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b",
+          theme.border,
+          theme.borderDark,
+        )}
+      >
+        <h3 className={cn("text-sm font-semibold", theme.headerText)}>
+          동료평가
+        </h3>
+        <p className={cn("text-sm tabular-nums", theme.headerText)}>
+          평균{" "}
+          <span className="font-bold text-base">
+            {peer.averageScore ?? "-"}
+          </span>
+          {peer.averageScore !== null ? "점" : null}
+          {overallRankLabel ? (
+            <span className="ml-1.5 text-xs font-semibold opacity-90">
+              {overallRankLabel}
+            </span>
+          ) : null}
+          <span className="ml-1 text-xs font-normal opacity-80">
+            ({peer.items.length}건)
+          </span>
+        </p>
+      </div>
+
+      {peer.items.length === 0 ? (
+        <p className="px-3 py-4 text-xs text-zinc-600 dark:text-zinc-400">
+          진행중이거나 종료된 동료평가 프로젝트가 없습니다.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-xs">
+            <thead>
+              <tr className={theme.headerBg}>
+                {peer.items.map((item) => (
+                  <th
+                    key={item.key}
+                    className={cn(
+                      "min-w-[7.5rem] border-r px-2 py-2 text-center align-bottom font-medium whitespace-nowrap",
+                      theme.headerText,
+                      theme.cellBorder,
+                    )}
+                    title={item.title}
+                  >
+                    <span className="block whitespace-nowrap text-[12px] tabular-nums">
+                      {item.dateLabel}
+                    </span>
+                    <span className="mt-0.5 block line-clamp-2 text-[10px] font-normal leading-tight opacity-80">
+                      {item.title} ({item.ratingCount}명)
+                    </span>
+                  </th>
+                ))}
+                <th
+                  className={cn(
+                    "px-2 py-2 text-center font-semibold",
+                    EVALUATION_TOTAL_COLUMN_CLASS,
+                    theme.headerBg,
+                    theme.headerText,
+                  )}
+                >
+                  평균
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-white/80 dark:bg-zinc-900/50">
+                {peer.items.map((item) => {
+                  const itemRankLabel = formatPeerRankLabel(
+                    item.rank,
+                    item.rankedStudentCount,
+                  );
+
+                  return (
+                    <td
+                      key={`score-${item.key}`}
+                      className={cn(
+                        "border-r px-2 py-3 text-center font-bold text-base tabular-nums text-black dark:text-zinc-50",
+                        theme.cellBorder,
+                      )}
+                      aria-label={`${item.title} 점수`}
+                      title={
+                        itemRankLabel
+                          ? `${item.score}점 · ${itemRankLabel}`
+                          : `${item.score}점`
+                      }
+                    >
+                      <span className="inline-flex items-baseline justify-center gap-1.5 whitespace-nowrap leading-none">
+                        <span>{item.score}</span>
+                        {itemRankLabel ? (
+                          <span
+                            className={cn(
+                              "text-[11px] font-semibold",
+                              theme.headerText,
+                            )}
+                          >
+                            {itemRankLabel}
+                          </span>
+                        ) : null}
+                      </span>
+                    </td>
+                  );
+                })}
+                <td
+                  className={cn(
+                    "px-2 py-3 text-center font-bold text-base tabular-nums",
+                    EVALUATION_TOTAL_COLUMN_CLASS,
+                    theme.totalBg,
+                    theme.totalText,
+                  )}
+                >
+                  {peer.averageScore ?? "-"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -480,15 +631,6 @@ function ProjectEvaluationSection({
           </table>
         </div>
       )}
-      <p
-        className={cn(
-          "px-3 py-2 text-[10px] text-zinc-500 dark:text-zinc-400 border-t",
-          theme.footerBorder,
-        )}
-      >
-        팀 프로젝트는 주제·업무분장 열과 세부 평가 점수가 가로로 표시됩니다.
-        추가 프로젝트 필드는 합계 열만 표시됩니다.
-      </p>
     </section>
   );
 }
@@ -715,7 +857,8 @@ export default function FinalEvaluationTab({
         <p>
           <strong>기초과정</strong>·<strong>과제</strong>·<strong>시험</strong>·
           <strong>프로젝트</strong>는 날짜별 가로 표이며, 팀 프로젝트는 5개 세부
-          항목 점수가 함께 표시됩니다. 상담 내용은
+          항목 점수가 함께 표시됩니다. <strong>동료평가</strong>는 학생이 받은
+          점수의 평균이며 학생 화면에는 공개되지 않습니다. 상담 내용은
           상담일지를 불러올 수 있으며, 교수 최종 평가는 아래에서 작성 후
           저장하세요. 학생별 <strong>PDF</strong> 또는{" "}
           <strong>모든 학생 출력</strong>을 누르면 새 탭에 A4
@@ -798,6 +941,9 @@ export default function FinalEvaluationTab({
                       <span>시험 {row.metrics.exam.totalScore}</span>
                       <span>과제 {row.metrics.homework.totalScore}</span>
                       <span>프로젝트 {row.metrics.project.totalScore}</span>
+                      <span title="동료평가 평균 점수 · 기수 내 등수">
+                        동료 {formatPeerScoreWithRank(row.metrics.peer)}
+                      </span>
                     </div>
                     {row.savedUpdatedAt ? (
                       <span className="text-[10px] text-zinc-400">
@@ -825,15 +971,25 @@ export default function FinalEvaluationTab({
 
                 {isExpanded ? (
                   <div className="border-t border-zinc-200 dark:border-zinc-700 px-4 py-4 space-y-4">
-                    <FoundationEvaluationSection
-                      foundation={row.metrics.foundation}
-                    />
-
-                    <HomeworkEvaluationSection homework={row.metrics.homework} />
+                    {/* 기초과정 · 과제평가를 넓은 화면에서 2열로 배치 */}
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <div className="min-w-0">
+                        <FoundationEvaluationSection
+                          foundation={row.metrics.foundation}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <HomeworkEvaluationSection
+                          homework={row.metrics.homework}
+                        />
+                      </div>
+                    </div>
 
                     <ExamEvaluationSection exam={row.metrics.exam} />
 
                     <ProjectEvaluationSection project={row.metrics.project} />
+
+                    <PeerEvaluationSection peer={row.metrics.peer} />
 
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">

@@ -8,6 +8,7 @@ import type {
   StudentFinalEvaluationRow,
   StudentProjectEvaluation,
 } from "@/lib/evaluation/fetch-cohort-final-evaluation-data";
+import type { StudentPeerEvaluation } from "@/lib/evaluation/fetch-cohort-peer-evaluation-scores";
 
 /** 인쇄/PDF용 학생 1명 데이터 (화면 초안 텍스트 포함) */
 export type FinalEvaluationPrintEntry = {
@@ -152,6 +153,60 @@ function renderProjectTableHtml(project: StudentProjectEvaluation): string {
     </section>`;
 }
 
+/** 동료평가 — 프로젝트별 받은 점수 평균 + 평가 인원 */
+function renderPeerEvaluationTableHtml(peer: StudentPeerEvaluation): string {
+  if (peer.items.length === 0) {
+    return `
+      <section class="print-section accent-rose">
+        <h3 class="section-title">동료평가</h3>
+        <p class="empty-msg">진행된 동료평가가 없습니다.</p>
+      </section>`;
+  }
+
+  const headerCells = peer.items
+    .map(
+      (item) => `
+        <th class="score-th">
+          <span class="date-label">${escapeHtml(item.dateLabel)}</span>
+          <span class="item-title">${escapeHtml(item.title)}</span>
+          <span class="item-sub">평가 ${item.ratingCount}명</span>
+        </th>`,
+    )
+    .join("");
+
+  const scoreCells = peer.items
+    .map((item) => {
+      const rankLabel =
+        item.rank !== null && item.rankedStudentCount > 0
+          ? `${item.rank}/${item.rankedStudentCount}위`
+          : "";
+      return `<td class="score-td tabular">${item.score}${
+        rankLabel
+          ? ` <span class="item-sub">${escapeHtml(rankLabel)}</span>`
+          : ""
+      }</td>`;
+    })
+    .join("");
+
+  const averageLabel = peer.averageScore === null ? "-" : peer.averageScore;
+  const overallRankLabel =
+    peer.rank !== null && peer.rankedStudentCount > 0
+      ? ` · ${peer.rank}/${peer.rankedStudentCount}위`
+      : "";
+
+  return `
+    <section class="print-section accent-rose">
+      <div class="section-head">
+        <h3 class="section-title">동료평가</h3>
+        <span class="section-total tabular">평균 ${averageLabel}${overallRankLabel} · 받은 평가 ${peer.ratingCount}건</span>
+      </div>
+      <table class="score-table">
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody><tr>${scoreCells}</tr></tbody>
+      </table>
+    </section>`;
+}
+
 function renderStudentPageHtml(
   groupName: string,
   entry: FinalEvaluationPrintEntry,
@@ -174,6 +229,7 @@ function renderStudentPageHtml(
     `시험 ${metrics.exam.totalScore}`,
     `과제 ${metrics.homework.totalScore}`,
     `프로젝트 ${metrics.project.totalScore}`,
+    `동료평가 ${metrics.peer.averageScore ?? "-"}`,
   ].join(" · ");
 
   const consultationBlock = consultationSummary.trim()
@@ -220,6 +276,7 @@ function renderStudentPageHtml(
         DATED_EVALUATION_SLOT_COUNT,
       )}
       ${renderProjectTableHtml(metrics.project)}
+      ${renderPeerEvaluationTableHtml(metrics.peer)}
 
       <section class="print-section text-section">
         <h3 class="section-title">상담 내용</h3>
@@ -383,9 +440,9 @@ const PRINT_STYLES = `
     background: #fafafa;
   }
   .score-th.grand-total, .score-td.grand-total {
-    width: 14mm;
-    min-width: 14mm;
-    max-width: 14mm;
+    width: 24mm;
+    min-width: 24mm;
+    max-width: 24mm;
     background: #eee;
     font-weight: 700;
   }
@@ -434,6 +491,7 @@ const PRINT_STYLES = `
   .accent-emerald .score-th { background: #e8f7ef; }
   .accent-amber .score-th { background: #fef6e8; }
   .accent-violet .score-th { background: #f3effc; }
+  .accent-rose .score-th { background: #fdeef2; }
   .text-block {
     border: 1px solid #ddd;
     border-radius: 4px;

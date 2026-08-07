@@ -41,7 +41,13 @@ export default async function PeerEvaluationDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  if (!isAdmin && userGroupName !== project.groupName) {
+  if (userGroupName !== project.groupName) {
+    // 관리자는 다른 기수도 볼 수 있지만 평가 제출 대상이 아니므로 결과 화면으로 이동
+    if (isAdmin) {
+      redirect(
+        `/admin/peer-evaluations/${project.id}?group=${encodeURIComponent(project.groupName)}`,
+      );
+    }
     notFound();
   }
 
