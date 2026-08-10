@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ADMIN_SCORE_PLACEHOLDER_URL, isAdminScoreOnlyHomeworkUrl } from "@/lib/admin-score-placeholder";
 import { fetchRowsWithChunkedInFilter } from "@/lib/supabase/chunked-in-filter";
 
 export type DashboardHomeworkRow = {
@@ -42,7 +43,11 @@ export async function fetchDashboardHomeworkRows(
     extraInFilter: { column: "assignment_id", values: assignmentIds },
   });
 
-  return rows.filter((row) => assignmentIdSet.has(row.assignment_id));
+  return rows.filter(
+    (row) =>
+      assignmentIdSet.has(row.assignment_id) &&
+      !isAdminScoreOnlyHomeworkUrl(row.url),
+  );
 }
 
 /** 검토 대기 제출물 건수 */
@@ -59,6 +64,7 @@ export async function countDashboardPendingHomeworks(
     .from("homeworks")
     .select("id", { count: "exact", head: true })
     .eq("status", "검토중")
+    .neq("url", ADMIN_SCORE_PLACEHOLDER_URL)
     .in("user_id", studentIds)
     .in("assignment_id", assignmentIds);
 
@@ -85,6 +91,7 @@ export async function fetchDashboardPendingHomeworkList(
     .from("homeworks")
     .select("id, user_id, assignment_id, url, status, created_at")
     .eq("status", "검토중")
+    .neq("url", ADMIN_SCORE_PLACEHOLDER_URL)
     .in("user_id", studentIds)
     .in("assignment_id", assignmentIds)
     .order("created_at", { ascending: false })

@@ -1045,6 +1045,8 @@ export default function EvaluationTab({
 
         const payload = (await res.json().catch(() => ({}))) as {
           error?: string;
+          created?: boolean;
+          placeholderUrl?: string;
         };
 
         if (!res.ok) {
@@ -1063,8 +1065,19 @@ export default function EvaluationTab({
 
         setEvaluationStatuses((prev) => ({
           ...prev,
-          [key]: status,
+          [key]: statusToSave,
         }));
+
+        // 한글 주석: 미제출→점수 저장 시 placeholder 행이 생겼으면 로컬 맵에 반영
+        if (payload.created && typeof payload.placeholderUrl === "string") {
+          setSubmissionData((prev) => ({
+            ...prev,
+            [key]: {
+              url: payload.placeholderUrl!,
+              submittedAt: new Date().toLocaleString("ko-KR"),
+            },
+          }));
+        }
       } catch (error) {
         if (isAbortError(error)) return;
         console.error("상태 업데이트 중 오류:", error);
@@ -1614,7 +1627,6 @@ export default function EvaluationTab({
                         assignment.id,
                       );
                       const key = getEvaluationKey(user.id, assignment.id);
-                      const hasSubmission = !!submissionData[key];
                       const homeworkPhase = getHomeworkScorePhase(assignment.id);
                       const allowedScores = getAllowedHomeworkScores(homeworkPhase);
                       const scoreMax = getHomeworkScoreMax(homeworkPhase);
@@ -1628,97 +1640,93 @@ export default function EvaluationTab({
                           key={`${user.id}-assignment-${assignment.id}`}
                           className={`${assignmentStyles.scoreCell} rounded-lg px-2 py-2 shadow-sm border flex items-center justify-center`}
                         >
-                          {hasSubmission ? (
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={
-                                assignmentScoreDraftByKey[key] ??
-                                String(currentScore)
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={
+                              assignmentScoreDraftByKey[key] ??
+                              String(currentScore)
+                            }
+                            onFocus={() => {
+                              assignmentEditRollbackRef.current[key] =
+                                currentStatus;
+                              setAssignmentScoreDraftByKey((prev) => ({
+                                ...prev,
+                                [key]: String(currentScore),
+                              }));
+                            }}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw !== "" && !/^\d+$/.test(raw)) {
+                                return;
                               }
-                              onFocus={() => {
-                                assignmentEditRollbackRef.current[key] =
-                                  currentStatus;
-                                setAssignmentScoreDraftByKey((prev) => ({
-                                  ...prev,
-                                  [key]: String(currentScore),
-                                }));
-                              }}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                if (raw !== "" && !/^\d+$/.test(raw)) {
-                                  return;
-                                }
-                                setAssignmentScoreDraftByKey((prev) => ({
-                                  ...prev,
-                                  [key]: raw,
-                                }));
-                                if (raw === "") {
-                                  return;
-                                }
-                                const parsed = Number.parseInt(raw, 10);
-                                if (allowedScores.includes(parsed)) {
-                                  const newStatus = scoreToEvaluationStatus(
-                                    parsed,
-                                    homeworkPhase,
-                                  );
-                                  setEvaluationStatuses((prev) => ({
-                                    ...prev,
-                                    [key]: newStatus,
-                                  }));
-                                }
-                              }}
-                              onBlur={async (e) => {
-                                const raw = e.target.value.trim();
-                                const parsed =
-                                  raw === ""
-                                    ? 0
-                                    : Math.min(
-                                        scoreMax,
-                                        Math.max(
-                                          0,
-                                          Number.parseInt(raw, 10) || 0,
-                                        ),
-                                      );
-                                const next = snapAssignmentScore(
+                              setAssignmentScoreDraftByKey((prev) => ({
+                                ...prev,
+                                [key]: raw,
+                              }));
+                              if (raw === "") {
+                                return;
+                              }
+                              const parsed = Number.parseInt(raw, 10);
+                              if (allowedScores.includes(parsed)) {
+                                const newStatus = scoreToEvaluationStatus(
                                   parsed,
                                   homeworkPhase,
                                 );
-                                const newStatus = scoreToEvaluationStatus(
-                                  next,
-                                  homeworkPhase,
-                                );
-                                const beforeStatus =
-                                  assignmentEditRollbackRef.current[key] ??
-                                  currentStatus;
                                 setEvaluationStatuses((prev) => ({
                                   ...prev,
                                   [key]: newStatus,
                                 }));
-                                setAssignmentScoreDraftByKey((prev) => {
-                                  const next = { ...prev };
-                                  delete next[key];
-                                  return next;
-                                });
-                                await updateEvaluationStatus(
-                                  user.id,
-                                  assignment.id,
-                                  newStatus,
-                                  beforeStatus,
-                                );
-                                delete assignmentEditRollbackRef.current[key];
-                              }}
-                              className={`evaluation-score-input text-sm font-semibold px-1 py-1 border rounded-md focus:outline-none focus:ring-2 ${assignmentStyles.scoreInput}`}
-                              aria-label={`${user.name} ${assignment.title} 점수`}
-                            />
-                          ) : (
-                            <span
-                              className="evaluation-score-display text-center text-sm font-semibold text-zinc-400 dark:text-zinc-500"
-                              title="미제출"
-                            >
-                              —
-                            </span>
-                          )}
+                              }
+                            }}
+                            onBlur={async (e) => {
+                              const raw = e.target.value.trim();
+                              const parsed =
+                                raw === ""
+                                  ? 0
+                                  : Math.min(
+                                      scoreMax,
+                                      Math.max(
+                                        0,
+                                        Number.parseInt(raw, 10) || 0,
+                                      ),
+                                    );
+                              const next = snapAssignmentScore(
+                                parsed,
+                                homeworkPhase,
+                              );
+                              const newStatus = scoreToEvaluationStatus(
+                                next,
+                                homeworkPhase,
+                              );
+                              const beforeStatus =
+                                assignmentEditRollbackRef.current[key] ??
+                                currentStatus;
+                              setEvaluationStatuses((prev) => ({
+                                ...prev,
+                                [key]: newStatus,
+                              }));
+                              setAssignmentScoreDraftByKey((prev) => {
+                                const nextDrafts = { ...prev };
+                                delete nextDrafts[key];
+                                return nextDrafts;
+                              });
+                              await updateEvaluationStatus(
+                                user.id,
+                                assignment.id,
+                                newStatus,
+                                beforeStatus,
+                              );
+                              delete assignmentEditRollbackRef.current[key];
+                            }}
+                            className={`evaluation-score-input text-sm font-semibold px-1 py-1 border rounded-md focus:outline-none focus:ring-2 ${assignmentStyles.scoreInput}`}
+                            aria-label={`${user.name} ${assignment.title} 점수`}
+                            title={
+                              submissionData[key]
+                                ? undefined
+                                : "미제출 — 점수 저장 시 0점 기준으로 기록됩니다"
+                            }
+                          />
                         </div>
                       );
                     }

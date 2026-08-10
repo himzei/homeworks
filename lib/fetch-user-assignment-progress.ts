@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isAdminScoreOnlyHomeworkUrl } from "@/lib/admin-score-placeholder";
 import { LEGACY_GROUPS } from "@/lib/constants";
 import { resolveHomeworkScorePhase } from "@/lib/evaluation/scoring";
 import {
@@ -180,6 +181,9 @@ export async function fetchUserAssignmentProgress(
   >();
 
   homeworkRows?.forEach((homework) => {
+    // 한글 주석: 관리자 점수 전용 placeholder는 학생 화면에 제출로 보이지 않음
+    if (isAdminScoreOnlyHomeworkUrl(homework.url)) return;
+
     submissionByAssignmentId.set(homework.assignment_id, {
       url: homework.url,
       status: homework.status || "검토중",

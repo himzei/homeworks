@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isAdminScoreOnlyHomeworkUrl } from "@/lib/admin-score-placeholder";
 import { PROFILE_APPROVAL_STATUS } from "@/lib/profile-approval";
 
 import {
@@ -404,12 +405,15 @@ export async function fetchProgressGridData(
       const submission = submissionByUserAssignment.get(
         `${user.id}:${assignment.id}`,
       );
+      // 한글 주석: 관리자 점수 전용 placeholder는 실제 제출로 치지 않음
+      const hasRealSubmission =
+        !!submission && !isAdminScoreOnlyHomeworkUrl(submission.url);
 
       progressData.push({
         userId: user.id,
         assignmentId: assignment.id,
-        status: submission ? "completed" : "not_completed",
-        url: submission?.url,
+        status: hasRealSubmission ? "completed" : "not_completed",
+        url: hasRealSubmission ? submission?.url : undefined,
         evaluationStatus: submission?.status || undefined,
       });
     }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { isAdminScoreOnlyHomeworkUrl } from "@/lib/admin-score-placeholder";
 
 interface HomeworkSubmissionProps {
   assignmentId: string; // 어떤 숙제에 대한 제출인지 식별
@@ -56,7 +57,7 @@ export default function HomeworkSubmission({
           .eq("assignment_id", assignmentId)
           .single();
 
-        if (data && !error) {
+        if (data && !error && !isAdminScoreOnlyHomeworkUrl(data.url)) {
           setUrl(data.url);
         }
       } catch (error) {
